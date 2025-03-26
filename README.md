@@ -1,6 +1,6 @@
 
 
-🛠 **Developed in Python 3.9.7**
+**Developed in Python 3.9.7**
 
 ##  Getting Started
 
