@@ -1,0 +1,83 @@
+import pygame
+
+class Camera:
+    """ Game camera class for controlling the viewport. """
+    def __init__(self, world_width, world_height, screen_width, screen_height, restrict_bounds=False):
+        self.x = 0
+        self.y = 0
+        self.zoom = 1.0
+        self.world_width = world_width
+        self.world_height = world_height
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.speed = 30
+        self.restrict_bounds = restrict_bounds  # Flag to toggle bounds restriction
+
+    def move(self, dx, dy):
+        dx /= self.zoom
+        dy /= self.zoom
+        self.x += dx
+        self.y += dy
+
+        if self.restrict_bounds:  # Apply bounds if restriction is enabled
+            self.x = max(0, min(self.world_width - self.screen_width / self.zoom, self.x))
+            self.y = max(0, min(self.world_height - self.screen_height / self.zoom, self.y))
+
+    def apply(self, position):
+        """
+        Transform world coordinates to screen coordinates relative to the camera.
+        """
+        x, y = position
+        screen_x = (x - self.x) * self.zoom
+        screen_y = (y - self.y) * self.zoom
+        
+        return screen_x, screen_y
+
+
+
+    def apply_rect(self, rect):
+        """
+        Apply the camera offset and zoom factor to a rectangle's position.
+        """
+        return pygame.Rect(
+            (rect.x - self.x) * self.zoom,
+            (rect.y - self.y) * self.zoom,
+            rect.width * self.zoom,
+            rect.height * self.zoom
+        )
+
+    def zoom_in(self):
+        """
+        Zoom in by increasing the zoom factor.
+        """
+        self.zoom = min(self.zoom * 1.1, 4.0)  # Max zoom of 400%
+
+    def zoom_out(self):
+        """
+        Zoom out by decreasing the zoom factor.
+        """
+        self.zoom = max(self.zoom / 1.1, 0.5)  # Min zoom of 50%
+    def zoom_around_mouse(self, zoom_in, mouse_x, mouse_y):
+        """
+        Zoom in or out, keeping the world coordinates under the mouse pointer stationary.
+        :param zoom_in: Boolean indicating whether to zoom in or out.
+        :param mouse_x: Mouse x position in screen coordinates.
+        :param mouse_y: Mouse y position in screen coordinates.
+        """
+        # Calculate world coordinates of the mouse before zooming
+        world_mouse_x = self.x + mouse_x / self.zoom
+        world_mouse_y = self.y + mouse_y / self.zoom
+
+        # Adjust the zoom level
+        if zoom_in:
+            self.zoom = min(self.zoom * 1.1, 4.0)  # Zoom in (max 400%)
+        else:
+            self.zoom = max(self.zoom / 1.1, 0.5)  # Zoom out (min 50%)
+
+        # Calculate new camera position so the mouse points to the same world coordinate
+        self.x = world_mouse_x - mouse_x / self.zoom
+        self.y = world_mouse_y - mouse_y / self.zoom
+
+        # Ensure the camera stays within the bounds of the world
+        self.x = max(0, min(self.world_width - self.screen_width / self.zoom, self.x))
+        self.y = max(0, min(self.world_height - self.screen_height / self.zoom, self.y))

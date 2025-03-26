@@ -1,0 +1,14 @@
+pygame
+noise
+numpy
+scipy
+torch
+torchvision
+torchaudio
+scikit-learn
+pandas
+matplotlib
+seaborn
+tensorboard
+opencv-python
+protobuf

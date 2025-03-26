@@ -1,0 +1,6 @@
+__pycache__/
+saved_models/
+logs/game/
+LOG/
+plan/
+Profiling_Stats/
