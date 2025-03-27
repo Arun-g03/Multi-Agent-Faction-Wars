@@ -21,7 +21,7 @@ from utils_helpers import profile_function  # Import profiler
 
 # Constants for the menu screen
 FONT_NAME = "Arial"
-TITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Simulation "
+TITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
 
 def main():
     """Main function to run the game."""

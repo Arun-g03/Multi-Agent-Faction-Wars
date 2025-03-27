@@ -785,7 +785,7 @@ class FactionManager:
                    role_size=5, local_state_size=10, global_state_size=15, 
                    network_type="HQNetwork"):
         """
-        Fully reset the list of factions and assign agents properly.
+        Fully reset the list of factions and assign agents.
         """
         self.factions.clear()  #  Ensure previous factions are removed
         logger.debug_log("[INFO] Resetting factions...", level=logging.INFO)

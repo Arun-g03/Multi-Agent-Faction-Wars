@@ -45,7 +45,7 @@ LOGGING_ENABLED = True
 #More training equals better results... probably.
 
 EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 15000 #How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 200 #How many steps to take per episode/ How long should a game last
 
 #Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
 
@@ -99,11 +99,16 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
 # World Dimensions
 #Size of the in-game world
-WORLD_WIDTH = 500 # Customise as needed!
-WORLD_HEIGHT = 500 # Customise as needed!
+WORLD_WIDTH = 1000 # Customise as needed!
+WORLD_HEIGHT = 1000 # Customise as needed!
 
 
-Terrain_Seed = 65 # Customise as needed, 65 is a good default seed in combination with the current perlin noise settings
+# Perlin Noise Settings
+#If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
+RandomiseTerrainBool = True # Customise as needed!
+Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
+                    #combination with the current perlin noise settings
+
 
 # colours
 #General colours used in the game
@@ -123,14 +128,12 @@ Water_Texture_Path = "images/Water+.png" #Water texture path
 WaterAnimationToggle = False #Toggle water animation #Turn off for performance
 
 
-
 #    ____                                    
 #   |  _ \ ___  ___  ___  _   _ _ __ ___ ___ 
 #   | |_) / _ \/ __|/ _ \| | | | '__/ __/ _ \
 #   |  _ <  __/\__ \ (_) | |_| | | | (_|  __/
 #   |_| \_\___||___/\___/ \__,_|_|  \___\___|
 #                                            
-
 
 
 # Perlin Noise Parameters

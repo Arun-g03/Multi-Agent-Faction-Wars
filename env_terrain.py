@@ -18,7 +18,8 @@ from utils_config import (
     BLUE,
     Grass_Texture_Path,
     Water_Texture_Path,
-    WaterAnimationToggle
+    WaterAnimationToggle,
+    RandomiseTerrainBool
 )
 
 from camera import Camera
@@ -45,7 +46,7 @@ class Terrain:
     #    \__, |\___|_| |_|\___|_|  \__,_|\__\___| | .__/ \___|_|  |_|_|_| |_| |_| |_|\___/|_|___/\___|
     #    |___/                                    |_|                                                 
 
-    def generate_noise_map(self, width, height, scale, octaves, persistence, lacunarity):
+    def generate_noise_map(self, width, height, scale, octaves, persistence, lacunarity, random=RandomiseTerrainBool):
         """
         Generate Perlin noise-based terrain with structured data for each cell.
         """
@@ -71,14 +72,22 @@ class Terrain:
         nx, ny = np.meshgrid(x_indices, y_indices)
 
         noise_map = np.zeros((width, height))
+        base_seed = np.random.randint(0, 1000) if random else Terrain_Seed
         for i in range(width):
             for j in range(height):
-                noise_map[i][j] = noise.pnoise2(nx[i][j], ny[i][j], octaves=octaves, persistence=persistence, lacunarity=lacunarity, repeatx=1024, repeaty=1024, base=Terrain_Seed)
+                noise_map[i][j] = noise.pnoise2(
+                                                nx[i][j], 
+                                                ny[i][j], 
+                                                octaves=octaves, 
+                                                persistence=persistence, 
+                                                lacunarity=lacunarity, 
+                                                repeatx=1024, 
+                                                repeaty=1024, 
+                                                base=base_seed)
 
         # Apply water threshold
         threshold = np.percentile(noise_map, WATER_COVERAGE * 100)
         
-
         for i in range(width):
             for j in range(height):
                 if noise_map[i][j] < threshold:  # Water
@@ -89,8 +98,7 @@ class Terrain:
                 grid[i][j]['faction'] = 'None'
                 grid[i][j]['resource_type'] = 'None'
 
-        return grid
-    
+        return grid    
 
 
     def smooth_noise_map(self, grid):
@@ -168,7 +176,7 @@ class Terrain:
                 if cell['type'] == 'water':
                     # Animate the water texture and apply on screen
                     
-                    play_animation = WaterAnimationToggle  # Local bool to toggle the animation
+                    play_animation = WaterAnimationToggle  # bool to toggle the animation
                     if play_animation:
                         frame = water_frames[current_frame]
                         scaled_frame = pygame.transform.scale(frame, (int(cell_size), int(cell_size)))

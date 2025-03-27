@@ -30,7 +30,7 @@ class GameRenderer:
     def __init__(self, screen, terrain, resources, factions, agents, camera=None):
         pygame.font.init()  # Initialise the font module
         self.screen = screen  # Use the screen passed as argument
-        pygame.display.set_caption('Multi-Agent System Simulation')
+        pygame.display.set_caption('Multi-agent competitive and cooperative strategy (MACCS) - Simulation')
         self.font = get_font(24)  # Use cached font for displaying faction IDs on bases
         self.attack_sprite_sheet = pygame.image.load("images/Attack_Animation.png").convert_alpha()
         self.attack_frames = self.load_frames(self.attack_sprite_sheet, frame_width=64, frame_height=64)
