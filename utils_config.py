@@ -215,7 +215,7 @@ Reference/Access ONLY!
 WARNING: DO NOT MODIFY THESE VALUES!  """
 
 
-NETWORK_TYPE_MAPPING = {
+NETWORK_TYPE_MAPPING: dict = {
     "none": 0,
     "PPOModel": 1,
     "DQNModel": 2,
