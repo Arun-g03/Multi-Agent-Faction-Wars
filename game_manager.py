@@ -15,7 +15,7 @@ from env_terrain import Terrain
 from env_resources import ResourceManager, AppleTree, GoldLump
 from render_display import GameRenderer
 from camera import Camera
-from game_rules import check_victory, check_stalemate_step
+from game_rules import check_victory
 from agent_factions import Faction, FactionManager
 from agent_base import Peacekeeper, Gatherer
 from agent_communication import CommunicationSystem
@@ -69,6 +69,7 @@ class GameManager:
         self.faction_manager.factions = []  # Ensure factions list is initialised
         self.agents = []  # List to store all agents
         self.screen = screen  # Initialise the screen   
+        
 
         # Initialise the resource manager with the terrain
         self.resource_manager = ResourceManager(self.terrain)
@@ -150,17 +151,18 @@ class GameManager:
 
     def step(self):
         try:
-            
+            # Handle camera input
             keys = pygame.key.get_pressed()
             self.handle_camera_movement(keys)
-            
-            
 
+            # HQ assigns tasks to agents
             self.communication_system.hq_to_agents()
 
             for agent in self.agents[:]:
                 try:
                     hq_state = agent.faction.aggregate_faction_state()
+
+                    # Handle agent death
                     if agent.Health <= 0:
                         print(f"Agent {agent.role} from faction {agent.faction.id} has died.")
                         if agent in agent.faction.agents:
@@ -168,32 +170,36 @@ class GameManager:
                         self.agents.remove(agent)
                         continue
 
-                    # Get agent state and execute task
-                    
+                    # Agent gets state and acts
                     state = agent.get_state(self.resource_manager, self.agents, agent.faction, hq_state)
                     reward, task_state = agent.perform_task(state, self.resource_manager, self.agents)
 
-                    # Define missing arguments for store_transition
-                    log_prob = agent.ai.choose_action(state)[1]  # Log probability from choose_action
-                    local_value = agent.ai.choose_action(state)[2]  # Value from choose_action
-                    global_value = 0  # Placeholder for global value (adjust as needed)
+                    # Transition bookkeeping
+                    log_prob = getattr(agent, "log_prob", None)
+                    local_value = getattr(agent, "value", None)
+                    action = getattr(agent, "current_action", None)
+
+                    if None in [log_prob, local_value, action]:
+                        print(f"[ERROR] Missing decision data for agent {agent.agent_id}. Skipping transition.")
+                        continue
+
                     done = (task_state in [TaskState.SUCCESS, TaskState.FAILURE])
 
-                    # Store the transition in the agent's AI memory
                     agent.ai.store_transition(
                         state=state,
-                        action=agent.current_action,
+                        action=action,
                         log_prob=log_prob,
                         reward=reward,
                         local_value=local_value,
-                        global_value=global_value,
+                        global_value=0,
                         done=done
                     )
+
                 except Exception as e:
                     print(f"An error occurred for agent {agent.role}: {e}")
                     traceback.print_exc()
 
-            # Agents broadcast observations to HQ
+            # Agents share observations
             for agent in self.agents:
                 state = self.get_agent_state(agent, hq_state)
                 agent.observe(
@@ -202,16 +208,15 @@ class GameManager:
                     resource_manager=self.resource_manager
                 )
 
-            # Update factions
+            # Update faction state
             self.faction_manager.update(self.resource_manager, self.agents)
 
-            # Increment step counter
+            # Advance step
             self.current_step += 1
 
         except Exception as e:
             print(f"An error occurred in step: {e}")
             traceback.print_exc()
-
 
 
 
@@ -277,6 +282,9 @@ class GameManager:
 
             # Store the mode
             self.mode = mode
+            
+
+            #Pass the Tensorboard instance to the Agent
 
             # Step 1: Generate Terrain
             self.terrain = Terrain()
@@ -290,6 +298,7 @@ class GameManager:
             # Now set the `resources` attribute after generating them
             self.resources = self.resource_manager.resources  # Assign resources after generation
             print("Resources generated.")
+            
 
             # Step 3: Initialise Factions
             print("Initialising factions...")
@@ -337,6 +346,7 @@ class GameManager:
             return
         self.agents_initialised = True
         print("Initialising agents...")
+        
 
         """Creates agents and assigns them to factions using stratified grid coverage for HQ placement."""
         minimum_distance = HQ_SPAWN_RADIUS  # Minimum distance between HQs
@@ -398,7 +408,7 @@ class GameManager:
                     role_actions=ROLE_ACTIONS_MAP,  # Pass role-specific actions
                     communication_system=self.communication_system,  # Pass the communication system
                     event_manager=self.event_manager,  # Pass EventManager
-                    network_type=network_type  # Pass network type for the agent (e.g., PPOModel, DQNModel)
+                    network_type=network_type,  # Pass network type for the agent (e.g., PPOModel, DQNModel)
                 )
                 if agent:
                     faction_agents.append(agent)
@@ -484,20 +494,21 @@ class GameManager:
 
                 # Create the agent with a unique AgentID
                 agent = agent_class(
-                    x=spawn_x,
-                    y=spawn_y,
-                    faction=faction,
-                    base_sprite_path=Peacekeeper_PNG if agent_class == Peacekeeper else Gatherer_PNG,
-                    terrain=self.terrain,
-                    agents=self.agents,
-                    agent_id=faction.next_agent_id,  # Assign the next available agent ID
-                    resource_manager=self.resource_manager,
-                    role_actions=role_actions,  # Pass role-specific actions
-                    state_size=state_size,
-                    communication_system=communication_system,  # Pass communication system
-                    event_manager=event_manager,  # Pass EventManager
-                    network_type=network_type,  # Pass the network type (PPO, DQN, etc.)
-                )
+                        x=spawn_x,
+                        y=spawn_y,
+                        faction=faction,
+                        base_sprite_path=Peacekeeper_PNG if agent_class == Peacekeeper else Gatherer_PNG,
+                        terrain=self.terrain,
+                        agents=self.agents,
+                        agent_id=faction.next_agent_id,
+                        resource_manager=self.resource_manager,
+                        role_actions=role_actions,
+                        state_size=state_size,
+                        communication_system=communication_system,
+                        event_manager=event_manager,
+                        network_type=network_type,
+                    )
+                agent.tensorboard_logger = self.tensorboard_logger 
                 faction.next_agent_id += 1  # Increment the counter
                 return agent
 
@@ -508,7 +519,7 @@ class GameManager:
         return None
 
 
-    def get_agent_state(self, agent, hq_state):  #  Expect hq_state, not faction_manager
+    def get_agent_state(self, agent, hq_state):  #Returns the state of the agent
         return agent.get_state(self.resource_manager, self.agents, agent.faction, hq_state)
 
 
@@ -529,17 +540,19 @@ class GameManager:
         """
         Main game loop handling both training and evaluation modes.
         """
+        self.best_scores_per_role = {}  # role -> (best_reward, agent)
+
         try:
             print(f"Running game in {self.mode} mode...")
             running = True
 
             while running and (self.episode <= EPISODES_LIMIT):
                 self.reset()
-                print("\033[92m" + f"Starting {self.mode} Episode {self.episode}" + "\033[0m")                
+                print("\033[92m" + f"Starting {self.mode} Episode {self.episode}" + "\033[0m")
                 self.logger.debug_log(f"Starting {self.mode} Episode", level=logging.INFO)
 
-                self.current_step = 0  # Reset step counter
-                episode_reward = 0  # Track cumulative reward for this episode
+                self.current_step = 0
+                episode_reward = 0
 
                 while self.current_step < self.max_steps_per_episode:
                     for event in pygame.event.get():
@@ -549,75 +562,96 @@ class GameManager:
                             pygame.quit()
                             sys.exit()
 
-                    #  Execute game step
                     self.step()
                     self.current_step += 1
 
-                    #  Get resource count for HUD
+                    for res in self.resource_manager.resources:
+                        if isinstance(res, AppleTree):
+                            res.update()
+
                     resource_counts = {
                         "gold_lumps": sum(1 for res in self.resource_manager.resources if isinstance(res, GoldLump)),
                         "gold_quantity": sum(res.quantity for res in self.resource_manager.resources if isinstance(res, GoldLump)),
                         "apple_trees": sum(1 for res in self.resource_manager.resources if isinstance(res, AppleTree)),
                         "apple_quantity": sum(res.quantity for res in self.resource_manager.resources if isinstance(res, AppleTree)),
-                    }                    
-                    #  Render the game + HUD overlay
+                    }
+
                     self.renderer.render(
                         self.camera,
                         self.terrain,
                         self.resource_manager.resources,
                         self.faction_manager.factions,
                         self.agents,
-                        self.episode,  #  Pass episode number
-                        self.current_step,  #  Pass step number
-                        resource_counts  #  Pass resource stats
+                        self.episode,
+                        self.current_step,
+                        resource_counts
                     )
-                    # Collect rewards from all agents
+
                     for agent in self.agents:
-                        episode_reward += agent.ai.memory["rewards"][-1] if agent.ai.memory["rewards"] else 0
+                        if agent.ai.memory["rewards"]:
+                            episode_reward += agent.ai.memory["rewards"][-1]
 
+                    pygame.display.flip()
 
-                    pygame.display.flip()  #  Ensure the screen updates
-
-                    #  Process game events
                     events = self.event_manager.get_events()
                     for event in events:
                         self.handle_event(event)
 
-                    # #  Training mode: Save model every STEPS_PER_EPISODE steps
-                    # if self.mode == "train" and self.current_step== STEPS_PER_EPISODE -1:
-                    #     self.save_model()
-
-                    #  Check for victory
                     winner = check_victory(self.faction_manager.factions)
                     if winner:
                         print(f"Faction {winner.id} wins! Moving to next episode...")
                         self.logger.debug_log(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
-                        break  # ✅ Stop the episode immediately
+                        break
 
-                        
-            
-                
-                # Log episode data
-                #Simply log the episode number against steps per episode
+                # TensorBoard: Episode summary
                 self.tensorboard_logger.log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
-
-                # Faction-specific stats
                 for faction in self.faction_manager.factions:
                     faction_reward = sum(agent.ai.memory["rewards"][-1] for agent in faction.agents if agent.ai.memory["rewards"])
-
                     self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Total_Reward", faction_reward, self.episode)
                     self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
                     self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
                     self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
 
-
-                #  End of episode logic
-                print(f"End of {self.mode} Episode {self.episode}")
-                self.episode += 1
-                self.logger.debug_log(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
-
+                # 🔁 Train agents at the end of the episode
                 if self.mode == "train":
-                    self.save_model()
+                    self.logger.debug_log("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
+                    for agent in self.agents:
+                        if agent.mode == "train" and len(agent.ai.memory["rewards"]) > 0:
+                            self.logger.debug_log(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
+                            try:
+                                agent.ai.train(mode="train")
+                            except Exception as e:
+                                print(f"Training failed for agent {agent.agent_id}: {e}")
+
+                    # Save best-performing model per role
+                    role_rewards = {}
+
+                    # Collect rewards per role
+                    for agent in self.agents:
+                        if agent.ai.memory["rewards"]:
+                            role = agent.role
+                            total_reward = sum(agent.ai.memory["rewards"])
+                            role_rewards.setdefault(role, []).append((agent, total_reward))
+
+                    # Evaluate best agent for each role
+                    for role, reward_list in role_rewards.items():
+                        best_agent, best_reward = max(reward_list, key=lambda x: x[1])
+                        prev_best, _ = self.best_scores_per_role.get(role, (None, float("-inf")))
+
+                        if best_reward > _:
+                            self.best_scores_per_role[role] = (best_agent, best_reward)
+                            model_path = f"saved_models/Best_{role}_episode_{self.episode}.pth"
+                            torch.save(best_agent.ai.state_dict(), model_path)
+                            self.logger.debug_log(
+                                f"[SAVE] New best {role} model saved at {model_path} with reward {best_reward:.2f}",
+                                level=logging.INFO
+                            )
+
+
+                # Wrap up the episode
+                print(f"End of {self.mode} Episode {self.episode}")
+                self.logger.debug_log(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
+                self.episode += 1
 
             if self.mode == "train" and self.episode > EPISODES_LIMIT:
                 print(f"Training completed after {EPISODES_LIMIT} episodes")
@@ -633,6 +667,7 @@ class GameManager:
             traceback.print_exc()
             pygame.quit()
             sys.exit()
+
 
 
 
@@ -655,38 +690,7 @@ class GameManager:
                 health_penalty=event["data"].get("health_penalty", 10)
             )
 
-    def save_model(self):
-        """
-        Save each agent's network model (PPO, DQN, or others), centralized critic, and optimiser states.
-        """
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)  #  Ensure save directory exists
-
-        for agent in self.agents:
-            if hasattr(agent, "ai"):  #  Check if the agent has a network
-                model_type = type(agent.ai).__name__  #  Get network type dynamically
-                agent_model_path = os.path.join(self.save_dir, f"{model_type}_agent_{agent.agent_id}_episode_{self.episode}.pth")
-                
-                #  Save the agent's model
-                torch.save(agent.ai.state_dict(), agent_model_path)
-                print(f"{model_type} model for Agent {agent.agent_id} saved at {agent_model_path}")
-                self.logger.debug_log(f"{model_type} model for Agent {agent.agent_id} saved at {agent_model_path}", level=logging.INFO)
-
-                #  Save the optimiser if it exists
-                if hasattr(agent, "optimizer"):
-                    optimizer_path = os.path.join(self.save_dir, f"{model_type}_optimizer_agent_{agent.agent_id}_episode_{self.episode}.pth")
-                    torch.save(agent.optimizer.state_dict(), optimizer_path)
-                    print(f"{model_type} optimiser for Agent {agent.agent_id} saved at {optimizer_path}")
-                    self.logger.debug_log(f"{model_type} optimiser for Agent {agent.agent_id} saved at {optimizer_path}", level=logging.INFO)
-
-        #  Save Centralized Critic model if it exists
-        if hasattr(self, "centralized_critic"):
-            critic_model_path = os.path.join(self.save_dir, f"critic_model_episode_{self.episode}.pth")
-            torch.save(self.centralized_critic.state_dict(), critic_model_path)
-            print(f"Centralized Critic model saved at {critic_model_path}")
-            self.logger.debug_log(f"Centralized Critic model saved at {critic_model_path}", level=logging.INFO)
-
-
+    
 
 
 

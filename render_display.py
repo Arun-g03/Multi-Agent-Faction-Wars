@@ -3,7 +3,9 @@ from utils_config import SCREEN_WIDTH, SCREEN_HEIGHT, SCALING_FACTOR, Tree_Scale
 from env_resources import AppleTree, GoldLump
 import sys
 import traceback
-
+import logging
+from utils_logger import Logger
+logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
 
 #    ____                _                    
 #   |  _ \ ___ _ __   __| | ___ _ __ ___ _ __ 
@@ -344,9 +346,11 @@ class GameRenderer:
             if agent_sprite:
                 agent_rect = agent_sprite.get_rect(center=(int(screen_x), int(screen_y)))
                 self.screen.blit(agent_sprite, agent_rect)
-
+                
                 # Check if the mouse is hovering over the agent
                 if agent_rect.collidepoint(mouse_x, mouse_y):
+                    
+
                     if DEBUG_MODE:  # Check if debug mode is enabled
                         # Draw FOV circle for debugging
                         fov_radius = Agent_field_of_view * CELL_SIZE * camera.zoom
@@ -368,30 +372,35 @@ class GameRenderer:
 
 
                         # Highlight the target of the agent if applicable
+                        # Highlight the target of the agent if applicable
                         if isinstance(agent.current_task, dict):
                             task_type = agent.current_task.get("type", "unknown")  # Extract the task type
                             target = agent.current_task.get("target")
+                            
                             if target:
-                                # Extract world coordinates
-                                target_x, target_y = None, None
-                                is_grid_target = False
-                                if isinstance(target, dict) and "position" in target:
-                                    target_x, target_y = target["position"]
-                                    is_grid_target = target.get("type") in {"AppleTree", "GoldLump"}  # Gatherer resources
-                                elif isinstance(target, tuple):
-                                    target_x, target_y = target
-                                    is_grid_target = True  # Assume gatherer target for tuples
-                                elif hasattr(target, "x") and hasattr(target, "y"):
-                                    target_x, target_y = target.x, target.y
+                                # 🪵 Log the full task assignment
+                                logger.debug_log(
+                                    f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
+                                    level=logging.DEBUG
+                                )
 
-                                # Adjust coordinates for grid-based targets (gatherers)
-                                if is_grid_target and target_x is not None and target_y is not None:
+                                # Extract world coordinates directly from the task
+                                target_position = target.get("position", None)
+                                if target_position:
+                                    target_x, target_y = target_position
+
+                                    # 🪵 Log the target coordinates
+                                    logger.debug_log(f"[DEBUG] Target Coordinates: {target_x}, {target_y}", level=logging.DEBUG)
+
+                                    # Adjust coordinates for grid-based targets (gatherers)
                                     target_x *= CELL_SIZE
                                     target_y *= CELL_SIZE
 
-                                # Calculate screen coordinates
-                                if target_x is not None and target_y is not None:
+                                    # Calculate screen coordinates
                                     target_screen_x, target_screen_y = camera.apply((target_x, target_y))
+
+                                    # 🪵 Log the screen coordinates
+                                    logger.debug_log(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
 
                                     # Determine the box colour based on task type
                                     if task_type == "eliminate":
@@ -409,24 +418,31 @@ class GameRenderer:
                                         CELL_SIZE * camera.zoom
                                     )
 
-                                    
+                                    # 🪵 Log the rectangle dimensions
+                                    logger.debug_log(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
 
                                     # Draw the box at the calculated screen position
                                     pygame.draw.rect(
                                         self.screen,
-                                        box_color,  # colour determined by task type
+                                        box_color,  # Colour determined by task type
                                         box_rect,
                                         width=2  # Border thickness
                                     )
                                 else:
-                                    # Handle the case where target is not a dictionary or tuple
-                                    print(f"Agent {agent.agent_id} Target is not a valid format.")
+                                    # Handle the case where target has no position
+                                    logger.debug_log(f"[ERROR] Task has no valid target position for Agent {agent.agent_id}", level=logging.ERROR)
+
 
 
                     # Extract and format task information
                     if isinstance(agent.current_task, dict):
                         task_type = agent.current_task.get("type", "Unknown")
                         target = agent.current_task.get("target", {})
+
+                        # Initialize default values for the target
+                        target_type = "Unknown"
+                        target_position = "Unknown"
+                        target_quantity = "Unknown"
 
                         # Handle target type based on its format
                         if isinstance(target, dict):
@@ -442,15 +458,18 @@ class GameRenderer:
                             target_position = "Unknown"
                             target_quantity = "Unknown"
 
+                        # Format the task info string
                         task_info = (
                             f"Task: {task_type}\n"
                             f"Target: {target_type} at {target_position}\n"
                             f"Quantity: {target_quantity}"
                         )
                     else:
-                        task_info = f"Task: {agent.current_task or 'None'}"
+                        task_info = "Task: None"
+                        # 🪵 Log the task info
+                        logger.debug_log(f"[DEBUG] Task Info: {task_info}", level=logging.DEBUG)
 
-                    # Fetch the current action from the index
+                    # Fetch the current action from the agent's role_actions
                     action = (
                         agent.role_actions[agent.current_action]
                         if 0 <= agent.current_action < len(agent.role_actions)
@@ -464,8 +483,9 @@ class GameRenderer:
                         f"{task_info}\n"
                         f"Action: {action}\n"
                         f"Health: {agent.Health}\n"
-                        f"Position: ({round(agent.x)}, {round(agent.y)})"  # Round position values
+                        f"Position: ({round(agent.x)}, {round(agent.y)})"  # Round position values for readability
                     )
+
 
 
 

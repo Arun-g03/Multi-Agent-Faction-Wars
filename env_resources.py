@@ -1,5 +1,6 @@
 import pygame
 import random
+import time
 from utils_config import (
     CELL_SIZE, 
     GOLD_IMAGE_PATH, 
@@ -10,7 +11,8 @@ from utils_config import (
     SCALING_FACTOR, 
     SCREEN_HEIGHT, 
     GoldLump_Scale_Img, 
-    Tree_Scale_Img)
+    Tree_Scale_Img,
+    APPLE_REGEN_TIME)
 
 
 class ResourceManager:
@@ -138,43 +140,6 @@ class ResourceManager:
 
 
 
-    #     ____                  _                                                 
-    #    / ___|___  _   _ _ __ | |_   _ __ ___  ___  ___  _   _ _ __ ___ ___  ___ 
-    #   | |   / _ \| | | | '_ \| __| | '__/ _ \/ __|/ _ \| | | | '__/ __/ _ \/ __|
-    #   | |__| (_) | |_| | | | | |_  | | |  __/\__ \ (_) | |_| | | | (_|  __/\__ \
-    #    \____\___/ \__,_|_| |_|\__| |_|  \___||___/\___/ \__,_|_|  \___\___||___/
-    #                                                                             
-
-    def get_counts(self):
-        """
-        Returns a dictionary with the counts and quantities of resources.
-        """
-        total_gold_quantity = sum(resource.quantity for resource in self.resources if isinstance(resource, GoldLump))
-        return {
-            "gold_lumps": self.gold_count,  # Number of gold lumps
-            "gold_quantity": total_gold_quantity,  # Total gold quantity
-            "apple_trees": self.apple_tree_count
-        }
-    
-
-
-    #    ___        __                                               _                __                                                                               _ 
-    #   |_ _|_ __  / _| ___  _ __ _ __ ___     __ _  __ _  ___ _ __ | |_ ___    ___  / _|  _ __ ___  ___  ___  _   _ _ __ ___ ___   _ __ ___ _ __ ___   _____   ____ _| |
-    #    | || '_ \| |_ / _ \| '__| '_ ` _ \   / _` |/ _` |/ _ \ '_ \| __/ __|  / _ \| |_  | '__/ _ \/ __|/ _ \| | | | '__/ __/ _ \ | '__/ _ \ '_ ` _ \ / _ \ \ / / _` | |
-    #    | || | | |  _| (_) | |  | | | | | | | (_| | (_| |  __/ | | | |_\__ \ | (_) |  _| | | |  __/\__ \ (_) | |_| | | | (_|  __/ | | |  __/ | | | | | (_) \ V / (_| | |
-    #   |___|_| |_|_|  \___/|_|  |_| |_| |_|  \__,_|\__, |\___|_| |_|\__|___/  \___/|_|   |_|  \___||___/\___/ \__,_|_|  \___\___| |_|  \___|_| |_| |_|\___/ \_/ \__,_|_|
-    #                                               |___/                                                                                                                
-
-
-
-
-    def notify_agents_of_removal(self, resource):
-        """Notify all agents that a resource has been removed."""
-        for agent in self.agent.faction:  # Assuming agents are accessible from terrain
-            if agent.current_task and agent.current_task['location'] == (resource.grid_x, resource.grid_y):
-                print(f"Agent {agent.role} notified of resource depletion at {resource.grid_x}, {resource.grid_y}.")
-                agent.current_task = None  # Clear the agent's current task
-
 
 
 
@@ -205,7 +170,9 @@ class AppleTree:
         self.grid_y = grid_y
         self.terrain = terrain
         self.resource_manager = resource_manager
-        self.quantity = quantity  # Number of apples
+        self.max_quantity = quantity  # Store max quantity
+        self.quantity =  random.randint(1, 6) # Number of apples
+        self.last_regen_time = time.time()  # Track last regeneration time
 
         # Load the sprite sheet
         sprite_sheet = pygame.image.load(TREE_IMAGE_PATH).convert_alpha()
@@ -218,6 +185,15 @@ class AppleTree:
         self.image = sprite_sheet.subsurface(
             pygame.Rect(sprite_width * 5, 0, sprite_width, sprite_height)
         )
+        self.update()
+
+    def update(self):
+        """Update the tree's apple quantity based on regeneration time."""
+        current_time = time.time()
+        if current_time - self.last_regen_time >= APPLE_REGEN_TIME and self.quantity < self.max_quantity:  # 10 seconds
+            self.quantity += 1
+            self.last_regen_time = current_time
+            print(f"Apple Tree at ({self.grid_x}, {self.grid_y}) regen. Remaining: {self.quantity}")
 
     def gather(self, amount):
         """
@@ -287,7 +263,6 @@ class AppleTree:
         offset_x = final_size // 2  # Half the width
         offset_y = final_size - CELL_SIZE * camera.zoom  # Ensure alignment with the cell
         screen.blit(tree_image_scaled, (screen_x - offset_x, screen_y - offset_y))
-
         
 
 

@@ -9,6 +9,8 @@ Purpose: To facilitate communication between agents and the HQ, allowing for the
 
 import logging
 from utils_logger import Logger
+from utils_config import TaskState
+    
 
 
 
@@ -135,34 +137,20 @@ class CommunicationSystem:
 
 
 
+    
+
     def send_task_to_agent(self, agent, global_state):
-        if not agent.current_task:  # Skip if the agent is already busy
-            if agent.role == "gatherer" and global_state["resources"]:
-                # Assign the first available resource
-                resource = global_state["resources"][0]
-                agent.update_resource_location(resource["location"])
-                agent.current_task = self.create_task(
-                    task_type="gather",
-                    target=resource["location"],
-                    target_id=f"Resource-{resource['location']}",
-                    target_type="resource"
-                )
-                logger.debug_log(f"Sent Task to {agent.role}: {agent.current_task}", level=logging.INFO)
+        if agent.current_task:
+            return
 
-            elif agent.role == "peacekeeper" and global_state["threats"]:
-                # Assign the first available threat based on its ID
-                threat = global_state["threats"][0]
-                agent.update_threat_location(threat["location"])
-                agent.current_task = self.create_task(
-                    task_type="eliminate",
-                    target=threat["location"],
-                    target_id=threat["id"],
-                    target_type=threat["type"]
-                )
-                logger.debug_log(f"Sent Task to {agent.role}: {agent.current_task}", level=logging.INFO)
+        task = agent.faction.assign_task(agent)  # or self.assign_task(agent) depending on context
+        if task:
+            agent.current_task = task
+            task_id = task.get("id") or task.get("task_id")
+            agent.faction.assigned_tasks[task_id] = agent
+            logger.debug_log(f"[HQ TASK SENT] Assigned {task['type']} task to {agent.agent_id}", level=logging.INFO)
 
-    
-    
+        
 
 
 

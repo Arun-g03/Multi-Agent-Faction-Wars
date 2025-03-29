@@ -45,7 +45,7 @@ LOGGING_ENABLED = True
 #More training equals better results... probably.
 
 EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 200 #How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 1000 #How many steps to take per episode/ How long should a game last
 
 #Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
 
@@ -75,7 +75,7 @@ ModelMetrics_Path = "logs/"
 #                                   
 
 # Pygame Settings
-FPS = 30  # Frames per second # Customise as needed!
+FPS = 240  # Frames per second # Customise as needed!
 
 # Screen Dimensions
 
@@ -99,13 +99,13 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
 # World Dimensions
 #Size of the in-game world
-WORLD_WIDTH = 1000 # Customise as needed!
-WORLD_HEIGHT = 1000 # Customise as needed!
+WORLD_WIDTH = 400 # Customise as needed!
+WORLD_HEIGHT = 400 # Customise as needed!
 
 
 # Perlin Noise Settings
 #If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
-RandomiseTerrainBool = True # Customise as needed!
+RandomiseTerrainBool = False # Customise as needed!
 Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
                     #combination with the current perlin noise settings
 
@@ -147,6 +147,7 @@ WATER_COVERAGE = 0.3  # Percentage of the terrain that should be water # Customi
 
 # Resource Parameters
 TREE_DENSITY = 0.04 # Density of apple trees on land # Customise as needed!
+APPLE_REGEN_TIME = 10 # Time in seconds for an apple tree to regrow an apple # Customise as needed!
 GOLD_ZONE_PROBABILITY = 0.1 # Probability of spawning a gold zone # Customise as needed!
 GOLD_SPAWN_DENSITY = 0.02 # Density of gold in gold zones # Customise as needed!
 
@@ -200,6 +201,7 @@ class TaskState(Enum):
     BLOCKED = "blocked"      # Task cannot proceed
     ABANDONED = "abandoned"  # Task was abandoned
     INVALID = "invalid"      # Task is not valid or cannot be executed (e.g. invalid parameters, unsupported action type for task)
+    UNASSIGNED = "unassigned" # A Task is ready to be picked up
 
 TASK_TYPE_MAPPING = {
     "none": 0,
@@ -405,41 +407,26 @@ AgentID = namedtuple("AgentID", ["faction_id", "agent_id"])
 
 
 def create_task(self, task_type, target, task_id=None):
-        """
-        Create a standardised task object.
-        
-        Args:
-            task_type (str): The type of the task (e.g., "gather", "eliminate", "explore").
-            target (any): The target of the task, format depends on task type (e.g., location, resource, threat).
-            task_id  (str, optional): A unique identifier for the task. Defaults to None.
-        
-        Returns:
-            dict: A standardized task object.
-
-            
-        Reference/Access ONLY!
-            
-        WARNING: DO NOT MODIFY STRUCTURE! 
-        """
-        task = {
-            "type": task_type,
-            "target": target
-        }
-        if task_id:
-            task["id"] = task_id
-        
-        return task
-
-
-# Utility function to get task type ID
-def get_task_type_id(task_type):
     """
-    Retrieve the numerical ID for a given task type.
-    :param task_type: The task type as a string.
-    :return: The task type ID.
+    Create a standardised task object.
 
-    Reference/Access ONLY!
-            
-    WARNING: DO NOT MODIFY STRUCTURE! 
+    Args:
+        task_type (str): The type of the task (e.g., "gather", "eliminate", "explore").
+        target (any): The target of the task, format depends on task type (e.g., location, resource, threat).
+        task_id (str, optional): A unique identifier for the task. Defaults to None.
+
+    Returns:
+        dict: A standardised task object including tracking state.
+
+    WARNING: DO NOT MODIFY STRUCTURE!
     """
-    return TASK_TYPE_MAPPING.get(task_type, 0)
+    task = {
+        "type": task_type,
+        "target": target,
+        "state": TaskState.PENDING  # Track the task's lifecycle from assignment
+    }
+    if task_id:
+        task["id"] = task_id
+
+    return task
+

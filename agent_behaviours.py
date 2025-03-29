@@ -6,7 +6,7 @@ from utils_config import (
                         ROLE_ACTIONS_MAP, 
                         AgentID, 
                         TASK_METHODS_MAPPING, 
-                        get_task_type_id,
+                        
                         )
 from env_resources import AppleTree, GoldLump
 import random
@@ -40,19 +40,7 @@ class AgentBehaviour:
 
     
 
-    def decide_action(self, state):
-        """
-        Decide the next action with the task type influencing decision-making.
-        """
-        task = self.agent.current_task or {"type": "none", "target": None}
-        task_type_id = get_task_type_id(task["type"])
-
-        logger.debug_log(f"{self.agent.role} deciding action with state: {state} and task_type_id: {task_type_id}.", level=logging.DEBUG)
-
-        
-
-        action_index, _, _ = self.ai.choose_action(state)
-        return action_index
+    
 
 
 
@@ -112,49 +100,64 @@ class AgentBehaviour:
 #                                                                                                                               
 
 
+   
+
     def perform_task(self, state, resource_manager, agents):
-        """
-        Execute tasks based on the agent's role, or let the NN decide an action independently if no task is assigned.
-        If no task is assigned, request one from the HQ and fallback to independent action if none is available.
-        """
         logger.debug_log(f"Agent {self.agent.role} performing task. Current task: {self.agent.current_task}", level=logging.INFO)
 
-        # Check if a task is assigned
+        tensorboard_logger = getattr(self.agent, "tensorboard_logger", None)
+        faction_id = self.agent.faction.id
+        episode = getattr(self.agent.faction, "episode", 0)
+
         if not self.agent.current_task:
-            logger.debug_log(f"No task assigned to {self.agent.role}. Requesting a task from HQ.", level=logging.WARNING)
-            self.agent.current_task = self.agent.query_hq_task()  # Request a new task
+            self.agent.current_task = self.agent.faction.assign_task(self.agent)
 
-            # If no task is available, fallback to independent NN-decided action
             if not self.agent.current_task:
-                logger.debug_log(f"No task available for {self.agent.role}. Executing NN-decided action independently.", level=logging.WARNING)
-                # Decide the next action using NN
-                action_index = self.decide_action(state)
+                # 💡 Always choose action and cache
+                action_index, log_prob, value = self.ai.choose_action(state)
+                self.agent.current_action = action_index
+                self.agent.log_prob = log_prob
+                self.agent.value = value
 
-                # Perform the action
                 task_state = self.perform_action(action_index, state, resource_manager, agents)
-
-                # Assign rewards based on independent exploration
                 reward = self.assign_reward_for_independent_action(task_state)
                 return reward, task_state
 
-        # If a task is assigned, execute it
-        logger.debug_log(f"{self.agent.role} executing assigned task.", level=logging.INFO)
+        # Mark task as ONGOING
+        if self.agent.current_task.get("state") != TaskState.ONGOING:
+            self.agent.current_task["state"] = TaskState.ONGOING
 
-        # Dynamically decide the next action based on the task
-        action_index = self.decide_action(state)
+        # 💡 Cache decision variables for training
+        action_index, log_prob, value = self.ai.choose_action(state)
+        self.agent.current_action = action_index
+        self.agent.log_prob = log_prob
+        self.agent.value = value
 
-        # Execute the action
+        logger.debug_log(
+            f"[PRE-ACTION] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}, State={state}",
+            level=logging.DEBUG
+        )
+
+        if any(x != x or x == float("inf") or x == float("-inf") for x in state):
+            print(f"\n[🔥 INVALID STATE] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}")
+            print(f"State: {state}")
+            raise ValueError("Agent state contains NaN or Inf values.")
+
         task_state = self.perform_action(action_index, state, resource_manager, agents)
-
-        # Assign rewards based on task outcome
         reward = self.assign_reward_for_task_action(task_state)
 
-        # Update task status
+        if tensorboard_logger and task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
+            task_type = self.agent.current_task.get("type", "unknown")
+            tensorboard_logger.log_scalar(f"Faction_{faction_id}/Task_{task_type}_{task_state.name}", 1, episode)
+
         if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
-            logger.debug_log(f"Task completed with state: {task_state}. Clearing task.", level=logging.INFO)
+            self.agent.current_task["state"] = task_state
             self.agent.current_task = None
+        else:
+            self.agent.current_task["state"] = task_state
 
         return reward, task_state
+
 
 
 

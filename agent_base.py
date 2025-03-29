@@ -168,35 +168,13 @@ class BaseAgent:
     
 
     def choose_action(self, state):
-        """
-        Decide the next action using the policy network.
-        """
-        #  Ensure correct tensor shape before passing to the model
-        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-
-        # Check if the state size matches expected input size
-        if state_tensor.shape[1] != self.input_size:
-            raise ValueError(f"[ERROR] State tensor shape mismatch: Expected {self.input_size}, got {state_tensor.shape[1]}")
-
-        logits, value = self.ai(state_tensor)
-        probs = torch.softmax(logits, dim=-1)
-        dist = Categorical(probs)
-        action = dist.sample()
-
-        return action.item(), dist.log_prob(action), value.item()
+        return self.ai.choose_action(state)
 
 
-    def store_experience(self, state, action, reward, next_state, done):
-        """
-        Store the agent's experiences for training.
-        """
-        self.network.store_transition(state, action, reward, next_state, done)  # Store experience in the network
 
-    def train_model(self):
-        """
-        Train the agent model (specific to PPO, DQN, etc.).
-        """
-        self.network.train()  # Call the train method of the network
+    
+
+   
 
 
 
@@ -249,6 +227,7 @@ class BaseAgent:
                     level=logging.WARNING
                 )
                 self.Health -= 2  # Example penalty (health loss)
+                logger.debug_log(f"Agent {self.agent_id}{self.role} has been penalised for being stuck.")
                 if self.Health <= 0:
                     print(f"Agent {self.role} has died from being stuck.")
             # Mark the new cell as the agent's faction territory
@@ -323,6 +302,13 @@ class BaseAgent:
             # Retrieve the agent's current state
             state = self.get_state(resource_manager, agents, self.faction)
             logger.debug_log(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
+
+            # 🔍 Log the current task before performing it
+            logger.debug_log(
+                f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
+                level=logging.DEBUG
+            )
+
             # Execute the current task or decide on a new action
             reward, task_state = self.perform_task(state, resource_manager, agents)
             self.update_task_state(task_state)  # Update the task state based on execution
@@ -332,7 +318,6 @@ class BaseAgent:
 
             # Report experiences for centralized learning
             if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
-                # Record task completion experience
                 next_state = self.get_state(resource_manager, agents, self.faction)
                 done = task_state in [TaskState.SUCCESS, TaskState.FAILURE]
                 self.report_experience_to_hq(state, self.current_task, reward, next_state, done)
@@ -340,10 +325,11 @@ class BaseAgent:
             # Handle health-related conditions
             if self.Health <= 0:
                 logger.debug_log(f"{self.role} has died and will be removed from the game.", level=logging.WARNING)
-                # Optionally trigger agent removal logic here
+
         except Exception as e:
             traceback.print_exc()
-            raise(f"An error occurred while updating the agent: {e}")
+            raise RuntimeError(f"An error occurred while updating the agent: {e}")
+
 
 
 
@@ -519,70 +505,9 @@ class BaseAgent:
 
 
 
-    
-#       _        _       __            _   _               _   _  ___     __                                          _                                  _   
-#      / \   ___| | __  / _| __ _  ___| |_(_) ___  _ __   | | | |/ _ \   / _| ___  _ __    __ _ _ __     __ _ ___ ___(_) __ _ _ __  _ __ ___   ___ _ __ | |_ 
-#     / _ \ / __| |/ / | |_ / _` |/ __| __| |/ _ \| '_ \  | |_| | | | | | |_ / _ \| '__|  / _` | '_ \   / _` / __/ __| |/ _` | '_ \| '_ ` _ \ / _ \ '_ \| __|
-#    / ___ \\__ \   <  |  _| (_| | (__| |_| | (_) | | | | |  _  | |_| | |  _| (_) | |    | (_| | | | | | (_| \__ \__ \ | (_| | | | | | | | | |  __/ | | | |_ 
-#   /_/   \_\___/_|\_\ |_|  \__,_|\___|\__|_|\___/|_| |_| |_| |_|\__\_\ |_|  \___/|_|     \__,_|_| |_|  \__,_|___/___/_|\__, |_| |_|_| |_| |_|\___|_| |_|\__|
-#                                                                                                                       |___/                                
 
-    
-    
-    def query_hq_task(self):
-        """
-        Query the HQ for task prioritisation based on the agent's role.
-        If no task is available from HQ, the agent will act autonomously to benefit its faction.
-        
-        Returns:
-            dict: A task object containing "type", "target", and optionally "id".
-        
-        Logs:
-            Detailed task assignment process for debugging and monitoring.
-        
-        Raises:
-            RuntimeError: If no valid task is found (should not occur in a well-functioning system).
-        """
-        hq_state = self.faction.provide_state()
-        logger.debug_log(f"Agent {self.role} querying HQ for tasks...", level=logging.INFO)
 
-        # Gatherer task assignment
-        if self.role == "gatherer" and hq_state.get("resources", []):
-            resource = hq_state["resources"][0]
-            return self.create_task(self,
-                task_type="gather",
-                target=resource["location"],
-                task_id =f"Resource-{resource['location']}"
-            )
-
-        # Peacekeeper task assignment
-        elif self.role == "peacekeeper" and hq_state.get("threats", []):
-            threat = hq_state["threats"][0]
-            return self.create_task(self,
-                task_type="eliminate",
-                target={
-                    "position": threat["location"],
-                    "id": threat["id"],
-                    "type": threat["type"]
-                },
-            )
-
-        # Autonomous exploration fallback
-        unexplored_areas = self.behavior.find_unexplored_areas()
-        if unexplored_areas:
-            explore_location = unexplored_areas[0]
-            return self.create_task(self,
-                task_type="explore",
-                target=explore_location,
-                task_id =f"Explore-{explore_location}"
-            )
-
-        # No valid tasks found
-        logger.error(
-            f"{self.role} is idle due to a code error: No valid tasks available in HQ state or unexplored areas.",
-            level=logging.ERROR
-        )
-        raise RuntimeError(f"{self.role} is idle due to a code error: No valid tasks available.")
+ 
 
 
     
@@ -596,17 +521,7 @@ class BaseAgent:
 
     
 
-    def report_to_faction(self, report_type, location):
-        """
-        Report information to the faction via the communication system.
-        """
-        if self.communication_system and self.faction:
-            report = {"type": report_type, "data": {"location": location}}
-            self.communication_system.agent_to_faction(self, report)
-            # Clear the report to prevent memory leaks
-            report.clear()  # Clear the report dictionary after sending to free memory
-
-
+  
 
 
 
@@ -649,7 +564,8 @@ class BaseAgent:
         ]
 
         #  Fill in missing features to match expected size
-        state.extend([0] * (18 - len(state)))  # Pad with zeros if fewer than 18 features
+        state.extend([0] * (self.state_size - len(state)))
+        # Pad with zeros if fewer than self.state_size features
 
         return state
 
@@ -696,16 +612,7 @@ class BaseAgent:
 
 
     
-    def update_behavior(self, state, resources, agents):
-        """
-        Update the agent's behavior based on its role.
-        """
-        if self.role == "gatherer":
-            #print(f"[Gatherer {self}] State: {state}")
-            self.behavior.gather(state, resources, agents)
-        elif self.role == "peacekeeper":
-            #print(f"[Peacekeeper {self}] State: {state}")
-            self.behavior.patrol(state, agents, resources)
+    
 
     def report_experience_to_hq(self, state, action, reward, next_state, done):
         """

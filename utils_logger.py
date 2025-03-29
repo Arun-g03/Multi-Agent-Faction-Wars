@@ -9,13 +9,13 @@ import numpy as np
  # Enables/disables debug logging and visuals
 
 class Logger:
-    def __init__(self, log_file, log_level=logging.INFO, log_to_console=True):
+    def __init__(self, log_file, log_level=logging.INFO, log_to_console=True, clear_logs=True):
         """
         Initialise the Logger class with mandatory log file and optional logging level.
         """
         # Create a unique logger instance
         self.logger = logging.getLogger(log_file)
-        
+    
         if not LOGGING_ENABLED:
             self.logger.addHandler(logging.NullHandler())
             print("DEBUG_MODE is disabled. Logger will not create log files.")
@@ -31,9 +31,10 @@ class Logger:
         self.log_file = os.path.join(log_directory, log_file)
         self.log_level = log_level
 
-        # Overwrite the log file at initialisation
-        open(self.log_file, 'w').close()
-        print(f"Logger initialised. Logs will be saved to: {os.path.abspath(self.log_file)}")
+        # Overwrite the log file at initialisation if clear_logs is True
+        if clear_logs:
+            open(self.log_file, 'w').close()
+            print(f"Logger initialised. Logs will be saved to: {os.path.abspath(self.log_file)}")
 
         self.logger.setLevel(self.log_level)
 
@@ -54,7 +55,7 @@ class Logger:
 
         # Log initialisation
         self.logger.info("Logger initialised and log file cleared.")
-
+        
     def log(self, message, level=logging.INFO):
         """
         Log a message at a specified logging level.

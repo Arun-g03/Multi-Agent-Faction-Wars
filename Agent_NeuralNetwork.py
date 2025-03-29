@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import numpy as np
 from torch.distributions import Categorical
 import logging
 from utils_config import STATE_FEATURES_MAP, DEF_AGENT_STATE_SIZE
@@ -295,6 +296,8 @@ class PPOModel(nn.Module):
         # Initialise other components of the agent
         self.ai = Agent_Critic(state_size, action_size)
         self.optimizer = optim.Adam(self.ai.parameters(), lr=learning_rate)
+        self.total_updates = 0  # Track training updates across episodes
+
 
         self.gamma = gamma
         self.clip_epsilon = clip_epsilon
@@ -320,20 +323,40 @@ class PPOModel(nn.Module):
     def forward(self, state):
         x = torch.relu(self.fc1(state))
         x = torch.relu(self.fc2(x))
-        task_assignment = self.actor(x)
-        task_value = self.critic(x)
+        task_assignment = self.actor(x)  # logits for action probabilities
+        task_value = self.critic(x)      # value estimate
+
+        # ✅ Check for NaNs/Infs in output logits
+        if torch.isnan(task_assignment).any() or torch.isinf(task_assignment).any():
+            print("[ERROR] NaNs or Infs detected in network output (task_assignment).")
+            print(f"Input state: {state}")
+            print(f"Hidden activation: {x}")
+            print(f"Logits: {task_assignment}")
+            raise ValueError("Network logits contain NaN or Inf.")
+
         return task_assignment, task_value
 
 
+
     def choose_action(self, state):
-        """
-        Decide the next action using the policy network.
-        :param state: Current state of the agent.
-        :return: Chosen action index, log probability, and value estimate.
-        """
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-        logits, value = self.ai(state_tensor)
+        logits, value = self.forward(state_tensor)
+
+        if torch.isnan(logits).any() or torch.isinf(logits).any():
+            logger.debug_log(f"[🔥 LOGITS ERROR] Detected NaNs/Infs in logits!", level=logging.ERROR)
+            logger.debug_log(f"State: {state}", level=logging.ERROR)
+            logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
+            raise ValueError("Logits contain NaN or Inf before softmax.")
+
         probs = torch.softmax(logits, dim=-1)
+
+        if torch.isnan(probs).any() or torch.isinf(probs).any():
+            logger.debug_log(f"[🔥 PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
+            logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
+            logger.debug_log(f"Softmaxed probs: {probs}", level=logging.ERROR)
+            logger.debug_log(f"State: {state}", level=logging.ERROR)
+            raise ValueError("Action probabilities contain NaN or Inf.")
+
         dist = Categorical(probs)
         action = dist.sample()
 
@@ -341,11 +364,12 @@ class PPOModel(nn.Module):
 
         return action.item(), dist.log_prob(action), value.item()
 
+
     def store_transition(self, state, action, log_prob, reward, local_value, global_value, done):
         """
         Store a single transition in memory.
         """
-        logger.debug_log(f"Storing transition: state={state}, action={action}, reward={reward}, local_value={local_value}, global_value={global_value}, done={done}.", level=logging.DEBUG)
+        logger.debug_log(f"AGENT - Storing transition: state={state}, action={action}, reward={reward}, local_value={local_value}, global_value={global_value}, done={done}.", level=logging.DEBUG)
         self.memory["states"].append(state)
         self.memory["actions"].append(action)
         self.memory["log_probs"].append(log_prob)
@@ -353,14 +377,44 @@ class PPOModel(nn.Module):
         self.memory["values"].append(local_value)
         self.memory["global_values"].append(global_value)
         self.memory["dones"].append(done)
+        logger.debug_log(
+                        f"[MEMORY COUNT] AgentID| Transitions Stored: {len(self.memory['rewards'])}",
+                        level=logging.DEBUG
+                    )
+
+
 
     def train(self, mode='train'):
         """
-        Train the PPO agent using stored experiences. In evaluation mode, we don't perform training.
-        :param mode: 'train' or 'evaluate'. If 'train', the agent will update its model. If 'evaluate', the agent won't learn.
+        Train the PPO agent using stored experiences.
+        In evaluation mode, we don’t perform training.
+        
+        :param mode: 'train' or 'evaluate'
         """
-        if mode == 'train' and len(self.memory["states"]) > 0:
-            # Perform training (only when mode is 'train' and there are experiences in memory)
+        required_keys = ["states", "actions", "log_probs", "rewards", "values", "dones"]
+
+        if mode == 'train':
+            logger.debug_log("[AGENT NETWORK] Training Agent...", level=logging.DEBUG)
+
+            # Check if memory is populated
+            if not all(len(self.memory[k]) > 0 for k in required_keys):
+                logger.debug_log(
+                    "[ERROR] Training skipped: Memory buffer is incomplete or empty. " +
+                    ", ".join(f"{k}={len(self.memory[k])}" for k in required_keys),
+                    level=logging.ERROR
+                )
+                return
+
+            # Ensure sufficient transitions for training
+            if len(self.memory["rewards"]) < 10:
+                logger.debug_log(
+                    f"[WARNING] Training skipped: Not enough transitions in memory. "
+                    f"Current transitions: {len(self.memory['rewards'])}",
+                    level=logging.WARNING
+                )
+                return
+
+            # Convert stored memory to tensors
             states = torch.tensor(self.memory["states"], dtype=torch.float32)
             actions = torch.tensor(self.memory["actions"], dtype=torch.long)
             log_probs_old = torch.stack(self.memory["log_probs"]).detach()
@@ -368,33 +422,82 @@ class PPOModel(nn.Module):
             values = torch.tensor(self.memory["values"], dtype=torch.float32)
             dones = torch.tensor(self.memory["dones"], dtype=torch.float32)
 
-            # Compute returns and advantages (Generalized Advantage Estimation)
-            returns, advantages = self.compute_gae(rewards, values, dones)
+            # Compute returns and advantages using GAE
+            try:
+                returns, advantages = self.compute_gae(rewards, values, values, dones)
+            except ValueError as e:
+                logger.debug_log(f"[ERROR] Failed to compute GAE: {e}", level=logging.ERROR)
+                return
 
-            for epoch in range(10):  # PPO epochs
-                logits, new_values = self.ai(states)
-                probs = torch.softmax(logits, dim=-1)
-                dist = Categorical(probs)
+            # Determine effective number of training epochs
+            dataset_size = len(self.memory["rewards"])
+            batch_size = 32
+            indices = np.arange(dataset_size)
+            ppo_epochs = getattr(self, 'ppo_epochs', 10)
+            batches_per_epoch = max(1, int(dataset_size) // int(batch_size))
+            effective_epochs = min(ppo_epochs, batches_per_epoch)
 
-                new_log_probs = dist.log_prob(actions)
-                entropy = dist.entropy().mean()
 
-                ratio = torch.exp(new_log_probs - log_probs_old)
-                surr1 = ratio * advantages
-                surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantages
-                policy_loss = -torch.min(surr1, surr2).mean()
 
-                value_loss = (returns - new_values.squeeze(-1)).pow(2).mean()
-                loss = policy_loss + 0.5 * value_loss - self.entropy_coeff * entropy
+            for epoch in range(effective_epochs):
+                np.random.shuffle(indices)
+                for start in range(0, dataset_size, batch_size):
+                    end = start + batch_size
+                    batch_idx = indices[start:end]
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                    states_batch = states[batch_idx]
+                    actions_batch = actions[batch_idx]
+                    log_probs_old_batch = log_probs_old[batch_idx]
+                    advantages_batch = advantages[batch_idx]
+                    returns_batch = returns[batch_idx]
 
-            self.clear_memory()  # Clear memory after training step
+                    logits, new_values = self.ai(states_batch)
+
+                    if torch.isnan(logits).any() or torch.isinf(logits).any():
+                        logger.debug_log(f"[TRAIN LOGITS ERROR] NaNs in logits during training epoch {epoch}", level=logging.ERROR)
+                        return
+
+                    probs = torch.softmax(logits, dim=-1)
+                    if torch.isnan(probs).any() or torch.isinf(probs).any():
+                        logger.debug_log(f"[TRAIN PROBS ERROR] NaNs in probs during training epoch {epoch}", level=logging.ERROR)
+                        return
+
+                    dist = Categorical(probs)
+                    new_log_probs = dist.log_prob(actions_batch)
+                    entropy = dist.entropy().mean()
+
+                    ratio = torch.exp(new_log_probs - log_probs_old_batch)
+                    surr1 = ratio * advantages_batch
+                    surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantages_batch
+                    policy_loss = -torch.min(surr1, surr2).mean()
+
+                    value_loss = (returns_batch - new_values.squeeze(-1)).pow(2).mean()
+                    loss = policy_loss + 0.5 * value_loss - self.entropy_coeff * entropy
+
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    if hasattr(self, "tensorboard_logger"):
+                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/PolicyLoss", policy_loss.item(), self.total_updates)
+                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/ValueLoss", value_loss.item(), self.total_updates)
+                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/TotalLoss", loss.item(), self.total_updates)
+                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/Entropy", entropy.item(), self.total_updates)
+
+                    self.optimizer.step()
+
+                    logger.debug_log(
+                        f"[TRAIN] Epoch {epoch + 1}: Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
+                        level=logging.DEBUG
+                    )
+
+            logger.debug_log("[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
 
         elif mode == 'evaluate':
-            self.clear_memory()  # Clear memory when in evaluation mode as agents shouldn't learn
+            logger.debug_log("[EVALUATE MODE] No training applied.", level=logging.DEBUG)
+
+        self.clear_memory()
+
+
+
 
 
 
@@ -402,6 +505,9 @@ class PPOModel(nn.Module):
         """
         Compute Generalized Advantage Estimation (GAE).
         """
+        if not rewards or not local_values or not global_values or not dones:
+            raise ValueError("Input lists cannot be empty")
+            
         logger.debug_log("Computing Generalized Advantage Estimation (GAE).", level=logging.INFO)
         returns = []
         advantages = []
@@ -410,7 +516,14 @@ class PPOModel(nn.Module):
 
         for step in reversed(range(len(rewards))):
             mask = 1 - dones[step]
-            delta = rewards[step] + self.gamma * global_values[step + 1] * mask - local_values[step]
+
+            if step < len(rewards) - 1:
+                next_global = global_values[step + 1]
+            else:
+                next_global = torch.tensor(0.0)  # or use global_values[step] if continuing value
+
+            delta = rewards[step] + self.gamma * next_global * mask - local_values[step]
+
             gae = delta + self.gamma * self.clip_epsilon * mask * gae
 
             advantages.insert(0, gae)
@@ -421,25 +534,14 @@ class PPOModel(nn.Module):
         returns = torch.tensor(returns, dtype=torch.float32)
         advantages = torch.tensor(advantages, dtype=torch.float32)
         return returns, (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-
+    
     def clear_memory(self):
         for key in self.memory.keys():
             self.memory[key] = []
 
-    def sync_target_model(self):
-        """
-        Sync the target model with the main model to stabilize training.
-        """
-        self.target_model.load_state_dict(self.ai.state_dict())
+    
 
-    def role_to_index(self, role):
-        """
-        Map roles to integer indices.
-        """
-        role_mapping = {"gatherer": 0, "peacekeeper": 1}  # Add all roles here
-        if role not in role_mapping:
-            print(f"Warning: Unknown role '{role}' encountered. Defaulting to 0.")
-        return role_mapping.get(role, 0)  # Default to 0 for gatherer
+    
     
     def calculate_loss(self):
         """

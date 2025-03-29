@@ -52,14 +52,6 @@ def check_victory(factions):
     return None  # No winner yet
 
 
-def check_stalemate_step(last_activity_step, current_step):
-    """
-    Check if the game has been stagnant for too many steps.
-    :param last_activity_step: Last step when meaningful activity occurred.
-    :param current_step: Current simulation step.
-    :return: True if a stalemate condition is detected, False otherwise.
-    """
-    return (current_step - last_activity_step) >= MAX_STALE_STEPS
 
 
 def resolve_conflict(agent1, agent2):

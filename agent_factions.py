@@ -1,5 +1,7 @@
 import traceback
 import random
+from typing import Optional
+
 # Manages factions and their agents.
 from utils_config import (
      FACTON_COUNT, 
@@ -178,16 +180,7 @@ class Faction():
         else:
             print(f"Warning: Agent {agent.role} not found in faction {self.id}.")
 
-    def perform_faction_tasks(self, resource_manager, agents):
-        """
-        Delegate tasks to agents based on their roles and the faction's priorities.
-        """
-        for agent in self.agents:
-            task = self.assigned_tasks.get(agent)
-            if task:
-                agent.behavior.execute_task(task, resource_manager, agents)
-        logger.debug_log(f"Faction {self.id} assigned task {task} to agent {agent.role}.", level=logging.INFO)
-
+    
 
     def receive_experience(self, experience):
         """
@@ -433,143 +426,103 @@ class Faction():
 
     def assign_high_level_tasks(self):
         """
-        Use HQ's neural network to dynamically prioritize and assign tasks to agents.
+        Assigns tasks to all idle agents using HQ's learned decision model.
         """
-        try:
-            raw_state = self.aggregate_faction_state()
-            #print(f"[DEBUG] Raw Global State Before Tensor Conversion: {raw_state}")  #  Debug Print
-            state_tensor = self.network.convert_state_to_tensor(raw_state)
-            #print(f"[DEBUG] Final State Tensor Size After Conversion: {state_tensor.shape}")  #  Verify new shape
-        except Exception as e:
-            print(f"[ERROR] Failed to convert state to tensor for Faction {self.id}. Exception: {e}")
-            raise
+        logger.debug_log(f"[HQ] Faction {self.id} assigning high-level tasks...", level=logging.INFO)
 
-        role_tensor = torch.zeros(1, 5, dtype=torch.float32)
-        local_state_tensor = torch.zeros(1, 5, dtype=torch.float32) 
-        global_state_tensor = state_tensor.clone()
-        logger.debug_log(f"Faction {self.id} - Tensor Shapes:\nRole={role_tensor.shape}\nState={state_tensor.shape}\n Local={local_state_tensor.shape}\n Global={global_state_tensor.shape}")
-        #  Automatically update HQ Network if input size changes
-        actual_size = state_tensor.shape[1] + role_tensor.shape[1] + local_state_tensor.shape[1] + global_state_tensor.shape[1]
-
-        if self.network.fc1.in_features != actual_size:
-            logger.debug_log(f"[INFO] Updating HQ_Network input size from {self.network.fc1.in_features} to {actual_size}")
-            self.network.update_network(actual_size)
-
-        logger.debug_log(f"[DEBUG] Actual HQ input size: {actual_size}", level=logging.INFO)
-
-        with torch.no_grad():
-            task_priorities, _ = self.network(state_tensor, role_tensor, local_state_tensor, global_state_tensor)
-
-        #  Ensure task_priorities is correctly formatted
-        if not isinstance(task_priorities, torch.Tensor):
-            raise TypeError(f"[ERROR] Expected tensor from HQ network, but got {type(task_priorities)}")
-
-        if task_priorities.shape[0] < 2:
-            raise ValueError(f"[ERROR] Expected at least 2 outputs (threat & resource priority), but got {task_priorities.shape}")
-
-        #  Extract priorities
-        threat_priority = task_priorities[0].item()
-        resource_priority = task_priorities[1].item()
-
-        logger.debug_log(
-            f"Faction {self.id} Task Priorities - Threat: {threat_priority}, Resource: {resource_priority}",
-            level=logging.INFO
-        )
-
-        #Assign tasks to agents dynamically
-        #Skip agents that already have an active task
         for agent in self.agents:
-            if agent.current_task is not None:  
-                continue  #  Skip assigning new tasks if an agent already has one
+            if agent.current_task:
+                continue  # skip agents with active tasks
 
             task = self.assign_task(agent)
             if task:
                 agent.current_task = task
+                self.assigned_tasks[task["id"]] = agent
+            
+            printdebug = False
+            if printdebug == True :
+                logger.debug_log(f"[TASK ASSIGNED] {agent.agent_id} => {task['type']} at {task['target'].get('position')}", level=logging.INFO)
+                logger.debug_log(f"[DEBUG] {agent.agent_id} has task: {agent.current_task}", level=logging.DEBUG)
 
 
 
 
 
-    def assign_task(self, agent):
+    def assign_task(self, agent) -> Optional[dict]:
         """
-        Assigns the most relevant task to an agent using a learned approach.
-        Takes agent location into account and validates role-task compatibility.
+        Decides the most relevant task for the agent and returns it.
+        Does NOT directly assign the task to the agent or update faction-assigned tasks.
         """
         role = getattr(agent, "role", None)
         if role not in ["gatherer", "peacekeeper"]:
             logger.debug_log(f"[WARN] Unknown role for agent {agent.agent_id}: {role}", level=logging.WARNING)
             return None
 
-        # Filter unassigned threats/resources
+        # Filter unassigned threats
         available_threats = [
-                                t for t in self.global_state["threats"]
-                                if t["id"] not in self.assigned_tasks
-                                and isinstance(t["id"], AgentID)
-                                and t["id"].faction_id != self.id
-                                and t["id"] != agent.agent_id
-                            ]
+            t for t in self.global_state.get("threats", [])
+            if isinstance(t.get("id"), AgentID)
+            and t["id"].faction_id != self.id
+            and t["id"] != agent.agent_id
+            and f"Threat-{t['id']}" not in self.assigned_tasks
+        ]
 
-     
-        available_resources = sorted( # Sort resources by distance from agent for task assignment
-                                        [r for r in self.resource_manager.resources if not r.is_depleted()],
-                                        key=lambda r: ((r.x - agent.x) ** 2 + (r.y - agent.y) ** 2) ** 0.5
-                                    )
+        # Filter unclaimed HQ-known resources
+        unclaimed_resources = [
+            r for r in self.global_state.get("resources", [])
+            if f"Resource-{r['location']}" not in self.assigned_tasks
+        ]
 
-        # Use the agent's position for distance calculation
-        nearest_threat = find_closest_actor(available_threats, entity_type="threat", requester=agent)
-        nearest_resource = find_closest_actor(available_resources, entity_type="resource", requester=agent)
+        # Use weight-based sorting
+        sorted_threats = sorted(available_threats, key=lambda t: self.calculate_threat_weight(agent, t))
+        sorted_resources = sorted(
+            unclaimed_resources,
+            key=lambda r: self.calculate_resource_weight(agent, 
+                next((res for res in self.resource_manager.resources if (res.grid_x, res.grid_y) == r["location"]), None)
+            )
+            if any((res.grid_x, res.grid_y) == r["location"] for res in self.resource_manager.resources) else float("inf")
+        )
 
-        # Build placeholder tensors for the HQ network
+        nearest_threat = sorted_threats[0] if sorted_threats else None
+        nearest_resource = sorted_resources[0] if sorted_resources else None
+
+        # Network inputs
         role_tensor = torch.zeros(1, 5, dtype=torch.float32)
         local_state_tensor = torch.zeros(1, 5, dtype=torch.float32)
         global_state_tensor = torch.zeros(1, 5, dtype=torch.float32)
         task_tensor = self.network.convert_state_to_tensor(self.global_state)
 
-        # Let the HQ network recommend task type
         with torch.no_grad():
             task_decision, _ = self.network(task_tensor, role_tensor, local_state_tensor, global_state_tensor)
 
-        # Decide based on HQ prediction
         chosen_task = "eliminate" if task_decision[0].item() > task_decision[1].item() else "gather"
 
-        # Role-task compatibility check
+        # Ensure role-task compatibility
         if role == "gatherer" and chosen_task != "gather":
-            logger.debug_log(f"Skipped assigning 'eliminate' task to gatherer {agent.agent_id}", level=logging.INFO)
+            logger.debug_log(f"[SKIP] Gatherer {agent.agent_id} not assigned 'eliminate'", level=logging.INFO)
             return None
         if role == "peacekeeper" and chosen_task != "eliminate":
-            logger.debug_log(f"Skipped assigning 'gather' task to peacekeeper {agent.agent_id}", level=logging.INFO)
+            logger.debug_log(f"[SKIP] Peacekeeper {agent.agent_id} not assigned 'gather'", level=logging.INFO)
             return None
 
-        #  Task assignment based on decision
+        # --- Task Construction ---
         if chosen_task == "eliminate" and nearest_threat:
             task_id = f"Threat-{nearest_threat['id']}"
-            target = {"position": nearest_threat["location"], "id": nearest_threat["id"]}
-        elif chosen_task == "gather" and self.global_state["resources"]:
-            # Find the closest HQ-known resource
-            hq_known_resources = self.global_state["resources"]
-            closest = find_closest_actor(hq_known_resources, entity_type="resource", requester=agent)
+            target = {"position": nearest_threat["location"], "id": nearest_threat["id"], "type": "agent"}
+            return create_task(self, "eliminate", target, task_id)
 
-            if closest:
-                # Match it to the actual AppleTree/GoldLump object
-                target_obj = next(
-                    (r for r in self.resource_manager.resources
-                    if not r.is_depleted()
-                    and (r.grid_x, r.grid_y) == closest["location"]),
-                    None
-                )
+        elif chosen_task == "gather" and nearest_resource:
+            target_location = nearest_resource["location"]
+            target_obj = next((res for res in self.resource_manager.resources if (res.grid_x, res.grid_y) == target_location), None)
+            if not target_obj:
+                return None
+            task_id = f"Resource-{target_location}"
+            target = {"position": target_location, "type": nearest_resource["type"]}
+            return create_task(self, "gather", target, task_id)
 
-                if target_obj:
-                    task_id = f"Resource-{(target_obj.grid_x, target_obj.grid_y)}"
-                    target = {"position": (target_obj.grid_x, target_obj.grid_y)}
-                    self.assigned_tasks[task_id] = agent
-                    return create_task(self, task_type="gather", target=target, task_id=task_id)
+        logger.debug_log(f"[NO TASK] No valid task found for agent {agent.agent_id}", level=logging.INFO)
+        return None
 
-        else:
-            return None  # No valid targets
-
-        # Register and return the task
-        self.assigned_tasks[task_id] = agent
-        return create_task(self, task_type=chosen_task, target=target, task_id=task_id)
 
 
 
@@ -635,13 +588,21 @@ class Faction():
         """
         if task_location in self.assigned_tasks:
             logger.debug_log(f"Task at {task_location} completed with state: {task_state}.", level=logging.INFO)
-            del self.assigned_tasks[task_location]
-
+            
             if task_state == TaskState.SUCCESS:
                 logger.debug_log(f"Agent {agent.role} successfully completed task at {task_location}.", level=logging.INFO)
                 self.clean_global_state()  # Update global state after task completion
+
+                # Only remove the task after it's completed
+                del self.assigned_tasks[task_location]
             elif task_state == TaskState.FAILURE:
                 logger.debug_log(f"Agent {agent.role} failed to complete task at {task_location}. Reassigning task.", level=logging.WARNING)
+                # You may want to reassign or mark the task as pending again.
+                # No need to clear the task here if you plan to reassign it
+
+        else:
+            logger.debug_log(f"Task at {task_location} not found in assigned tasks.", level=logging.WARNING)
+
 
     def update_tasks(self, agents):
         """
@@ -649,16 +610,23 @@ class Faction():
         """
         for agent in agents:
             if agent.current_task_state == TaskState.SUCCESS or agent.current_task_state == TaskState.FAILURE:
-                # Mark task as completed and clear for reassignment
                 task = agent.current_task
                 if task:
+                    # If the task is complete, mark it and reassigned if needed
                     self.complete_task(task.get("target"), agent, agent.current_task_state)
-                    agent.current_task = None
-                    agent.update_task_state(TaskState.NONE)
+                    
+                    # Clear the task only if the task is successfully completed or failed
+                    if task["state"] == TaskState.SUCCESS or task["state"] == TaskState.FAILURE:
+                        agent.current_task = None
+                        agent.update_task_state(TaskState.NONE)  # Reset the task state if the task is cleared
+
+                else:
+                    logger.debug_log(f"No task assigned to agent {agent.agent_id}. Skipping.", level=logging.DEBUG)
 
 
-    
-    
+
+        
+        
     
     
     
