@@ -56,7 +56,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class GameManager:
-    def __init__(self, save_dir="saved_models", max_steps_per_episode=STEPS_PER_EPISODE, screen=None):
+    def __init__(self, mode, save_dir="saved_models", max_steps_per_episode=STEPS_PER_EPISODE, screen=None):
         # Initialise a logger specific to GameManager
         self.logger = Logger(log_file="game_manager_log.txt", log_level=logging.DEBUG)
         self.mode = None  # Default mode is None
@@ -68,7 +68,8 @@ class GameManager:
         self.faction_manager = FactionManager()  # Initialise faction manager
         self.faction_manager.factions = []  # Ensure factions list is initialised
         self.agents = []  # List to store all agents
-        self.screen = screen  # Initialise the screen   
+        self.screen = screen  # Initialise the screen
+        self.mode = mode  # Set the mode
         
 
         # Initialise the resource manager with the terrain
@@ -110,6 +111,7 @@ class GameManager:
         # Create directory for saved models if it doesn't exist
         if not os.path.exists(self.save_dir):  # Here `save_dir` should be a valid path string
             os.makedirs(self.save_dir)
+        self.set_mode(mode)
 
 
 
@@ -156,12 +158,11 @@ class GameManager:
             self.handle_camera_movement(keys)
 
             # HQ assigns tasks to agents
-            self.communication_system.hq_to_agents()
+            self.communication_system.Communicate_Task_to_Agent()
 
+            # Main agent loop
             for agent in self.agents[:]:
                 try:
-                    hq_state = agent.faction.aggregate_faction_state()
-
                     # Handle agent death
                     if agent.Health <= 0:
                         print(f"Agent {agent.role} from faction {agent.faction.id} has died.")
@@ -170,30 +171,11 @@ class GameManager:
                         self.agents.remove(agent)
                         continue
 
-                    # Agent gets state and acts
-                    state = agent.get_state(self.resource_manager, self.agents, agent.faction, hq_state)
-                    reward, task_state = agent.perform_task(state, self.resource_manager, self.agents)
+                    # Generate fresh HQ state for each agent
+                    hq_state = agent.faction.aggregate_faction_state()
 
-                    # Transition bookkeeping
-                    log_prob = getattr(agent, "log_prob", None)
-                    local_value = getattr(agent, "value", None)
-                    action = getattr(agent, "current_action", None)
-
-                    if None in [log_prob, local_value, action]:
-                        print(f"[ERROR] Missing decision data for agent {agent.agent_id}. Skipping transition.")
-                        continue
-
-                    done = (task_state in [TaskState.SUCCESS, TaskState.FAILURE])
-
-                    agent.ai.store_transition(
-                        state=state,
-                        action=action,
-                        log_prob=log_prob,
-                        reward=reward,
-                        local_value=local_value,
-                        global_value=0,
-                        done=done
-                    )
+                    # Let agent handle task execution, transitions, and learning
+                    agent.update(self.resource_manager, self.agents, hq_state)
 
                 except Exception as e:
                     print(f"An error occurred for agent {agent.role}: {e}")
@@ -201,7 +183,7 @@ class GameManager:
 
             # Agents share observations
             for agent in self.agents:
-                state = self.get_agent_state(agent, hq_state)
+                state = self.get_agent_state(agent, agent.faction.aggregate_faction_state())
                 agent.observe(
                     all_agents=self.agents,
                     enemy_hq={"position": agent.faction.home_base["position"]},
@@ -211,7 +193,7 @@ class GameManager:
             # Update faction state
             self.faction_manager.update(self.resource_manager, self.agents)
 
-            # Advance step
+            # Advance simulation step
             self.current_step += 1
 
         except Exception as e:

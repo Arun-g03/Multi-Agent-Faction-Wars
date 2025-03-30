@@ -399,7 +399,7 @@ class PPOModel(nn.Module):
             # Check if memory is populated
             if not all(len(self.memory[k]) > 0 for k in required_keys):
                 logger.debug_log(
-                    "[ERROR] Training skipped: Memory buffer is incomplete or empty. " +
+                    "[ERROR] Training :skipped Memory buffer is incomplete or empty. " +
                     ", ".join(f"{k}={len(self.memory[k])}" for k in required_keys),
                     level=logging.ERROR
                 )

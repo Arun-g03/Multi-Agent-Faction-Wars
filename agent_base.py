@@ -111,8 +111,8 @@ class BaseAgent:
             network_type_int = NETWORK_TYPE_MAPPING.get(network_type, 1)  # Default to "none" if not found
 
             # Agent-specific initialisation
-            self.x = x
-            self.y = y
+            self.x : float = x
+            self.y : float = y
             self.role = role
             self.faction = faction
             self.terrain = terrain
@@ -291,7 +291,7 @@ class BaseAgent:
         logger.debug_log(f"{self.role} task state updated to {task_state}.", level=logging.DEBUG)
 
     
-    def update(self, resource_manager, agents):
+    def update(self, resource_manager, agents, hq_state):
         """
         Update the agent's state. This includes:
         - Performing assigned tasks.
@@ -299,15 +299,15 @@ class BaseAgent:
         - Reporting experiences to the faction.
         """
         try:
-            # Retrieve the agent's current state
-            state = self.get_state(resource_manager, agents, self.faction)
-            logger.debug_log(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
-
             # 🔍 Log the current task before performing it
             logger.debug_log(
                 f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
                 level=logging.DEBUG
             )
+
+            # Retrieve the agent's current state based on HQ state
+            state = self.get_state(resource_manager, agents, self.faction, hq_state)
+            logger.debug_log(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
 
             # Execute the current task or decide on a new action
             reward, task_state = self.perform_task(state, resource_manager, agents)
@@ -316,10 +316,12 @@ class BaseAgent:
             # Observe the environment and report findings to the faction
             self.observe(agents, {"position": self.faction.home_base["position"]}, resource_manager)
 
-            # Report experiences for centralized learning
+            # Log the task state and reward for centralized learning
             if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
-                next_state = self.get_state(resource_manager, agents, self.faction)
+                next_state = self.get_state(resource_manager, agents, self.faction, hq_state)
                 done = task_state in [TaskState.SUCCESS, TaskState.FAILURE]
+
+                # Report the agent's experience to the HQ
                 self.report_experience_to_hq(state, self.current_task, reward, next_state, done)
 
             # Handle health-related conditions
@@ -329,6 +331,7 @@ class BaseAgent:
         except Exception as e:
             traceback.print_exc()
             raise RuntimeError(f"An error occurred while updating the agent: {e}")
+
 
 
 

@@ -371,7 +371,7 @@ class GameRenderer:
                         )
 
 
-                        # Highlight the target of the agent if applicable
+                        
                         # Highlight the target of the agent if applicable
                         if isinstance(agent.current_task, dict):
                             task_type = agent.current_task.get("type", "unknown")  # Extract the task type
@@ -392,11 +392,13 @@ class GameRenderer:
                                     # 🪵 Log the target coordinates
                                     logger.debug_log(f"[DEBUG] Target Coordinates: {target_x}, {target_y}", level=logging.DEBUG)
 
-                                    # Adjust coordinates for grid-based targets (gatherers)
-                                    target_x *= CELL_SIZE
+                                    # Adjust coordinates for grid-based targets
+                                    target_x *= CELL_SIZE  # Adjust based on CELL_SIZE
                                     target_y *= CELL_SIZE
 
-                                    # Calculate screen coordinates
+                                    
+
+                                    # Calculate the screen coordinates
                                     target_screen_x, target_screen_y = camera.apply((target_x, target_y))
 
                                     # 🪵 Log the screen coordinates
@@ -422,15 +424,11 @@ class GameRenderer:
                                     logger.debug_log(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
 
                                     # Draw the box at the calculated screen position
-                                    pygame.draw.rect(
-                                        self.screen,
-                                        box_color,  # Colour determined by task type
-                                        box_rect,
-                                        width=2  # Border thickness
-                                    )
+                                    pygame.draw.rect(self.screen, box_color, box_rect, width=2)
                                 else:
                                     # Handle the case where target has no position
                                     logger.debug_log(f"[ERROR] Task has no valid target position for Agent {agent.agent_id}", level=logging.ERROR)
+
 
 
 
@@ -719,11 +717,11 @@ class MenuRenderer:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if train_button_rect.collidepoint(event.pos):
-                    self.selected_mode = 'train'  #  Store mode but don't exit menu
+                    self.selected_mode = 'train'  #  Store mode 
                     print("[INFO] Training mode selected.")
 
                 elif evaluate_button_rect.collidepoint(event.pos):
-                    self.selected_mode = 'evaluate'  #  Store mode but don't exit menu
+                    self.selected_mode = 'evaluate'  #  Store mode 
                     print("[INFO] Evaluation mode selected.")
 
                 elif start_button_rect.collidepoint(event.pos) and self.selected_mode:

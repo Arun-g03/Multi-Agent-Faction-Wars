@@ -454,74 +454,55 @@ class Faction():
         Does NOT directly assign the task to the agent or update faction-assigned tasks.
         """
         role = getattr(agent, "role", None)
+
+        # Ensure role is known and valid
         if role not in ["gatherer", "peacekeeper"]:
             logger.debug_log(f"[WARN] Unknown role for agent {agent.agent_id}: {role}", level=logging.WARNING)
             return None
 
-        # Filter unassigned threats
+        # Filter unassigned threats for peacekeepers (only peacekeepers can be assigned 'eliminate' tasks)
         available_threats = [
             t for t in self.global_state.get("threats", [])
-            if isinstance(t.get("id"), AgentID)
-            and t["id"].faction_id != self.id
-            and t["id"] != agent.agent_id
-            and f"Threat-{t['id']}" not in self.assigned_tasks
+            if isinstance(t.get("id"), AgentID) and t["id"].faction_id != self.id
+            and t["id"] != agent.agent_id and f"Threat-{t['id']}" not in self.assigned_tasks
         ]
 
-        # Filter unclaimed HQ-known resources
+        # Filter unclaimed HQ-known resources for gatherers (only gatherers can be assigned 'gather' tasks)
         unclaimed_resources = [
             r for r in self.global_state.get("resources", [])
             if f"Resource-{r['location']}" not in self.assigned_tasks
         ]
 
-        # Use weight-based sorting
-        sorted_threats = sorted(available_threats, key=lambda t: self.calculate_threat_weight(agent, t))
-        sorted_resources = sorted(
-            unclaimed_resources,
-            key=lambda r: self.calculate_resource_weight(agent, 
-                next((res for res in self.resource_manager.resources if (res.grid_x, res.grid_y) == r["location"]), None)
-            )
-            if any((res.grid_x, res.grid_y) == r["location"] for res in self.resource_manager.resources) else float("inf")
-        )
-
-        nearest_threat = sorted_threats[0] if sorted_threats else None
-        nearest_resource = sorted_resources[0] if sorted_resources else None
-
-        # Network inputs
-        role_tensor = torch.zeros(1, 5, dtype=torch.float32)
-        local_state_tensor = torch.zeros(1, 5, dtype=torch.float32)
-        global_state_tensor = torch.zeros(1, 5, dtype=torch.float32)
-        task_tensor = self.network.convert_state_to_tensor(self.global_state)
-
-        with torch.no_grad():
-            task_decision, _ = self.network(task_tensor, role_tensor, local_state_tensor, global_state_tensor)
-
-        chosen_task = "eliminate" if task_decision[0].item() > task_decision[1].item() else "gather"
-
-        # Ensure role-task compatibility
-        if role == "gatherer" and chosen_task != "gather":
-            logger.debug_log(f"[SKIP] Gatherer {agent.agent_id} not assigned 'eliminate'", level=logging.INFO)
-            return None
-        if role == "peacekeeper" and chosen_task != "eliminate":
-            logger.debug_log(f"[SKIP] Peacekeeper {agent.agent_id} not assigned 'gather'", level=logging.INFO)
-            return None
-
-        # --- Task Construction ---
-        if chosen_task == "eliminate" and nearest_threat:
-            task_id = f"Threat-{nearest_threat['id']}"
-            target = {"position": nearest_threat["location"], "id": nearest_threat["id"], "type": "agent"}
-            return create_task(self, "eliminate", target, task_id)
-
-        elif chosen_task == "gather" and nearest_resource:
-            target_location = nearest_resource["location"]
-            target_obj = next((res for res in self.resource_manager.resources if (res.grid_x, res.grid_y) == target_location), None)
-            if not target_obj:
+        # If the agent is a gatherer, only consider resources, and if it's a peacekeeper, only consider threats
+        if role == "gatherer":
+            nearest_resource = sorted(
+                unclaimed_resources,
+                key=lambda r: self.calculate_resource_weight(agent,
+                    next((res for res in self.resource_manager.resources if (res.grid_x, res.grid_y) == r["location"]), None)
+                ) if any((res.grid_x, res.grid_y) == r["location"] for res in self.resource_manager.resources) else float("inf")
+            )[0] if unclaimed_resources else None
+            # If no resources available, return None (no task)
+            if not nearest_resource:
+                logger.debug_log(f"[NO TASK] No valid resources for gatherer {agent.agent_id}", level=logging.INFO)
                 return None
+            target_location = nearest_resource["location"]
             task_id = f"Resource-{target_location}"
             target = {"position": target_location, "type": nearest_resource["type"]}
             return create_task(self, "gather", target, task_id)
 
+        if role == "peacekeeper":
+            nearest_threat = sorted(available_threats, key=lambda t: self.calculate_threat_weight(agent, t))[0] if available_threats else None
+            # If no threats available, return None (no task)
+            if not nearest_threat:
+                logger.debug_log(f"[NO TASK] No valid threats for peacekeeper {agent.agent_id}", level=logging.INFO)
+                return None
+            task_id = f"Threat-{nearest_threat['id']}"
+            target = {"position": nearest_threat["location"], "id": nearest_threat["id"], "type": "agent"}
+            return create_task(self, "eliminate", target, task_id)
+
         logger.debug_log(f"[NO TASK] No valid task found for agent {agent.agent_id}", level=logging.INFO)
         return None
+
 
 
 

@@ -137,7 +137,7 @@ def start_game(screen, mode, debug_mode=True, tensorboard_enabled=True, auto_ten
         print(f"[INFO] Starting game in {mode} mode...")
 
         # Initialise GameManager
-        game_manager = GameManager(screen=screen)
+        game_manager = GameManager(screen=screen, mode=mode)
 
         # Initialise the game with the selected mode
         game_manager.Initialise(mode)

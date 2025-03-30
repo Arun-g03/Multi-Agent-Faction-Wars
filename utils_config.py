@@ -45,7 +45,7 @@ LOGGING_ENABLED = True
 #More training equals better results... probably.
 
 EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 1000 #How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 600 #How many steps to take per episode/ How long should a game last
 
 #Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
 

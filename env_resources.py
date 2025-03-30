@@ -193,7 +193,7 @@ class AppleTree:
         if current_time - self.last_regen_time >= APPLE_REGEN_TIME and self.quantity < self.max_quantity:  # 10 seconds
             self.quantity += 1
             self.last_regen_time = current_time
-            print(f"Apple Tree at ({self.grid_x}, {self.grid_y}) regen. Remaining: {self.quantity}")
+            
 
     def gather(self, amount):
         """

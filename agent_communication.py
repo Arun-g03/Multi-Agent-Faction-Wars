@@ -109,47 +109,35 @@ class CommunicationSystem:
     def agent_to_hq(self, agent, report):
         faction = agent.faction  # Assuming agents have a reference to their faction
         faction.receive_report(report)
-        logger.debug_log(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
+        #logger.debug_log(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
 
-    def hq_to_agents(self):
+    def Communicate_Task_to_Agent(self):
         """
         Each faction's HQ processes reports and dynamically assigns tasks to agents.
         """
         for faction in self.faction:
-            #  Ensure global state is updated before assigning tasks
+            # Ensure global state is updated before assigning tasks
             faction.clean_global_state()
 
-            #  Use HQ's neural network to prioritize tasks dynamically
-            faction.assign_high_level_tasks()
+            logger.debug_log(f"[HQ] Faction {faction.id} cleaned global state.", level=logging.INFO)
 
-            #  Iterate through agents and assign the best available task only if needed
+            # Use HQ's neural network to prioritize tasks dynamically
+            faction.assign_high_level_tasks()  # This will internally handle the task assignment
+
+            # Now, just iterate through agents to make sure the tasks are properly assigned
             for agent in faction.agents:
-                if agent.current_task is not None:  
-                    continue  #  Skip if agent already has an active task
-
-                task = faction.assign_task(agent)  #  Assign a new task only if needed
-                if task:
-                    agent.current_task = task
-                    logger.debug_log(f"HQ assigned task to {agent.role}: {task}", level=logging.INFO)
+                # Check if the agent has a task already
+                if agent.current_task is None:
+                    # If the agent does not have a task, log this and assign a new task
+                    logger.debug_log(f"[HQ] No task assigned to agent {agent.agent_id} ({agent.role}). No valid resources or threats.", level=logging.WARNING)
                 else:
-                    logger.debug_log(f"No task assigned to {agent.role} (ID: {agent.agent_id}).", level=logging.WARNING)
+                    logger.debug_log(f"[HQ] Agent {agent.agent_id} already has a task: {agent.current_task}", level=logging.DEBUG)
 
 
 
+        
 
-    
-
-    def send_task_to_agent(self, agent, global_state):
-        if agent.current_task:
-            return
-
-        task = agent.faction.assign_task(agent)  # or self.assign_task(agent) depending on context
-        if task:
-            agent.current_task = task
-            task_id = task.get("id") or task.get("task_id")
-            agent.faction.assigned_tasks[task_id] = agent
-            logger.debug_log(f"[HQ TASK SENT] Assigned {task['type']} task to {agent.agent_id}", level=logging.INFO)
-
+        
         
 
 

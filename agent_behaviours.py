@@ -144,7 +144,14 @@ class AgentBehaviour:
             raise ValueError("Agent state contains NaN or Inf values.")
 
         task_state = self.perform_action(action_index, state, resource_manager, agents)
-        reward = self.assign_reward_for_task_action(task_state)
+        reward = self.assign_reward_for_task_action(
+                    task_state,
+                    task_type=self.agent.current_task.get("type", "unknown"),  # Use self.agent for task reference
+                    agent=self.agent,  # Use self.agent for reference
+                    target_position=self.agent.current_task.get("target", {}).get("position", (0, 0)),  # Get target position
+                    current_position=(self.agent.x, self.agent.y)  # Get current position from self.agent
+                )
+
 
         if tensorboard_logger and task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
             task_type = self.agent.current_task.get("type", "unknown")
@@ -152,7 +159,7 @@ class AgentBehaviour:
 
         if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
             self.agent.current_task["state"] = task_state
-            self.agent.current_task = None
+            
         else:
             self.agent.current_task["state"] = task_state
 
@@ -175,20 +182,78 @@ class AgentBehaviour:
             return -1  # Small penalty for invalid actions
 
 
-    def assign_reward_for_task_action(self, task_state):
+    def assign_reward_for_task_action(self, task_state, task_type, agent, target_position, current_position):
         """
-        Assign rewards for actions performed as part of an assigned task.
+        Assign rewards based on task state, task progress, time, and path efficiency.
         """
+        # Reward for task success
         if task_state == TaskState.SUCCESS:
-            return 10  # High reward for task success
+            reward = 10  # High reward for successful task completion
+            
+            # Reward for fast completion (based on distance to target)
+            distance_travelled = self.calculate_distance(current_position, target_position)
+            reward += max(0, 5 - distance_travelled)  # Reward for covering less distance
+            
+        # Penalize task failure
         elif task_state == TaskState.FAILURE:
-            return -5  # Penalize task failure
+            reward = -5  # Penalize failure
+            reward -= 2 * self.calculate_distance(current_position, target_position)  # Heavier penalty for failure with more distance
+            
+        # Reward for ongoing tasks (neutral or progress-based)
         elif task_state == TaskState.ONGOING:
-            return 2  # Neutral reward for ongoing task actions
+            reward = 2  # Neutral reward
+            
+            # Reward for moving closer to the target
+            distance_travelled = self.calculate_distance(current_position, target_position)
+            reward += max(0, 3 - distance_travelled)  # Encourage quicker movement towards target
+
+            # Penalize backtracking (agent going away from the target)
+            if self.is_backtracking(current_position, target_position):
+                reward -= 3  # Penalize for going backwards
+
+        # Penalize invalid task states
         elif task_state == TaskState.INVALID:
-            return -3  # Penalize invalid task states
+            reward = -3  # Penalize invalid states
+            
+        # Default penalty for unknown task states
         else:
-            return -1  # Default penalty for unknown states
+            reward = -1  # Default penalty for unknown task states
+
+        # If the task is related to gathering (e.g., close to the target, collecting resources)
+        if task_type == "gather":
+            # Reward for completing gather actions quickly
+            if task_state == TaskState.SUCCESS:
+                reward += 5  # Bonus for fast gathering
+
+        # If the task is related to eliminating (e.g., threat elimination)
+        if task_type == "eliminate":
+            # Reward for eliminating threats with minimal risk
+            if task_state == TaskState.SUCCESS:
+                reward += 7  # Bonus for eliminating threats effectively
+
+        return reward
+
+    def calculate_distance(self, pos1, pos2):
+        """
+        Calculate the Euclidean distance between two points.
+        """
+        return ((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2) ** 0.5
+
+    def is_backtracking(self, current_position, target_position):
+        """
+        Determine if the agent is moving away from its target.
+        """
+        # Check if the agent is moving away from the target position
+        # This could be based on the previous position (if you store it)
+        # or by comparing the direction of movement with the target location.
+        # Here, we are assuming the agent has access to a `previous_position` attribute.
+
+        if hasattr(self.agent, "previous_position"):
+            distance_to_previous = self.calculate_distance(self.agent.previous_position, target_position)
+            distance_to_current = self.calculate_distance(current_position, target_position)
+
+            return distance_to_current > distance_to_previous  # Backtracking if current distance is larger than the previous one
+        return False
 
 
 
