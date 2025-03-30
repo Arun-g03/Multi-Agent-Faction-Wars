@@ -38,17 +38,17 @@ from utils_config import (
     HQ_Agent_Spawn_Radius,
     TaskState,
     ROLE_ACTIONS_MAP,
-    AgentID,
+    AgentIDStruc,
     DEF_AGENT_STATE_SIZE)
 
 """Logging  and profiling for performance and execution analysis"""
 import logging
-from utils_logger import Logger, TensorBoardLogger
+from utils_logger import Logger
 import cProfile
 import pstats
 import io
 import traceback
-
+from utils_logger import TensorBoardLogger
 """Neural Network libraries and GPU enabling""" 
 import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,6 +70,7 @@ class GameManager:
         self.agents = []  # List to store all agents
         self.screen = screen  # Initialise the screen
         self.mode = mode  # Set the mode
+        self.episode = 1
         
 
         # Initialise the resource manager with the terrain
@@ -93,7 +94,7 @@ class GameManager:
         self.max_steps_per_episode = max_steps_per_episode
         self.last_activity_step = 0
         self.communication_system = None  # Communication system
-        self.episode = 1
+        
 
         # Initialise factions and agents
         self.Initialise_factions()
@@ -106,7 +107,9 @@ class GameManager:
             renderer=self.renderer,
             camera=self.camera
         )
-        self.tensorboard_logger = TensorBoardLogger(log_dir="logs/game")
+
+        
+        
 
         # Create directory for saved models if it doesn't exist
         if not os.path.exists(self.save_dir):  # Here `save_dir` should be a valid path string
@@ -275,7 +278,7 @@ class GameManager:
             # Step 2: Initialise Resources
             print("Initialising resources...")
             self.resource_manager = ResourceManager(self.terrain)
-            self.resource_manager.generate_resources()
+            self.resource_manager.generate_resources(episode=self.episode)
             
             # Now set the `resources` attribute after generating them
             self.resources = self.resource_manager.resources  # Assign resources after generation
@@ -299,6 +302,8 @@ class GameManager:
             # Step 6: Finalize initialisation
             self.current_step = 0  # Reset step counter for the new game
             self.episode = 1  # Reset episode counter for the new game
+            global CurrEpisode
+            CurrEpisode = self.episode          
             print(f"Game initialised in {mode} mode.")
         except:
             print("An error occurred during initialisation.")
@@ -490,7 +495,7 @@ class GameManager:
                         event_manager=event_manager,
                         network_type=network_type,
                     )
-                agent.tensorboard_logger = self.tensorboard_logger 
+                
                 faction.next_agent_id += 1  # Increment the counter
                 return agent
 
@@ -586,14 +591,38 @@ class GameManager:
                         break
 
                 # TensorBoard: Episode summary
-                self.tensorboard_logger.log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
-                for faction in self.faction_manager.factions:
-                    faction_reward = sum(agent.ai.memory["rewards"][-1] for agent in faction.agents if agent.ai.memory["rewards"])
-                    self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Total_Reward", faction_reward, self.episode)
-                    self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
-                    self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
-                    self.tensorboard_logger.log_scalar(f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
+                
+                TensorBoardLogger().log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
 
+                for faction in self.faction_manager.factions:
+                    # Aggregate rewards per role
+                    role_rewards = {}
+                    total_reward = 0
+
+                    for agent in faction.agents:
+                        rewards = agent.ai.memory.get("rewards", [])
+                        if rewards:
+                            last_reward = rewards[-1]
+                            total_reward += last_reward
+
+                            role = agent.role
+                            role_rewards[role] = role_rewards.get(role, 0) + last_reward
+
+                    # Log overall faction reward
+                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
+                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
+                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
+                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
+                    print(f"Faction {faction.id} total reward: {total_reward}")
+                    print(f"Faction {faction.id} gold balance: {faction.gold_balance}")
+                    print(f"Faction {faction.id} food balance: {faction.food_balance}")
+                    print(f"Faction {faction.id} agents alive: {len(faction.agents)}")
+                    print(f"Faction {faction.id} reward by role: {role_rewards}")
+
+                    # Log reward by role
+                    for role, reward in role_rewards.items():
+                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
+                        
                 # 🔁 Train agents at the end of the episode
                 if self.mode == "train":
                     self.logger.debug_log("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
@@ -604,7 +633,7 @@ class GameManager:
                                 agent.ai.train(mode="train")
                             except Exception as e:
                                 print(f"Training failed for agent {agent.agent_id}: {e}")
-
+                                traceback.print_exc()
                     # Save best-performing model per role
                     role_rewards = {}
 

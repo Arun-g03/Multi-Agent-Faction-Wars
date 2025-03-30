@@ -23,6 +23,10 @@ from utils_helpers import profile_function  # Import profiler
 FONT_NAME = "Arial"
 TITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
 
+from utils_logger import TensorBoardLogger
+# Initialise tensorboard logger
+tensorboard_logger = TensorBoardLogger(log_dir="Tensorboard_logs")
+
 def main():
     """Main function to run the game."""
     try:

@@ -9,7 +9,7 @@ from utils_config import (
     INITAL_PEACEKEEPER_COUNT, 
     CELL_SIZE, 
     TaskState, 
-    AgentID, 
+    AgentIDStruc, 
     create_task, 
     DEF_AGENT_STATE_SIZE,
     STATE_FEATURES_MAP,
@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from Agent_NeuralNetwork import device, PPOModel, DQNModel, HQ_Network 
+from Agent_NeuralNetwork import PPOModel, DQNModel, HQ_Network 
 from env_terrain import Terrain
 from env_resources import AppleTree, GoldLump
 from agent_communication import CommunicationSystem
@@ -34,7 +34,7 @@ from agent_communication import CommunicationSystem
 import logging
 from utils_logger import Logger
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 
 
@@ -463,7 +463,7 @@ class Faction():
         # Filter unassigned threats for peacekeepers (only peacekeepers can be assigned 'eliminate' tasks)
         available_threats = [
             t for t in self.global_state.get("threats", [])
-            if isinstance(t.get("id"), AgentID) and t["id"].faction_id != self.id
+            if isinstance(t.get("id"), AgentIDStruc) and t["id"].faction_id != self.id
             and t["id"] != agent.agent_id and f"Threat-{t['id']}" not in self.assigned_tasks
         ]
 

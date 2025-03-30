@@ -4,14 +4,15 @@ from utils_config import (
                         Agent_Attack_Range, 
                         TaskState, 
                         ROLE_ACTIONS_MAP, 
-                        AgentID, 
+                        AgentIDStruc, 
                         TASK_METHODS_MAPPING, 
                         
                         )
 from env_resources import AppleTree, GoldLump
 import random
 import logging
-from utils_logger import Logger, TensorBoardLogger
+from utils_logger import Logger
+from utils_logger import TensorBoardLogger
 import inspect
 from utils_helpers import (
     find_closest_actor
@@ -103,9 +104,12 @@ class AgentBehaviour:
    
 
     def perform_task(self, state, resource_manager, agents):
+        if state is None:
+            raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
+
         logger.debug_log(f"Agent {self.agent.role} performing task. Current task: {self.agent.current_task}", level=logging.INFO)
 
-        tensorboard_logger = getattr(self.agent, "tensorboard_logger", None)
+    
         faction_id = self.agent.faction.id
         episode = getattr(self.agent.faction, "episode", 0)
 
@@ -137,33 +141,38 @@ class AgentBehaviour:
             f"[PRE-ACTION] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}, State={state}",
             level=logging.DEBUG
         )
-
         if any(x != x or x == float("inf") or x == float("-inf") for x in state):
             print(f"\n[🔥 INVALID STATE] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}")
             print(f"State: {state}")
             raise ValueError("Agent state contains NaN or Inf values.")
 
         task_state = self.perform_action(action_index, state, resource_manager, agents)
+
+        # Calculate reward using contextual task data
         reward = self.assign_reward_for_task_action(
-                    task_state,
-                    task_type=self.agent.current_task.get("type", "unknown"),  # Use self.agent for task reference
-                    agent=self.agent,  # Use self.agent for reference
-                    target_position=self.agent.current_task.get("target", {}).get("position", (0, 0)),  # Get target position
-                    current_position=(self.agent.x, self.agent.y)  # Get current position from self.agent
-                )
-
-
-        if tensorboard_logger and task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
-            task_type = self.agent.current_task.get("type", "unknown")
-            tensorboard_logger.log_scalar(f"Faction_{faction_id}/Task_{task_type}_{task_state.name}", 1, episode)
-
-        if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
+            task_state=task_state,
+            task_type=self.agent.current_task.get("type", "unknown"),
+            agent=self.agent,
+            target_position=self.agent.current_task.get("target", {}).get("position", (0, 0)),
+            current_position=(self.agent.x, self.agent.y)
+        )
+        # Always update task state in current_task
+        if self.agent.current_task:
             self.agent.current_task["state"] = task_state
-            
-        else:
-            self.agent.current_task["state"] = task_state
+
+        self.agent.ai.store_transition(
+            state=state,
+            action=self.agent.current_action,
+            log_prob=self.agent.log_prob,
+            reward=reward,
+            local_value=self.agent.value,
+            global_value=0,  # Or calculated if available
+            done=(task_state in [TaskState.SUCCESS, TaskState.FAILURE])
+        )
+
 
         return reward, task_state
+
 
 
 
@@ -231,7 +240,21 @@ class AgentBehaviour:
             if task_state == TaskState.SUCCESS:
                 reward += 7  # Bonus for eliminating threats effectively
 
+                # 🧠 Log to TensorBoard
+        try:
+           
+            episode = getattr(agent.faction, "episode", 0)
+            faction_id = agent.faction.id
+            TensorBoardLogger().log_scalar(
+                f"Faction_{faction_id}/Task_{task_type}_{task_state.name}",
+                reward,
+                episode
+            )
+        except Exception as e:
+            logger.debug_log(f"[TensorBoard] Failed to log task reward: {e}", level=logging.WARNING)
+
         return reward
+
 
     def calculate_distance(self, pos1, pos2):
         """
@@ -410,6 +433,7 @@ class AgentBehaviour:
         """
         Heal the agent using an apple from its faction's food balance.
         """
+        
         if self.agent.faction.food_balance > 0:
             self.agent.faction.food_balance -= 1
             self.agent.Health = min(100, self.agent.Health + 10)

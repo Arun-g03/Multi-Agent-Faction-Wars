@@ -14,6 +14,9 @@ from utils_config import (
     Tree_Scale_Img,
     APPLE_REGEN_TIME)
 
+from utils_logger import TensorBoardLogger
+
+
 
 class ResourceManager:
     def __init__(self, terrain):
@@ -26,6 +29,8 @@ class ResourceManager:
         self.apple_tree_count = 0
         self.generate_resources()
         
+        """The current episode"""
+        
 
     #     ____                           _                                                     
     #    / ___| ___ _ __   ___ _ __ __ _| |_ ___   _ __ ___  ___  ___  _   _ _ __ ___ ___  ___ 
@@ -36,7 +41,7 @@ class ResourceManager:
 
 
 
-    def generate_resources(self, add_trees=0, add_gold_lumps=0, tree_density=None, gold_zone_probability=None, gold_spawn_density=None):
+    def generate_resources(self, add_trees=0, add_gold_lumps=0, tree_density=None, gold_zone_probability=None, gold_spawn_density=None, episode=0):
         """
         Generate resources (trees and gold lumps) either dynamically (specific amounts) or via density and probability for startup.
         :param add_trees: Number of trees to add dynamically.
@@ -45,6 +50,10 @@ class ResourceManager:
         :param gold_zone_probability: Probability of starting a gold zone (used for startup).
         :param gold_spawn_density: Density of gold lumps within a gold zone (used for startup).
         """
+        # Reset resource counts before generation
+        self.apple_tree_count = 0
+        self.gold_count = 0
+
         # Use default density/probability if not provided (for startup)
         tree_density = tree_density if tree_density is not None else TREE_DENSITY
         gold_zone_probability = gold_zone_probability if gold_zone_probability is not None else GOLD_ZONE_PROBABILITY
@@ -116,9 +125,16 @@ class ResourceManager:
                                             gold_cell['resource_type'] = 'gold_lump'
                                             self.gold_count += 1
 
+        
+
+        # Log to TensorBoard
+        print (f"Generated {self.apple_tree_count} apple trees and {self.gold_count} gold lumps.")
+        TensorBoardLogger().log_scalar("Resources/AppleTrees_Added", self.apple_tree_count, episode)
+        TensorBoardLogger().log_scalar("Resources/GoldLumps_Added", self.gold_count, episode)
+
             
 
-        print(f"Added {added_trees} trees and {added_gold_lumps} gold lumps dynamically.")
+        
 
 
     #    _   _           _       _          __    _                    _  __       _            _      _           ___  

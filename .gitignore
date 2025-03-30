@@ -1,6 +1,6 @@
 __pycache__/
 saved_models/
-logs/game/
+Tensorboard_logs
 LOG/
 plan/
 Profiling_Stats/

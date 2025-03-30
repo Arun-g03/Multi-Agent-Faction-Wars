@@ -339,7 +339,7 @@ Peacekeeper_PNG = 'images\peacekeeper.png' #Path to peacekeeper image
 Gatherer_PNG = 'images\gatherer.png' #Path to gatherer image
 
 
-DEF_AGENT_STATE_SIZE = 14 + len(TASK_TYPE_MAPPING) # Agent state size 
+DEF_AGENT_STATE_SIZE = 7 + len(TASK_TYPE_MAPPING) # Agent state size 
 """
 WARNING: DO NOT MODIFY THE STATE SIZE! 
 Controls the information that is sent to/used by the agent model.
@@ -399,7 +399,7 @@ MAX_ZOOM_OUT_LIMIT = 20  # Maximum zoom-out level (depends on screen size)
 
 
 
-AgentID = namedtuple("AgentID", ["faction_id", "agent_id"])
+AgentIDStruc = namedtuple("AgentID", ["faction_id", "agent_id"])
 """Identification tag for agents, combining faction ID and agent ID."""
 
 

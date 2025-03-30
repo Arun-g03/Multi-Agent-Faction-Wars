@@ -83,22 +83,44 @@ class Logger:
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
+
 import os
 
 
+
 class TensorBoardLogger:
-    def __init__(self, log_dir="log"):
-        """
-        Initialises the TensorBoard logger and sets up the directory for logs.
-        
-        :param log_dir: The directory to store the TensorBoard logs.
-        """
-        self.log_dir = log_dir
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-        
-        # Create a SummaryWriter to log data for TensorBoard
-        self.writer = SummaryWriter(log_dir=self.log_dir)
+    """
+    TensorBoardLogger is a singleton class that initializes a TensorBoard SummaryWriter.
+    It ensures that only one instance of the SummaryWriter is created and used across the application.
+    Attributes:
+        log_dir (str): Directory where TensorBoard logs will be saved.
+        writer (SummaryWriter): TensorBoard SummaryWriter instance.
+    
+
+    """
+    _instance = None  # Singleton reference
+
+    def __new__(cls, log_dir="log"):
+        if cls._instance is None:
+            try:
+                cls._instance = super(TensorBoardLogger, cls).__new__(cls)
+                cls._instance._init_writer(log_dir)
+            except Exception as e:
+                print(f"Error creating TensorBoardLogger instance: {str(e)}")
+                return None
+        return cls._instance
+
+    def _init_writer(self, log_dir):
+        try:
+            import os
+            from torch.utils.tensorboard import SummaryWriter
+
+            self.log_dir = log_dir
+            if not os.path.exists(self.log_dir):
+                os.makedirs(self.log_dir)
+            self.writer = SummaryWriter(log_dir=self.log_dir)
+        except Exception as e:
+            print(f"Error initializing TensorBoard writer: {str(e)}")
 
     def log_scalar(self, name, value, step):
         """
@@ -108,7 +130,10 @@ class TensorBoardLogger:
         :param value: The value of the metric.
         :param step: The step at which to log the metric.
         """
-        self.writer.add_scalar(name, value, step)
+        try:
+            self.writer.add_scalar(name, value, step)
+        except Exception as e:
+            print(f"Error logging scalar {name}: {str(e)}")
 
     def log_histogram(self, name, value, step):
         """
@@ -118,7 +143,10 @@ class TensorBoardLogger:
         :param value: The value to log (usually a tensor or array).
         :param step: The step at which to log the metric.
         """
-        self.writer.add_histogram(name, value, step)
+        try:
+            self.writer.add_histogram(name, value, step)
+        except Exception as e:
+            print(f"Error logging histogram {name}: {str(e)}")
 
     def log_image(self, name, image_tensor, step):
         """
@@ -128,7 +156,10 @@ class TensorBoardLogger:
         :param image_tensor: The image tensor to log (typically in CHW format).
         :param step: The step at which to log the image.
         """
-        self.writer.add_image(name, image_tensor, step)
+        try:
+            self.writer.add_image(name, image_tensor, step)
+        except Exception as e:
+            print(f"Error logging image {name}: {str(e)}")
 
     def log_text(self, name, text, step):
         """
@@ -138,7 +169,10 @@ class TensorBoardLogger:
         :param text: The text to log.
         :param step: The step at which to log the text.
         """
-        self.writer.add_text(name, text, step)
+        try:
+            self.writer.add_text(name, text, step)
+        except Exception as e:
+            print(f"Error logging text {name}: {str(e)}")
 
     def log_metrics(self, metrics_dict, step):
         """
@@ -147,13 +181,18 @@ class TensorBoardLogger:
         :param metrics_dict: A dictionary where the keys are metric names, and the values are the metric values.
         :param step: The step at which to log the metrics.
         """
-        for name, value in metrics_dict.items():
-            self.log_scalar(name, value, step)
+        try:
+            for name, value in metrics_dict.items():
+                self.log_scalar(name, value, step)
+        except Exception as e:
+            print(f"Error logging metrics: {str(e)}")
 
     def close(self):
         """Close the TensorBoard writer when you're done logging."""
-        self.writer.close()
-
+        try:
+            self.writer.close()
+        except Exception as e:
+            print(f"Error closing TensorBoard writer: {str(e)}")
 
 
 
@@ -300,3 +339,4 @@ class MatplotlibPlotter:
         image = plt.imread(image_name)
         tensorboard_logger.log_image(image_name, image, step=0)
         print(f"Sent {image_name} to TensorBoard.")
+

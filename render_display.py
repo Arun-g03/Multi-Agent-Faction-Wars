@@ -244,6 +244,7 @@ class GameRenderer:
                         f"Threats: {threat_count}\n\n"
                         f"Faction Metrics:\n"
                         f"Gold: {faction.gold_balance}\n"
+                        f"Food: {faction.food_balance}\n"
                         f"Peacekeepers: {peacekeeper_count}\n"
                         f"Gatherers: {gatherer_count}"
                     )

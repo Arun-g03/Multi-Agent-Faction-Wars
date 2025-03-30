@@ -7,7 +7,7 @@ Base class for agents.
 import traceback
 
 import pygame
-from Agent_NeuralNetwork import PPOModel, DQNModel, device  # Import the network models
+from Agent_NeuralNetwork import PPOModel, DQNModel  # Import the network models
 from agent_behaviours import AgentBehaviour # Import behavior classes
 from agent_factions import Faction
 from utils_config import (
@@ -20,7 +20,7 @@ from utils_config import (
         WORLD_WIDTH, 
         TaskState,
         DEBUG_MODE,
-        AgentID,
+        AgentIDStruc,
         create_task,
         TASK_TYPE_MAPPING,
         DEF_AGENT_STATE_SIZE,
@@ -118,8 +118,11 @@ class BaseAgent:
             self.terrain = terrain
             self.resource_manager = resource_manager
             self.role_actions = role_actions[role]
-            self.agent_id = AgentID(faction.id, agent_id)
-            self.state_size = state_size
+            self.agent_id = AgentIDStruc(faction.id, agent_id)
+            
+            # Ensure a valid state size is always used
+            self.state_size = state_size if state_size is not None else DEF_AGENT_STATE_SIZE
+
             self.communication_system = communication_system
             self.event_manager = event_manager
             self.mode = mode
@@ -129,7 +132,13 @@ class BaseAgent:
             self.update_detection_range()
 
             # Initialise the network (model) first
-            self.ai = self.initialise_network(network_type_int, state_size, len(self.role_actions))
+            self.ai = self.initialise_network(
+                network_type_int=network_type_int,
+                state_size=self.state_size,
+                action_size=len(self.role_actions),
+                AgentID=self.agent_id
+            )
+
 
             # Then initialise the behavior object(AgentBehaviour)
             self.behavior = AgentBehaviour(
@@ -152,31 +161,38 @@ class BaseAgent:
     except Exception as e:
         raise(f"Error in BaseAgent initialisation: {e}")
             
-    def initialise_network(self, network_type_int, state_size, action_size):
+    def initialise_network(self, network_type_int, state_size, action_size, AgentID):
         """
-        Initialise the network model based on the selected network type (using integer values).
+        Initialise the network model based on the selected network type.
         """
         if network_type_int == NETWORK_TYPE_MAPPING["PPOModel"]:
-            print("\033[93m" + f"Initialising PPOModel with state_size={state_size}, action_size={action_size}" + "\033[0m")            
-            return PPOModel(state_size, action_size)
+            print(
+                "\033[93m"
+                + f"Initialising PPOModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}"
+                + "\033[0m"
+            )
+            return PPOModel(
+                AgentID=AgentID,
+                state_size=state_size,
+                action_size=action_size
+            )
+
         elif network_type_int == NETWORK_TYPE_MAPPING["DQNModel"]:
-            print("\033[93m" + f"Initialising DQNModel with state_size={state_size}, action_size={action_size}" + "\033[0m")            
-            return DQNModel(state_size, action_size)
+            print(
+                "\033[93m"
+                + f"Initialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}"
+                + "\033[0m"
+            )
+            return DQNModel(
+                state_size=state_size,
+                action_size=action_size
+            )
+
         else:
             raise ValueError(f"Unsupported network type: {network_type_int}")
-        
+
+            
     
-
-    def choose_action(self, state):
-        return self.ai.choose_action(state)
-
-
-
-    
-
-   
-
-
 
 
     def can_move_to(self, new_x, new_y):
@@ -299,7 +315,7 @@ class BaseAgent:
         - Reporting experiences to the faction.
         """
         try:
-            # 🔍 Log the current task before performing it
+            # Log the current task before performing it
             logger.debug_log(
                 f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
                 level=logging.DEBUG
@@ -307,6 +323,9 @@ class BaseAgent:
 
             # Retrieve the agent's current state based on HQ state
             state = self.get_state(resource_manager, agents, self.faction, hq_state)
+            if state is None:
+                raise RuntimeError(f"[CRITICAL] Agent {self.agent_id} received a None state from get_state")
+
             logger.debug_log(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
 
             # Execute the current task or decide on a new action
@@ -370,7 +389,7 @@ class BaseAgent:
 
         for threat in observed_threats:
             # Ensure the threat is from a different faction
-            if isinstance(threat["id"], AgentID):
+            if isinstance(threat["id"], AgentIDStruc):
                 if threat["id"].faction_id == self.faction.id:
                     continue  # Skip friendly threats
             else:
@@ -451,7 +470,7 @@ class BaseAgent:
                 continue
 
             # Ensure valid IDs and attributes
-            if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, AgentID):
+            if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, AgentIDStruc):
                 logger.warning(
                     f"Invalid agent detected by Agent {self.agent_id}: {agent}. Skipping threat detection."
                 )
@@ -485,7 +504,7 @@ class BaseAgent:
             distance_to_hq = ((enemy_hq["position"][0] - self.x) ** 2 + (enemy_hq["position"][1] - self.y) ** 2) ** 0.5
             if distance_to_hq <= self.local_view * CELL_SIZE:
                 threat = {
-                    "id": AgentID(faction_id=enemy_hq["faction_id"], agent_id="HQ"),  # Use AgentID for HQ
+                    "id": AgentIDStruc(faction_id=enemy_hq["faction_id"], agent_id="HQ"),  # Use AgentID for HQ
                     "faction": enemy_hq["faction_id"],  # Use the faction ID from HQ
                     "type": "Faction HQ",
                     "location": enemy_hq["position"],
@@ -556,7 +575,7 @@ class BaseAgent:
         nearest_resource = find_closest_actor(perceived_resources, entity_type="resource", requester=self) if perceived_resources else None
 
         #  Construct normalized state vector
-        state = [
+        core_state = [
             self.x / WORLD_WIDTH,
             self.y / WORLD_HEIGHT,
             self.Health / 100,
@@ -566,11 +585,18 @@ class BaseAgent:
             nearest_resource["location"][1] / WORLD_HEIGHT if nearest_resource else -1,
         ]
 
-        #  Fill in missing features to match expected size
-        state.extend([0] * (self.state_size - len(state)))
-        # Pad with zeros if fewer than self.state_size features
+        # Append one-hot for task type or role (must match TASK_TYPE_MAPPING)
+        one_hot_task = [0] * len(TASK_TYPE_MAPPING)
+        # Optional: determine current task type and mark active bit
+        if self.current_task:
+            task_type_index = TASK_TYPE_MAPPING.get(self.current_task.get("type", "none"), None)
+            if task_type_index is not None:
+                one_hot_task[task_type_index] = 1
+        state = core_state + one_hot_task
 
+        logger.debug_log(f"Agent {self.agent_id} state: {state}", level=logging.DEBUG)
         return state
+
 
 
 

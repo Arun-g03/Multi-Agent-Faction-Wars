@@ -7,11 +7,12 @@ from torch.distributions import Categorical
 import logging
 from utils_config import STATE_FEATURES_MAP, DEF_AGENT_STATE_SIZE
 from utils_logger import Logger
+from utils_logger import TensorBoardLogger
 
 logger = Logger(log_file="neural_network_log.txt", log_level=logging.DEBUG)
 
 # Check for GPU
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+Training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.is_available():
     print(f"Using GPU: {torch.cuda.get_device_name(0)}")
 else:
@@ -65,7 +66,7 @@ class AttentionLayer(nn.Module):
 
 
 class HQ_Network(nn.Module):
-    def __init__(self, state_size=29, action_size=10, role_size=5, local_state_size=5, global_state_size=5, device="cpu"):
+    def __init__(self, state_size=29, action_size=10, role_size=5, local_state_size=5, global_state_size=5, device=Training_device):
         super().__init__()
         # Initialise the device to use (CPU or GPU)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -191,10 +192,10 @@ class HQ_Critic(nn.Module):
     HQ Critic for evaluating task assignments. Inherits from nn.Module.
     Evaluates the value of current task assignments and strategies.
     """
-    def __init__(self, input_size=100, role_size=5, local_state_size=5, global_state_size=5, device="cpu"):
+    def __init__(self, input_size=100, role_size=5, local_state_size=5, global_state_size=5, device=Training_device):
         super().__init__()
         # Initialise the device to use (CPU or GPU)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.role_size = role_size
         self.local_state_size = local_state_size
         self.global_state_size = global_state_size
@@ -236,10 +237,10 @@ class HQ_Critic(nn.Module):
 
 
 class Agent_Critic(nn.Module):
-    def __init__(self, input_size=100, action_size=10, device="cpu"):
+    def __init__(self, input_size=100, action_size=10, device=Training_device):
         super(Agent_Critic, self).__init__()
         # Initialise the device to use (CPU or GPU)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         # Dynamically determine input size
         self.input_size = input_size
 
@@ -277,14 +278,16 @@ class Agent_Critic(nn.Module):
 
 
 class PPOModel(nn.Module):
-    def __init__(self, state_size=DEF_AGENT_STATE_SIZE, action_size=10, hq_critic=None, learning_rate=1e-4, gamma=0.70, clip_epsilon=0.2, entropy_coeff=0.01, device="cpu"):
+    def __init__(self, AgentID, state_size=DEF_AGENT_STATE_SIZE,  action_size=10, hq_critic=None, learning_rate=1e-4, gamma=0.70, clip_epsilon=0.2, entropy_coeff=0.01, device=Training_device):
         # Call the parent class constructor first
         super(PPOModel, self).__init__()
         # Initialise the device to use(CPU or GPU)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         
         # Ensure `state_size` is dynamically assigned
-        self.input_size = state_size
+        if state_size is None:
+                self.input_size = DEF_AGENT_STATE_SIZE
+        self.AgentID = AgentID
 
         # Initialise the critic if not provided
         if hq_critic is None:
@@ -318,8 +321,7 @@ class PPOModel(nn.Module):
         self.critic = nn.Linear(128, 1)
 
 
-        logger.debug_log("Agent_Network initialised successfully using PPO model.", level=logging.INFO)
-
+        logger.debug_log(f"Agent_Network initialised successfully using PPO model (state_size={state_size}, action_size={action_size}, gamma={gamma}, clip_epsilon={clip_epsilon}, entropy_coeff={entropy_coeff}).", level=logging.INFO)
     def forward(self, state):
         x = torch.relu(self.fc1(state))
         x = torch.relu(self.fc2(x))
@@ -339,10 +341,18 @@ class PPOModel(nn.Module):
 
 
     def choose_action(self, state):
-        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-        logits, value = self.forward(state_tensor)
+        if state is None:
+            raise ValueError(f"[CRITICAL] Agent {self.AgentID} received a None state.")
 
-        if torch.isnan(logits).any() or torch.isinf(logits).any():
+        if any(v is None for v in state):
+            raise ValueError(f"[CRITICAL] Agent {self.AgentID} state contains None values: {state}")
+
+        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+        logger.debug_log(f" AgentID: {self.AgentID}__State: {state}", level=logging.DEBUG)
+        logits, value = self.forward(state_tensor)
+        
+        if torch.isnan(logits).any().item() or torch.isinf(logits).any().item():
+        
             logger.debug_log(f"[🔥 LOGITS ERROR] Detected NaNs/Infs in logits!", level=logging.ERROR)
             logger.debug_log(f"State: {state}", level=logging.ERROR)
             logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
@@ -350,7 +360,7 @@ class PPOModel(nn.Module):
 
         probs = torch.softmax(logits, dim=-1)
 
-        if torch.isnan(probs).any() or torch.isinf(probs).any():
+        if torch.isnan(probs).any().item() or torch.isinf(probs).any().item():
             logger.debug_log(f"[🔥 PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
             logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
             logger.debug_log(f"Softmaxed probs: {probs}", level=logging.ERROR)
@@ -378,7 +388,7 @@ class PPOModel(nn.Module):
         self.memory["global_values"].append(global_value)
         self.memory["dones"].append(done)
         logger.debug_log(
-                        f"[MEMORY COUNT] AgentID| Transitions Stored: {len(self.memory['rewards'])}",
+                        f"[MEMORY COUNT] {self.AgentID}| Transitions Stored: {len(self.memory['rewards'])}",
                         level=logging.DEBUG
                     )
 
@@ -453,12 +463,12 @@ class PPOModel(nn.Module):
 
                     logits, new_values = self.ai(states_batch)
 
-                    if torch.isnan(logits).any() or torch.isinf(logits).any():
+                    if torch.isnan(logits).any().item() or torch.isinf(logits).any().item():
                         logger.debug_log(f"[TRAIN LOGITS ERROR] NaNs in logits during training epoch {epoch}", level=logging.ERROR)
                         return
 
                     probs = torch.softmax(logits, dim=-1)
-                    if torch.isnan(probs).any() or torch.isinf(probs).any():
+                    if torch.isnan(probs).any().item() or torch.isinf(probs).any().item():
                         logger.debug_log(f"[TRAIN PROBS ERROR] NaNs in probs during training epoch {epoch}", level=logging.ERROR)
                         return
 
@@ -476,11 +486,11 @@ class PPOModel(nn.Module):
 
                     self.optimizer.zero_grad()
                     loss.backward()
-                    if hasattr(self, "tensorboard_logger"):
-                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/PolicyLoss", policy_loss.item(), self.total_updates)
-                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/ValueLoss", value_loss.item(), self.total_updates)
-                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/TotalLoss", loss.item(), self.total_updates)
-                        self.tensorboard_logger.log_scalar(f"Agent_{id(self)}/Entropy", entropy.item(), self.total_updates)
+                    
+                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/PolicyLoss", policy_loss.item(), self.total_updates)
+                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/ValueLoss", value_loss.item(), self.total_updates)
+                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/TotalLoss", loss.item(), self.total_updates)
+                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/Entropy", entropy.item(), self.total_updates)
 
                     self.optimizer.step()
 
@@ -505,8 +515,15 @@ class PPOModel(nn.Module):
         """
         Compute Generalized Advantage Estimation (GAE).
         """
-        if not rewards or not local_values or not global_values or not dones:
-            raise ValueError("Input lists cannot be empty")
+        if len(rewards) == 0 or len(local_values) == 0 or len(global_values) == 0 or len(dones) == 0:
+            logger.debug_log("[ERROR] GAE input arrays are empty.", level=logging.ERROR)
+            print(f"[DEBUG] rewards: {type(rewards)}, len={len(rewards)}")
+            print(f"[DEBUG] local_values: {local_values.shape}")
+            print(f"[DEBUG] global_values: {global_values.shape}")
+            print(f"[DEBUG] dones: {dones.shape}")
+
+            return None, None
+
             
         logger.debug_log("Computing Generalized Advantage Estimation (GAE).", level=logging.INFO)
         returns = []
@@ -635,7 +652,7 @@ class PPOModel(nn.Module):
 
 
 class DQNModel(nn.Module):
-    def __init__(self, state_size, action_size, device="cpu"):
+    def __init__(self, state_size, action_size, device=Training_device):
         super().__init__()
         self.fc1 = nn.Linear(state_size, 128)
         self.fc2 = nn.Linear(128, 128)
