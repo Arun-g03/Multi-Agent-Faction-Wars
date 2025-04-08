@@ -39,7 +39,8 @@ from utils_config import (
     TaskState,
     ROLE_ACTIONS_MAP,
     AgentIDStruc,
-    DEF_AGENT_STATE_SIZE)
+    DEF_AGENT_STATE_SIZE,
+    LOGGING_ENABLED)
 
 """Logging  and profiling for performance and execution analysis"""
 import logging
@@ -61,7 +62,7 @@ class GameManager:
         self.logger = Logger(log_file="game_manager_log.txt", log_level=logging.DEBUG)
         self.mode = None  # Default mode is None
         # Log initialisation
-        self.logger.debug_log("GameManager initialised. Logs cleared for a new game.", level=logging.INFO)
+        if LOGGING_ENABLED: self.logger.debug_log("GameManager initialised. Logs cleared for a new game.", level=logging.INFO)
 
         # Initialise the terrain
         self.terrain = Terrain()
@@ -299,7 +300,7 @@ class GameManager:
             self.communication_system = CommunicationSystem(self.agents, self.faction_manager.factions)
             print("Communication system initialised.")
 
-            # Step 6: Finalize initialisation
+            # Step 6: Finalise initialisation
             self.current_step = 0  # Reset step counter for the new game
             self.episode = 1  # Reset episode counter for the new game
             global CurrEpisode
@@ -536,7 +537,7 @@ class GameManager:
             while running and (self.episode <= EPISODES_LIMIT):
                 self.reset()
                 print("\033[92m" + f"Starting {self.mode} Episode {self.episode}" + "\033[0m")
-                self.logger.debug_log(f"Starting {self.mode} Episode", level=logging.INFO)
+                if LOGGING_ENABLED: self.logger.debug_log(f"Starting {self.mode} Episode", level=logging.INFO)
 
                 self.current_step = 0
                 episode_reward = 0
@@ -545,7 +546,7 @@ class GameManager:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             print("[INFO] Window closed. Exiting game...")
-                            self.logger.debug_log("Window closed - Exiting game.", level=logging.INFO)
+                            if LOGGING_ENABLED:self. logger.debug_log("Window closed - Exiting game.", level=logging.INFO)
                             pygame.quit()
                             sys.exit()
 
@@ -587,7 +588,7 @@ class GameManager:
                     winner = check_victory(self.faction_manager.factions)
                     if winner:
                         print(f"Faction {winner.id} wins! Moving to next episode...")
-                        self.logger.debug_log(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
+                        if LOGGING_ENABLED: self.logger.debug_log(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
                         break
 
                 # TensorBoard: Episode summary
@@ -625,10 +626,10 @@ class GameManager:
                         
                 # 🔁 Train agents at the end of the episode
                 if self.mode == "train":
-                    self.logger.debug_log("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
+                    if LOGGING_ENABLED: self.logger.debug_log("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
                     for agent in self.agents:
                         if agent.mode == "train" and len(agent.ai.memory["rewards"]) > 0:
-                            self.logger.debug_log(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
+                            if LOGGING_ENABLED: self.logger.debug_log(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
                             try:
                                 agent.ai.train(mode="train")
                             except Exception as e:
@@ -653,7 +654,7 @@ class GameManager:
                             self.best_scores_per_role[role] = (best_agent, best_reward)
                             model_path = f"saved_models/Best_{role}_episode_{self.episode}.pth"
                             torch.save(best_agent.ai.state_dict(), model_path)
-                            self.logger.debug_log(
+                            if LOGGING_ENABLED: self.logger.debug_log(
                                 f"[SAVE] New best {role} model saved at {model_path} with reward {best_reward:.2f}",
                                 level=logging.INFO
                             )
@@ -661,7 +662,7 @@ class GameManager:
 
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")
-                self.logger.debug_log(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
+                if LOGGING_ENABLED: self.logger.debug_log(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
                 self.episode += 1
 
             if self.mode == "train" and self.episode > EPISODES_LIMIT:
@@ -808,7 +809,7 @@ class EventManager:
 
     def trigger_dynamic_event(self, max_trees=10, max_gold_lumps=5, health_penalty=10):
         """
-        Trigger a dynamic event to redistribute resources and penalize health.
+        Trigger a dynamic event to redistribute resources and penalise health.
         """
         print("Triggering Dynamic Event: Redistributing resources and applying health penalty!")
 

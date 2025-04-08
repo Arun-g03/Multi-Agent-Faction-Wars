@@ -1,5 +1,13 @@
 import pygame
-from utils_config import SCREEN_WIDTH, SCREEN_HEIGHT, SCALING_FACTOR, Tree_Scale_Img, GoldLump_Scale_Img, CELL_SIZE, DEBUG_MODE, Agent_field_of_view, Agent_Attack_Range
+from utils_config import (SCREEN_WIDTH, 
+                          SCREEN_HEIGHT, 
+                          SCALING_FACTOR, 
+                          Tree_Scale_Img, 
+                          GoldLump_Scale_Img, 
+                          CELL_SIZE, 
+                          Agent_field_of_view, 
+                          Agent_Interact_Range,
+                          LOGGING_ENABLED)
 from env_resources import AppleTree, GoldLump
 import sys
 import traceback
@@ -158,7 +166,7 @@ class GameRenderer:
             if faction.home_base["position"]:
                 x, y = faction.home_base["position"]
                 size = faction.home_base["size"]
-                colour = faction.home_base["color"]
+                colour = faction.home_base["colour"]
 
                 # Adjust position and scale based on camera
                 screen_x, screen_y = camera.apply((x, y))
@@ -178,53 +186,53 @@ class GameRenderer:
                 # Highlight resources and threats known to the faction if hovering over the base
                 base_rect = pygame.Rect(screen_x, screen_y, adjusted_size, adjusted_size)
                 if base_rect.collidepoint(mouse_x, mouse_y):
-                    if DEBUG_MODE:
+                    
                         
-                        # Highlight resources
-                        for resource in faction.global_state["resources"]:
-                            resource_screen_x = (resource["location"][0] * CELL_SIZE - camera.x) * camera.zoom
-                            resource_screen_y = (resource["location"][1] * CELL_SIZE - camera.y) * camera.zoom
+                    # Highlight resources
+                    for resource in faction.global_state["resources"]:
+                        resource_screen_x = (resource["location"][0] * CELL_SIZE - camera.x) * camera.zoom
+                        resource_screen_y = (resource["location"][1] * CELL_SIZE - camera.y) * camera.zoom
 
+                        pygame.draw.rect(
+                            self.screen,
+                            (0, 255, 0),  # Green colour for highlighting resources
+                            pygame.Rect(
+                                resource_screen_x - CELL_SIZE * camera.zoom // 2,
+                                resource_screen_y - CELL_SIZE * camera.zoom // 2,
+                                CELL_SIZE * camera.zoom,
+                                CELL_SIZE * camera.zoom
+                            ),
+                            width=2
+                        )
+
+                    # Highlight threats
+                    for threat in faction.global_state["threats"]:
+                        try:
+                            if isinstance(threat, dict) and "location" in threat:
+                                threat_x, threat_y = threat["location"]
+                            else:
+                                continue  # Skip invalid threats
+
+                            # Convert grid coordinates to screen coordinates
+                            threat_screen_x = (threat_x - camera.x) * camera.zoom
+                            threat_screen_y = (threat_y - camera.y) * camera.zoom
+
+                            # Draw the threat box
+                            box_size = CELL_SIZE * camera.zoom
                             pygame.draw.rect(
                                 self.screen,
-                                (0, 255, 0),  # Green colour for highlighting resources
+                                (255, 0, 0),  # Red colour for threats
                                 pygame.Rect(
-                                    resource_screen_x - CELL_SIZE * camera.zoom // 2,
-                                    resource_screen_y - CELL_SIZE * camera.zoom // 2,
-                                    CELL_SIZE * camera.zoom,
-                                    CELL_SIZE * camera.zoom
+                                    threat_screen_x - box_size // 2,
+                                    threat_screen_y - box_size // 2,
+                                    box_size,
+                                    box_size
                                 ),
-                                width=2
+                                width=2  # Border thickness
                             )
-
-                        # Highlight threats
-                        for threat in faction.global_state["threats"]:
-                            try:
-                                if isinstance(threat, dict) and "location" in threat:
-                                    threat_x, threat_y = threat["location"]
-                                else:
-                                    continue  # Skip invalid threats
-
-                                # Convert grid coordinates to screen coordinates
-                                threat_screen_x = (threat_x - camera.x) * camera.zoom
-                                threat_screen_y = (threat_y - camera.y) * camera.zoom
-
-                                # Draw the threat box
-                                box_size = CELL_SIZE * camera.zoom
-                                pygame.draw.rect(
-                                    self.screen,
-                                    (255, 0, 0),  # Red colour for threats
-                                    pygame.Rect(
-                                        threat_screen_x - box_size // 2,
-                                        threat_screen_y - box_size // 2,
-                                        box_size,
-                                        box_size
-                                    ),
-                                    width=2  # Border thickness
-                                )
-                            except Exception as e:
-                                print(f"Error highlighting threat: {e}")
-                                continue
+                        except Exception as e:
+                            print(f"Error highlighting threat: {e}")
+                            continue
 
                     # Gather faction metrics
                     resource_counts = {
@@ -309,9 +317,9 @@ class GameRenderer:
         leaderboard_text = font.render("Faction Leaderboard:", True, (255, 255, 255))
         screen.blit(leaderboard_text, (20, 180))
 
-        # Sort factions by gold balance and display the top 3
+        # Sort factions by gold balance and display the top 4
         sorted_factions = sorted(factions, key=lambda f: f.gold_balance, reverse=True)
-        for i, faction in enumerate(sorted_factions[:3]):
+        for i, faction in enumerate(sorted_factions[:4]):
             faction_text = font.render(
                 f"{i + 1}. Faction {faction.id} - Gold: {faction.gold_balance}, Agents: {len(faction.agents)}",
                 True,
@@ -333,131 +341,89 @@ class GameRenderer:
         Render each agent and display a tooltip if the mouse hovers over an agent.
         Ensure proper handling of target types for gatherers and peacekeepers.
         """
-        mouse_x, mouse_y = pygame.mouse.get_pos()  # Get mouse position in screen coordinates
+        mouse_x, mouse_y = pygame.mouse.get_pos()
 
         for agent in agents:
             if not hasattr(agent, 'x') or not hasattr(agent, 'y'):
                 print(f"Warning: Agent {agent} does not have 'x' and 'y' attributes. Skipping render.")
-                continue  # Skip this agent if invalid
-            # Transform the agent's world position to screen position
-            screen_x, screen_y = camera.apply((agent.x, agent.y))
+                continue
 
-            # Render the agent sprite
+            screen_x, screen_y = camera.apply((agent.x, agent.y))
             agent_sprite = agent.sprite
+
             if agent_sprite:
                 agent_rect = agent_sprite.get_rect(center=(int(screen_x), int(screen_y)))
                 self.screen.blit(agent_sprite, agent_rect)
-                
-                # Check if the mouse is hovering over the agent
+
                 if agent_rect.collidepoint(mouse_x, mouse_y):
+
                     
+                    # FOV + interact radius
+                    fov_radius = Agent_field_of_view * CELL_SIZE * camera.zoom
+                    pygame.draw.circle(self.screen, (255, 255, 0), (screen_x, screen_y), fov_radius, width=2)
 
-                    if DEBUG_MODE:  # Check if debug mode is enabled
-                        # Draw FOV circle for debugging
-                        fov_radius = Agent_field_of_view * CELL_SIZE * camera.zoom
-                        pygame.draw.circle(
-                            self.screen,
-                            (255, 255, 0),  # Yellow for FOV
-                            (screen_x, screen_y),  # Center of the agent
-                            fov_radius,
-                            width=2  # Border thickness
-                        )
-                        attack_radius = Agent_Attack_Range * CELL_SIZE * camera.zoom
-                        pygame.draw.circle(
-                            self.screen,
-                            (255, 0, 0),  # Yellow for FOV
-                            (screen_x, screen_y),  # Center of the agent
-                            attack_radius,
-                            width=2  # Border thickness
-                        )
+                    interact_radius = Agent_Interact_Range * CELL_SIZE * camera.zoom
+                    pygame.draw.circle(self.screen, (173, 216, 230), (screen_x, screen_y), interact_radius, width=2)
 
+                    # 🎯 Highlight task target
+                    if isinstance(agent.current_task, dict):
+                        task_type = agent.current_task.get("type", "unknown")
+                        target = agent.current_task.get("target")
 
-                        
-                        # Highlight the target of the agent if applicable
-                        if isinstance(agent.current_task, dict):
-                            task_type = agent.current_task.get("type", "unknown")  # Extract the task type
-                            target = agent.current_task.get("target")
-                            
-                            if target:
-                                # 🪵 Log the full task assignment
-                                logger.debug_log(
-                                    f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
-                                    level=logging.DEBUG
+                        if target:
+                            if LOGGING_ENABLED: logger.debug_log(
+                                f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
+                                level=logging.DEBUG
+                            )
+
+                            target_position = target.get("position")
+                            target_type = target.get("type")
+                            target_x = target_y = None
+
+                            if task_type == "eliminate" and target_type == "agent" and "id" in target:
+                                target_id = target["id"]
+                                target_agent = next((a for a in agents if a.agent_id == target_id), None)
+
+                                if target_agent:
+                                    target_x, target_y = target_agent.x, target_agent.y
+                                else:
+                                    if LOGGING_ENABLED: logger.debug_log(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
+
+                            elif target_position:
+                                target_x, target_y = target_position
+                                target_x *= CELL_SIZE
+                                target_y *= CELL_SIZE
+
+                            if target_x is not None and target_y is not None:
+                                target_screen_x, target_screen_y = camera.apply((target_x, target_y))
+                                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
+
+                                if task_type == "eliminate":
+                                    box_colour = (255, 0, 0)
+                                elif task_type == "gather":
+                                    box_colour = (0, 255, 0)
+                                else:
+                                    box_colour = (255, 255, 0)
+
+                                box_rect = pygame.Rect(
+                                    target_screen_x - (CELL_SIZE * camera.zoom) // 2,
+                                    target_screen_y - (CELL_SIZE * camera.zoom) // 2,
+                                    CELL_SIZE * camera.zoom,
+                                    CELL_SIZE * camera.zoom
                                 )
 
-                                # Extract world coordinates directly from the task
-                                target_position = target.get("position", None)
-                                if target_position:
-                                    target_x, target_y = target_position
+                                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
+                                pygame.draw.rect(self.screen, box_colour, box_rect, width=2)
+                            else:
+                                if LOGGING_ENABLED: logger.debug_log(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
 
-                                    # 🪵 Log the target coordinates
-                                    logger.debug_log(f"[DEBUG] Target Coordinates: {target_x}, {target_y}", level=logging.DEBUG)
-
-                                    # Adjust coordinates for grid-based targets
-                                    target_x *= CELL_SIZE  # Adjust based on CELL_SIZE
-                                    target_y *= CELL_SIZE
-
-                                    
-
-                                    # Calculate the screen coordinates
-                                    target_screen_x, target_screen_y = camera.apply((target_x, target_y))
-
-                                    # 🪵 Log the screen coordinates
-                                    logger.debug_log(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
-
-                                    # Determine the box colour based on task type
-                                    if task_type == "eliminate":
-                                        box_color = (255, 0, 0)  # Red for eliminate tasks
-                                    elif task_type == "gather":
-                                        box_color = (0, 255, 0)  # Green for gather tasks
-                                    else:
-                                        box_color = (255, 255, 0)  # Default to yellow for unknown tasks
-
-                                    # Calculate the box rectangle
-                                    box_rect = pygame.Rect(
-                                        target_screen_x - (CELL_SIZE * camera.zoom) // 2,
-                                        target_screen_y - (CELL_SIZE * camera.zoom) // 2,
-                                        CELL_SIZE * camera.zoom,
-                                        CELL_SIZE * camera.zoom
-                                    )
-
-                                    # 🪵 Log the rectangle dimensions
-                                    logger.debug_log(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
-
-                                    # Draw the box at the calculated screen position
-                                    pygame.draw.rect(self.screen, box_color, box_rect, width=2)
-                                else:
-                                    # Handle the case where target has no position
-                                    logger.debug_log(f"[ERROR] Task has no valid target position for Agent {agent.agent_id}", level=logging.ERROR)
-
-
-
-
-                    # Extract and format task information
+                    # 📝 Tooltip Info
                     if isinstance(agent.current_task, dict):
                         task_type = agent.current_task.get("type", "Unknown")
                         target = agent.current_task.get("target", {})
-
-                        # Initialize default values for the target
-                        target_type = "Unknown"
-                        target_position = "Unknown"
-                        target_quantity = "Unknown"
-
-                        # Handle target type based on its format
-                        if isinstance(target, dict):
-                            target_type = target.get("type", "Unknown")
-                            target_position = target.get("position", "Unknown")
-                            target_quantity = target.get("quantity", "Unknown")
-                        elif isinstance(target, tuple):
-                            target_type = "Location"  # Indicate a positional target
-                            target_position = target
-                            target_quantity = "N/A"  # Not applicable for positional targets
-                        else:
-                            target_type = "Unknown"
-                            target_position = "Unknown"
-                            target_quantity = "Unknown"
-
-                        # Format the task info string
+                        target_type = target.get("type", "Unknown") if isinstance(target, dict) else "Unknown"
+                        target_position = target.get("position", "Unknown") if isinstance(target, dict) else "Unknown"
+                        target_quantity = target.get("quantity", "Unknown") if isinstance(target, dict) else "N/A"
                         task_info = (
                             f"Task: {task_type}\n"
                             f"Target: {target_type} at {target_position}\n"
@@ -465,25 +431,22 @@ class GameRenderer:
                         )
                     else:
                         task_info = "Task: None"
-                        # 🪵 Log the task info
-                        logger.debug_log(f"[DEBUG] Task Info: {task_info}", level=logging.DEBUG)
 
-                    # Fetch the current action from the agent's role_actions
                     action = (
                         agent.role_actions[agent.current_action]
                         if 0 <= agent.current_action < len(agent.role_actions)
                         else f"Idle ({agent.current_action})"
                     )
 
-                    # Display agent's info as a tooltip
                     self.render_tooltip(
                         f"ID: {agent.agent_id}\n"
                         f"Role: {agent.role}\n"
                         f"{task_info}\n"
                         f"Action: {action}\n"
                         f"Health: {agent.Health}\n"
-                        f"Position: ({round(agent.x)}, {round(agent.y)})"  # Round position values for readability
+                        f"Position: ({round(agent.x)}, {round(agent.y)})"
                     )
+
 
 
 
@@ -612,7 +575,6 @@ FONT_NAME = "Arial"
 TITLE = "Simulation Game"
 WELCOME_TEXT = "Welcome to the Multi-Agent Faction Wars Simulation Game!"
 HYPERPARAMS_TEXT = "Please set your hyperparameters and preferences below."
-DEBUG_MODE_TEXT = "Enable Debug Mode?"
 TRAIN_EVALUATE_TEXT = "Choose Mode (Training or Evaluation):"
 TENSORBOARD_TEXT = "Run TensorBoard after Simulation?"
 AUTOMATIC_TB_TEXT = "Automatically open TensorBoard after simulation?"
@@ -659,16 +621,16 @@ class MenuRenderer:
         text_rect = text_surface.get_rect(center=(x, y))
         surface.blit(text_surface, text_rect)
 
-    def create_button(self, surface, text, font, size, colour, hover_color, click_color, x, y, width, height, state='normal', icon=None):
+    def create_button(self, surface, text, font, size, colour, hover_colour, click_colour, x, y, width, height, state='normal', icon=None):
         """Helper function to create buttons with hover and click feedback, and an icon (check or cross)"""
         button_rect = pygame.Rect(x, y, width, height)
 
         # Check for mouse hover
         if button_rect.collidepoint(pygame.mouse.get_pos()):
             if state == 'normal':
-                pygame.draw.rect(surface, hover_color, button_rect)  # Hover state
+                pygame.draw.rect(surface, hover_colour, button_rect)  # Hover state
             elif state == 'clicked':
-                pygame.draw.rect(surface, click_color, button_rect)  # Clicked state
+                pygame.draw.rect(surface, click_colour, button_rect)  # Clicked state
         else:
             pygame.draw.rect(surface, colour, button_rect)  # Normal state
 
@@ -684,7 +646,7 @@ class MenuRenderer:
 
         return button_rect
 
-    def render_menu(self, debug_mode, tensorboard_enabled, auto_tensorboard_enabled, mode, start_game_callback):
+    def render_menu(self, tensorboard_enabled, auto_tensorboard_enabled, mode, start_game_callback):
         """Renders the menu and handles button states."""
         self.screen.fill(BLACK)  # Set the background to black
 
@@ -727,7 +689,7 @@ class MenuRenderer:
 
                 elif start_button_rect.collidepoint(event.pos) and self.selected_mode:
                     print("[INFO] Starting game in mode:", self.selected_mode)
-                    start_game_callback(self.selected_mode, debug_mode, tensorboard_enabled, auto_tensorboard_enabled)
+                    start_game_callback(self.selected_mode, tensorboard_enabled, auto_tensorboard_enabled)
                     return False  #  Exit menu and start game
 
         # Update the display

@@ -46,7 +46,6 @@ def main():
 
         # Track menu options
         mode = None
-        debug_mode = False
         tensorboard_enabled = False
         auto_tensorboard_enabled = False
         clock = pygame.time.Clock()
@@ -62,15 +61,15 @@ def main():
 
             if is_menu:
                 is_menu = menu_renderer.render_menu(
-                    debug_mode, tensorboard_enabled, auto_tensorboard_enabled, mode,
-                    start_game_callback=lambda m, d, t, a: start_game(screen, m, d, t, a)
+                    tensorboard_enabled, auto_tensorboard_enabled, mode,
+                    start_game_callback=lambda m, d, t: start_game(screen, m, d, t)
                 )
+
 
                 if not is_menu and menu_renderer.selected_mode:
                     game_manager = start_game(
                         screen=screen,
                         mode=menu_renderer.selected_mode,
-                        debug_mode=debug_mode,
                         tensorboard_enabled=tensorboard_enabled,
                         auto_tensorboard_enabled=auto_tensorboard_enabled
                     )
@@ -133,7 +132,7 @@ def main():
         pygame.quit()
         sys.exit()
 
-def start_game(screen, mode, debug_mode=True, tensorboard_enabled=True, auto_tensorboard_enabled=True):
+def start_game(screen, mode, tensorboard_enabled=True, auto_tensorboard_enabled=True):
     """
     Initialises and starts the game.
     """

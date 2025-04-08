@@ -23,9 +23,8 @@ So i dont have to change the internal code every time I want to change something
 #Customisable
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
-DEBUG_MODE = True 
 """Used to enable visual debugging"""
-LOGGING_ENABLED = True 
+LOGGING_ENABLED = False 
 """Enable logging for debugging"""
 
 
@@ -45,7 +44,7 @@ LOGGING_ENABLED = True
 #More training equals better results... probably.
 
 EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 600 #How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 2000 #How many steps to take per episode/ How long should a game last
 
 #Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
 
@@ -99,8 +98,8 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
 # World Dimensions
 #Size of the in-game world
-WORLD_WIDTH = 400 # Customise as needed!
-WORLD_HEIGHT = 400 # Customise as needed!
+WORLD_WIDTH = 600 # Customise as needed!
+WORLD_HEIGHT = 600 # Customise as needed!
 
 
 # Perlin Noise Settings
@@ -115,8 +114,8 @@ Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
 GREEN = (34,139,34)  # Land
 BLUE = (30, 144, 255)     # Water
 RED = (255, 0, 0)  # Red
-APPLE_TREE_COLOR = (0, 255, 0)  # A brighter green for apple trees
-GOLD_COLOR = (255, 215, 0)  # Gold colour
+APPLE_TREE_colour = (0, 255, 0)  # A brighter green for apple trees
+GOLD_colour = (255, 215, 0)  # Gold colour
 
 # The size of each cell in the grid
 CELL_SIZE = 20
@@ -331,7 +330,7 @@ WARNING: DO NOT MODIFY THESE VALUES!
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
 Agent_field_of_view = 10 # Agent field of view # Customise as needed!
-Agent_Attack_Range = 3 # Agent attack range, Anything less will get hit # Customise as needed!
+Agent_Interact_Range = 3 # Agent attack range, Anything less will get hit # Customise as needed!
 
 
 ## File paths for agent images
@@ -361,9 +360,9 @@ HQ_Agent_Spawn_Radius = 5 # Radius around HQ to spawn agents
 Faction_PNG = "images\castle-7440761_1280.png"
 
 #Team Composition
-FACTON_COUNT = 2 # Number of factons # Customise as needed!
-INITAL_GATHERER_COUNT = 2 # Initial number of gatherers for a single faction # Customise as needed!
-INITAL_PEACEKEEPER_COUNT = 2 # Initial number of peacekeepers for a single faction # Customise as needed!
+FACTON_COUNT = 4 # Number of factons # Customise as needed!
+INITAL_GATHERER_COUNT = 4 # Initial number of gatherers for a single faction # Customise as needed!
+INITAL_PEACEKEEPER_COUNT = 4 # Initial number of peacekeepers for a single faction # Customise as needed!
 
 
 #     ____                               

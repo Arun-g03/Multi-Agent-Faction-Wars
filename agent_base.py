@@ -19,13 +19,13 @@ from utils_config import (
         WORLD_HEIGHT, 
         WORLD_WIDTH, 
         TaskState,
-        DEBUG_MODE,
         AgentIDStruc,
         create_task,
         TASK_TYPE_MAPPING,
         DEF_AGENT_STATE_SIZE,
         ROLE_ACTIONS_MAP,
-        NETWORK_TYPE_MAPPING )
+        NETWORK_TYPE_MAPPING,
+        LOGGING_ENABLED )
 
 from utils_helpers import (
     find_closest_actor
@@ -59,15 +59,15 @@ logger = Logger(log_file="agent_base_log.txt", log_level=logging.DEBUG)
 
 
 """ Tint the sprite with the faction colour so its easy to identify the agent's faction. """
-def tint_sprite(sprite, tint_color):
+def tint_sprite(sprite, tint_colour):
     """
     Apply a colour tint to a sprite.
     :param sprite: The base sprite image (Surface).
-    :param tint_color: The colour to tint the sprite (RGB tuple).
+    :param tint_colour: The colour to tint the sprite (RGB tuple).
     :return: The tinted sprite (Surface).
     """
     tinted_sprite = sprite.copy()  # Make a copy of the original sprite
-    tinted_sprite.fill(tint_color, special_flags=pygame.BLEND_RGB_MULT)  # Apply colour tint
+    tinted_sprite.fill(tint_colour, special_flags=pygame.BLEND_RGB_MULT)  # Apply colour tint
     return tinted_sprite
 
 
@@ -203,7 +203,7 @@ class BaseAgent:
         # Check bounds
         if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(self.terrain.grid[0]):
             return self.terrain.grid[grid_x][grid_y]['type'] == 'land'
-        logger.debug_log(f"Attempted to move to invalid position: ({new_x}, {new_y})", level=logging.ERROR)
+        if LOGGING_ENABLED: logger.debug_log(f"Attempted to move to invalid position: ({new_x}, {new_y})", level=logging.ERROR)
         return False
 
     def move(self, dx, dy):
@@ -225,7 +225,7 @@ class BaseAgent:
             # Update the agent's position
             self.x = new_x
             self.y = new_y
-            logger.debug_log(f"Agent {self.role} moved to ({new_x}, {new_y})")
+            if LOGGING_ENABLED: logger.debug_log(f"Agent {self.role} moved to ({new_x}, {new_y})")
 
             # Update position history
             if not hasattr(self, "recent_positions"):
@@ -237,13 +237,13 @@ class BaseAgent:
             # Check for being stuck
             unique_positions = len(set(self.recent_positions))
             if unique_positions <= 2:  # Threshold for "stuck" detection (more sensitive)
-                logger.debug_log(
-                    f"Agent {self.role} is likely stuck. "
-                    f"Recent positions: {self.recent_positions}. Penalising.",
-                    level=logging.WARNING
-                )
+                if LOGGING_ENABLED: logger.debug_log(
+                        f"Agent {self.role} is likely stuck. "
+                        f"Recent positions: {self.recent_positions}. Penalising.",
+                        level=logging.WARNING
+                    )
                 self.Health -= 2  # Example penalty (health loss)
-                logger.debug_log(f"Agent {self.agent_id}{self.role} has been penalised for being stuck.")
+                if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent_id}{self.role} has been penalised for being stuck.")
                 if self.Health <= 0:
                     print(f"Agent {self.role} has died from being stuck.")
             # Mark the new cell as the agent's faction territory
@@ -251,7 +251,7 @@ class BaseAgent:
             grid_y = new_y // CELL_SIZE
             self.terrain.grid[grid_x][grid_y]['faction'] = self.faction.id
         else:
-            logger.debug_log(f"Agent {self.role} attempted invalid move to ({new_x}, {new_y}).", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"Agent {self.role} attempted invalid move to ({new_x}, {new_y}).", level=logging.ERROR)
 
 
 
@@ -304,7 +304,7 @@ class BaseAgent:
         :param task_state: The new state of the current task (TaskState).
         """
         self.current_task_state = task_state
-        logger.debug_log(f"{self.role} task state updated to {task_state}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f"{self.role} task state updated to {task_state}.", level=logging.DEBUG)
 
     
     def update(self, resource_manager, agents, hq_state):
@@ -313,20 +313,22 @@ class BaseAgent:
         - Performing assigned tasks.
         - Observing the environment.
         - Reporting experiences to the faction.
+        
         """
+        self._perception_cache = None
         try:
             # Log the current task before performing it
-            logger.debug_log(
-                f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
-                level=logging.DEBUG
-            )
+            if LOGGING_ENABLED: logger.debug_log(
+                    f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
+                    level=logging.DEBUG
+                )
 
             # Retrieve the agent's current state based on HQ state
             state = self.get_state(resource_manager, agents, self.faction, hq_state)
             if state is None:
                 raise RuntimeError(f"[CRITICAL] Agent {self.agent_id} received a None state from get_state")
 
-            logger.debug_log(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
+            if LOGGING_ENABLED: logger.debug_log(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
 
             # Execute the current task or decide on a new action
             reward, task_state = self.perform_task(state, resource_manager, agents)
@@ -335,7 +337,7 @@ class BaseAgent:
             # Observe the environment and report findings to the faction
             self.observe(agents, {"position": self.faction.home_base["position"]}, resource_manager)
 
-            # Log the task state and reward for centralized learning
+            # Log the task state and reward for centralised learning
             if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
                 next_state = self.get_state(resource_manager, agents, self.faction, hq_state)
                 done = task_state in [TaskState.SUCCESS, TaskState.FAILURE]
@@ -345,7 +347,8 @@ class BaseAgent:
 
             # Handle health-related conditions
             if self.Health <= 0:
-                logger.debug_log(f"{self.role} has died and will be removed from the game.", level=logging.WARNING)
+                if LOGGING_ENABLED: logger.debug_log(f"{self.role} has died and will be removed from the game.", level=logging.WARNING)
+                print(f"{self.role} has died and will be removed from the game.")
 
         except Exception as e:
             traceback.print_exc()
@@ -385,7 +388,7 @@ class BaseAgent:
 
         # Log all observed threats
         if observed_threats:
-            logger.debug_log(f"Agent {self.agent_id} observed threats: {observed_threats}", level=logging.DEBUG)        
+            if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent_id} observed threats: {observed_threats}", level=logging.DEBUG)        
 
         for threat in observed_threats:
             # Ensure the threat is from a different faction
@@ -409,7 +412,7 @@ class BaseAgent:
                 self.communication_system.agent_to_hq(self, {"type": "resource", "data": resource})
 
         # Log reported resources
-        logger.debug_log(f"Agent {self.agent_id} observed resources: {observed_resources}", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent_id} observed resources: {observed_resources}", level=logging.DEBUG)
 
 
 
@@ -493,11 +496,10 @@ class BaseAgent:
             }
             threats.append(threat)
 
-            logger.debug_log(
-                f"Agent {self.agent_id} detected threat: AgentID {agent.agent_id}, "
-                f"Faction {agent.agent_id.faction_id}, at location ({agent.x}, {agent.y}).",
-                level=logging.DEBUG
-            )
+            if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent_id} detected threat: AgentID {agent.agent_id}, "
+                    f"Faction {agent.agent_id.faction_id}, at location ({agent.x}, {agent.y}).",
+                    level=logging.DEBUG
+                )
 
         # Detect enemy HQ
         if "position" in enemy_hq and enemy_hq.get("faction_id") is not None:
@@ -511,7 +513,7 @@ class BaseAgent:
                 }
                 threats.append(threat)
 
-                logger.debug_log(
+                if LOGGING_ENABLED: logger.debug_log(
                     f"Agent {self.agent_id} detected enemy HQ at location {enemy_hq['position']}.",
                     level=logging.DEBUG
                 )
@@ -574,7 +576,7 @@ class BaseAgent:
         nearest_threat = find_closest_actor(perceived_threats, entity_type="threat", requester=self) if perceived_threats else None
         nearest_resource = find_closest_actor(perceived_resources, entity_type="resource", requester=self) if perceived_resources else None
 
-        #  Construct normalized state vector
+        #  Construct normalised state vector
         core_state = [
             self.x / WORLD_WIDTH,
             self.y / WORLD_HEIGHT,
@@ -594,7 +596,7 @@ class BaseAgent:
                 one_hot_task[task_type_index] = 1
         state = core_state + one_hot_task
 
-        logger.debug_log(f"Agent {self.agent_id} state: {state}", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent_id} state: {state}", level=logging.DEBUG)
         return state
 
 
@@ -645,7 +647,7 @@ class BaseAgent:
 
     def report_experience_to_hq(self, state, action, reward, next_state, done):
         """
-        Report the experience to the HQ for centralized training.
+        Report the experience to the HQ for centralised training.
         """
         experience = {
             "state": state,
@@ -689,7 +691,7 @@ class Peacekeeper(BaseAgent):
             self.base_sprite = pygame.image.load(base_sprite_path).convert_alpha()
             sprite_size = int(SCREEN_HEIGHT * AGENT_SCALE_FACTOR)
             self.base_sprite = pygame.transform.scale(self.base_sprite, (sprite_size, sprite_size))
-            self.sprite = tint_sprite(self.base_sprite, faction.color) if faction and hasattr(faction, 'color') else self.base_sprite
+            self.sprite = tint_sprite(self.base_sprite, faction.colour) if faction and hasattr(faction, 'colour') else self.base_sprite
 
            
 
@@ -733,7 +735,7 @@ class Gatherer(BaseAgent):
             self.base_sprite = pygame.image.load(base_sprite_path).convert_alpha()
             sprite_size = int(SCREEN_HEIGHT * AGENT_SCALE_FACTOR)
             self.base_sprite = pygame.transform.scale(self.base_sprite, (sprite_size, sprite_size))
-            self.sprite = tint_sprite(self.base_sprite, faction.color) if faction and hasattr(faction, 'color') else self.base_sprite
+            self.sprite = tint_sprite(self.base_sprite, faction.colour) if faction and hasattr(faction, 'colour') else self.base_sprite
 
             
 
@@ -781,7 +783,7 @@ class Archer(BaseAgent):
             sprite_size = int(SCREEN_HEIGHT * AGENT_SCALE_FACTOR)
             self.base_sprite = pygame.transform.scale(self.base_sprite, (sprite_size, sprite_size))
 
-            self.sprite = tint_sprite(self.base_sprite, faction.color) if faction and hasattr(faction, 'color') else self.base_sprite
+            self.sprite = tint_sprite(self.base_sprite, faction.colour) if faction and hasattr(faction, 'colour') else self.base_sprite
     except Exception as e:
         raise(f"Error in Initialising Archer class: {e}") """
 

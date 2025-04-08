@@ -16,10 +16,7 @@ class Logger:
         # Create a unique logger instance
         self.logger = logging.getLogger(log_file)
     
-        if not LOGGING_ENABLED:
-            self.logger.addHandler(logging.NullHandler())
-            print("DEBUG_MODE is disabled. Logger will not create log files.")
-            return
+        
 
         # Ensure the LOG directory exists
         log_directory = "LOG"
@@ -74,12 +71,7 @@ class Logger:
         elif level == logging.CRITICAL:
             self.logger.critical(message)
 
-    def debug_log(self, message, level=logging.DEBUG):
-        """
-        Log a debug message if DEBUG_MODE is enabled.
-        """
-        if LOGGING_ENABLED:
-            self.log(message, level)
+    
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -90,7 +82,7 @@ import os
 
 class TensorBoardLogger:
     """
-    TensorBoardLogger is a singleton class that initializes a TensorBoard SummaryWriter.
+    TensorBoardLogger is a singleton class that initialises a TensorBoard SummaryWriter.
     It ensures that only one instance of the SummaryWriter is created and used across the application.
     Attributes:
         log_dir (str): Directory where TensorBoard logs will be saved.
@@ -120,7 +112,7 @@ class TensorBoardLogger:
                 os.makedirs(self.log_dir)
             self.writer = SummaryWriter(log_dir=self.log_dir)
         except Exception as e:
-            print(f"Error initializing TensorBoard writer: {str(e)}")
+            print(f"Error initialising TensorBoard writer: {str(e)}")
 
     def log_scalar(self, name, value, step):
         """

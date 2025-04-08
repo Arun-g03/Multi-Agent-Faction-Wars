@@ -139,7 +139,7 @@ class Terrain:
         grid_height = len(self.grid[0])
 
         # Create a mapping of faction IDs to their RGB colours
-        faction_colours = {str(faction.id): faction.color for faction in factions}
+        faction_colours = {str(faction.id): faction.colour for faction in factions}
         
         from render_display import get_font
 
@@ -191,8 +191,8 @@ class Terrain:
 
                     # Create a tint surface and scale it to fit the cell size
                     tint_surface = pygame.Surface((int(cell_size), int(cell_size)), pygame.SRCALPHA)
-                    tint_color = (0,160,0,255)  # Adjust tint colour and transparency (R, G, B, A)
-                    tint_surface.fill(tint_color)
+                    tint_colour = (0,160,0,255)  # Adjust tint colour and transparency (R, G, B, A)
+                    tint_surface.fill(tint_colour)
 
                     # Apply the tint by blitting the tint surface onto the scaled texture
                     tinted_grass_texture = scaled_grass_texture.copy()
@@ -203,9 +203,9 @@ class Terrain:
 
                     # If the cell is owned by a faction, overlay the faction's colour with some transparency
                     if cell['faction'] != 'None':
-                        faction_color = faction_colours.get(cell['faction'], (0, 255, 0))  # Default to green
+                        faction_colour = faction_colours.get(cell['faction'], (0, 255, 0))  # Default to green
                         overlay = pygame.Surface((int(cell_size), int(cell_size)), pygame.SRCALPHA)
-                        overlay.fill((*faction_color, 128))  # Semi-transparent overlay
+                        overlay.fill((*faction_colour, 128))  # Semi-transparent overlay
                         screen.blit(overlay, (world_x, world_y))
                 else:
                     # Default fallback for other cell types (e.g., green for undefined cells)

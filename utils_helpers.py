@@ -131,7 +131,7 @@ def find_closest_actor(entities, entity_type=None, requester=None):
 
 
 
-def generate_random_color(used_colours=None, min_distance=100):
+def generate_random_colour(used_colours=None, min_distance=100):
     """
     Generate a random RGB colour that is visually distinct from previously used colours
     and avoids black, white, and grassy greens.
@@ -146,11 +146,11 @@ def generate_random_color(used_colours=None, min_distance=100):
     if used_colours is None:
         used_colours = []
 
-    def euclidean_distance(color1, colour2):
+    def euclidean_distance(colour1, colour2):
         """Calculate the Euclidean distance between two RGB colours."""
-        return math.sqrt(sum((c1 - c2) ** 2 for c1, c2 in zip(color1, colour2)))
+        return math.sqrt(sum((c1 - c2) ** 2 for c1, c2 in zip(colour1, colour2)))
 
-    def is_valid_color(color):
+    def is_valid_colour(colour):
         """Ensure the colour is not too dark, too bright, or grassy green."""
         r, g, b = colour
 
@@ -170,7 +170,7 @@ def generate_random_color(used_colours=None, min_distance=100):
         colour = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
         # Ensure the colour is valid and distinct
-        if (is_valid_color(colour) and
+        if (is_valid_colour(colour) and
             all(euclidean_distance(colour, used) >= min_distance for used in used_colours)):
             used_colours.append(colour)  # Add to the list of used colours
             return colour

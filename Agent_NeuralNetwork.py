@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.distributions import Categorical
 import logging
-from utils_config import STATE_FEATURES_MAP, DEF_AGENT_STATE_SIZE
+from utils_config import STATE_FEATURES_MAP, DEF_AGENT_STATE_SIZE, LOGGING_ENABLED
 from utils_logger import Logger
 from utils_logger import TensorBoardLogger
 
@@ -14,11 +14,11 @@ logger = Logger(log_file="neural_network_log.txt", log_level=logging.DEBUG)
 # Check for GPU
 Training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.is_available():
-    print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+    print("\033[93mUsing GPU: {}\033[0m".format(torch.cuda.get_device_name(0)))    
+    if LOGGING_ENABLED: logger.debug_log(f"Using GPU: {torch.cuda.get_device_name(0)}")
 else:
-    print("**Agent Networks**\nNo GPU detected.\nUsing CPU.\nNote training will be slower.\n")
-
-
+    print("\033[93m**Agent Networks**\nNo GPU detected.\nUsing CPU.\nNote training will be slower.\n\033[0m")
+    if LOGGING_ENABLED: logger.debug_log(f"\033[93mUsing CPU.\033[0m")
 
 #       _   _   _             _   _               _                          
 #      / \ | |_| |_ ___ _ __ | |_(_) ___  _ __   | |    __ _ _   _  ___ _ __ 
@@ -72,10 +72,11 @@ class HQ_Network(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #  Compute total input size dynamically
         total_input_size = state_size + role_size + local_state_size + global_state_size
-        logger.debug_log(f"[DEBUG] HQ_Network expected input size: {total_input_size}", level=logging.INFO)
+        if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] HQ_Network expected input size: {total_input_size}", level=logging.INFO)
 
 
-        print(f"[DEBUG] HQ_Network initialised with input size: {total_input_size}")
+        if LOGGING_ENABLED:
+            print(f"[DEBUG] HQ_Network initialised with input size: {total_input_size}")
 
         #  Make input size dynamic
         total_input_size = state_size + role_size + local_state_size + global_state_size
@@ -88,7 +89,8 @@ class HQ_Network(nn.Module):
         """
         Update the network structure dynamically when the input size changes.
         """
-        logger.debug_log(f"[INFO] Updating HQ_Network input size from {self.fc1.in_features} to {new_input_size}")
+        if LOGGING_ENABLED:
+            if LOGGING_ENABLED: logger.debug_log(f"[INFO] Updating HQ_Network input size from {self.fc1.in_features} to {new_input_size}")
         self.fc1 = nn.Linear(new_input_size, 128)
 
 
@@ -109,7 +111,7 @@ class HQ_Network(nn.Module):
         input_size_check = state.shape[0] + role.shape[0] + local_state.shape[0] + global_state.shape[0]
 
         if input_size_check != self.fc1.in_features:
-            logger.debug_log(f"[INFO] Updating HQ_Network input size from {self.fc1.in_features} to {input_size_check}")
+            if LOGGING_ENABLED: logger.debug_log(f"[INFO] Updating HQ_Network input size from {self.fc1.in_features} to {input_size_check}")
             self.update_network(input_size_check)
 
         x = torch.cat([state, role, local_state, global_state], dim=-1)
@@ -321,7 +323,12 @@ class PPOModel(nn.Module):
         self.critic = nn.Linear(128, 1)
 
 
-        logger.debug_log(f"Agent_Network initialised successfully using PPO model (state_size={state_size}, action_size={action_size}, gamma={gamma}, clip_epsilon={clip_epsilon}, entropy_coeff={entropy_coeff}).", level=logging.INFO)
+        if LOGGING_ENABLED: logger.debug_log(
+            f"Agent_Network initialised successfully using PPO model (state_size={state_size}, " \
+            f"action_size={action_size}, gamma={gamma}, clip_epsilon={clip_epsilon}, " \
+            f"entropy_coeff={entropy_coeff}).", level=logging.INFO)    
+    
+    
     def forward(self, state):
         x = torch.relu(self.fc1(state))
         x = torch.relu(self.fc2(x))
@@ -348,29 +355,29 @@ class PPOModel(nn.Module):
             raise ValueError(f"[CRITICAL] Agent {self.AgentID} state contains None values: {state}")
 
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-        logger.debug_log(f" AgentID: {self.AgentID}__State: {state}", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f" AgentID: {self.AgentID}__State: {state}", level=logging.DEBUG)
         logits, value = self.forward(state_tensor)
         
         if torch.isnan(logits).any().item() or torch.isinf(logits).any().item():
         
-            logger.debug_log(f"[🔥 LOGITS ERROR] Detected NaNs/Infs in logits!", level=logging.ERROR)
-            logger.debug_log(f"State: {state}", level=logging.ERROR)
-            logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"[LOGITS ERROR] Detected NaNs/Infs in logits!", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"State: {state}", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
             raise ValueError("Logits contain NaN or Inf before softmax.")
 
         probs = torch.softmax(logits, dim=-1)
 
         if torch.isnan(probs).any().item() or torch.isinf(probs).any().item():
-            logger.debug_log(f"[🔥 PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
-            logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
-            logger.debug_log(f"Softmaxed probs: {probs}", level=logging.ERROR)
-            logger.debug_log(f"State: {state}", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"[PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"Logits: {logits}", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"Softmaxed probs: {probs}", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log(f"State: {state}", level=logging.ERROR)
             raise ValueError("Action probabilities contain NaN or Inf.")
 
         dist = Categorical(probs)
         action = dist.sample()
 
-        logger.debug_log(f"Action probabilities: {probs.tolist()}, Selected action: {action.item()}, State value: {value.item()}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f"Action probabilities: {probs.tolist()}, Selected action: {action.item()}, State value: {value.item()}.", level=logging.DEBUG)
 
         return action.item(), dist.log_prob(action), value.item()
 
@@ -379,7 +386,14 @@ class PPOModel(nn.Module):
         """
         Store a single transition in memory.
         """
-        logger.debug_log(f"AGENT - Storing transition: state={state}, action={action}, reward={reward}, local_value={local_value}, global_value={global_value}, done={done}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f"AGENT - Storing transition: state={state}"\
+                            f"action={action}"\
+                            f"reward={reward}"\
+                            f"local_value={local_value}"\
+                            f"global_value={global_value}"\
+                            f"done={done}.", 
+                            level=logging.DEBUG
+                                                                    )
         self.memory["states"].append(state)
         self.memory["actions"].append(action)
         self.memory["log_probs"].append(log_prob)
@@ -387,8 +401,9 @@ class PPOModel(nn.Module):
         self.memory["values"].append(local_value)
         self.memory["global_values"].append(global_value)
         self.memory["dones"].append(done)
-        logger.debug_log(
-                        f"[MEMORY COUNT] {self.AgentID}| Transitions Stored: {len(self.memory['rewards'])}",
+        if LOGGING_ENABLED: logger.debug_log(
+                        f"[MEMORY COUNT] {self.AgentID}"\
+                        f"Transitions Stored: {len(self.memory['rewards'])}",
                         level=logging.DEBUG
                     )
 
@@ -404,11 +419,11 @@ class PPOModel(nn.Module):
         required_keys = ["states", "actions", "log_probs", "rewards", "values", "dones"]
 
         if mode == 'train':
-            logger.debug_log("[AGENT NETWORK] Training Agent...", level=logging.DEBUG)
+            if LOGGING_ENABLED: logger.debug_log("[AGENT NETWORK] Training Agent...", level=logging.DEBUG)
 
             # Check if memory is populated
             if not all(len(self.memory[k]) > 0 for k in required_keys):
-                logger.debug_log(
+                if LOGGING_ENABLED: logger.debug_log(
                     "[ERROR] Training :skipped Memory buffer is incomplete or empty. " +
                     ", ".join(f"{k}={len(self.memory[k])}" for k in required_keys),
                     level=logging.ERROR
@@ -417,7 +432,7 @@ class PPOModel(nn.Module):
 
             # Ensure sufficient transitions for training
             if len(self.memory["rewards"]) < 10:
-                logger.debug_log(
+                if LOGGING_ENABLED: logger.debug_log(
                     f"[WARNING] Training skipped: Not enough transitions in memory. "
                     f"Current transitions: {len(self.memory['rewards'])}",
                     level=logging.WARNING
@@ -436,7 +451,7 @@ class PPOModel(nn.Module):
             try:
                 returns, advantages = self.compute_gae(rewards, values, values, dones)
             except ValueError as e:
-                logger.debug_log(f"[ERROR] Failed to compute GAE: {e}", level=logging.ERROR)
+                if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Failed to compute GAE: {e}", level=logging.ERROR)
                 return
 
             # Determine effective number of training epochs
@@ -464,12 +479,12 @@ class PPOModel(nn.Module):
                     logits, new_values = self.ai(states_batch)
 
                     if torch.isnan(logits).any().item() or torch.isinf(logits).any().item():
-                        logger.debug_log(f"[TRAIN LOGITS ERROR] NaNs in logits during training epoch {epoch}", level=logging.ERROR)
+                        if LOGGING_ENABLED: logger.debug_log(f"[TRAIN LOGITS ERROR] NaNs in logits during training epoch {epoch}", level=logging.ERROR)
                         return
 
                     probs = torch.softmax(logits, dim=-1)
                     if torch.isnan(probs).any().item() or torch.isinf(probs).any().item():
-                        logger.debug_log(f"[TRAIN PROBS ERROR] NaNs in probs during training epoch {epoch}", level=logging.ERROR)
+                        if LOGGING_ENABLED: logger.debug_log(f"[TRAIN PROBS ERROR] NaNs in probs during training epoch {epoch}", level=logging.ERROR)
                         return
 
                     dist = Categorical(probs)
@@ -494,15 +509,15 @@ class PPOModel(nn.Module):
 
                     self.optimizer.step()
 
-                    logger.debug_log(
+                    if LOGGING_ENABLED: logger.debug_log(
                         f"[TRAIN] Epoch {epoch + 1}: Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
                         level=logging.DEBUG
                     )
 
-            logger.debug_log("[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
+            if LOGGING_ENABLED: logger.debug_log("[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
 
         elif mode == 'evaluate':
-            logger.debug_log("[EVALUATE MODE] No training applied.", level=logging.DEBUG)
+            if LOGGING_ENABLED: logger.debug_log("[EVALUATE MODE] No training applied.", level=logging.DEBUG)
 
         self.clear_memory()
 
@@ -513,10 +528,10 @@ class PPOModel(nn.Module):
 
     def compute_gae(self, rewards, local_values, global_values, dones):
         """
-        Compute Generalized Advantage Estimation (GAE).
+        Compute Generalised Advantage Estimation (GAE).
         """
         if len(rewards) == 0 or len(local_values) == 0 or len(global_values) == 0 or len(dones) == 0:
-            logger.debug_log("[ERROR] GAE input arrays are empty.", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.debug_log("[ERROR] GAE input arrays are empty.", level=logging.ERROR)
             print(f"[DEBUG] rewards: {type(rewards)}, len={len(rewards)}")
             print(f"[DEBUG] local_values: {local_values.shape}")
             print(f"[DEBUG] global_values: {global_values.shape}")
@@ -525,7 +540,7 @@ class PPOModel(nn.Module):
             return None, None
 
             
-        logger.debug_log("Computing Generalized Advantage Estimation (GAE).", level=logging.INFO)
+        if LOGGING_ENABLED: logger.debug_log("Computing Generalised Advantage Estimation (GAE).", level=logging.INFO)
         returns = []
         advantages = []
         gae = 0
@@ -547,7 +562,7 @@ class PPOModel(nn.Module):
             last_return = rewards[step] + self.gamma * last_return * mask
             returns.insert(0, last_return)
 
-        logger.debug_log(f"GAE computed. Returns: {returns}, Advantages: {advantages}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.debug_log(f"GAE computed. Returns: {returns}, Advantages: {advantages}.", level=logging.DEBUG)
         returns = torch.tensor(returns, dtype=torch.float32)
         advantages = torch.tensor(advantages, dtype=torch.float32)
         return returns, (advantages - advantages.mean()) / (advantages.std() + 1e-8)
