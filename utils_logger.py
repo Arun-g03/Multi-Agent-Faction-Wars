@@ -1,6 +1,6 @@
 import logging
 
-from utils_config import LOGGING_ENABLED
+from utils_config import LOGGING_ENABLED, TENSORBOARD_ENABLED
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -103,8 +103,11 @@ class TensorBoardLogger:
 
     """
     _instance = None  # Singleton reference
+      # Global flag to enable/disable TensorBoard logging
 
     def __new__(cls, log_dir="log"):
+        if not TENSORBOARD_ENABLED:
+            return None
         if cls._instance is None:
             try:
                 cls._instance = super(TensorBoardLogger, cls).__new__(cls)
@@ -134,6 +137,8 @@ class TensorBoardLogger:
         :param value: The value of the metric.
         :param step: The step at which to log the metric.
         """
+        if not TENSORBOARD_ENABLED:
+            return
         try:
             self.writer.add_scalar(name, value, step)
         except Exception as e:
@@ -147,6 +152,8 @@ class TensorBoardLogger:
         :param value: The value to log (usually a tensor or array).
         :param step: The step at which to log the metric.
         """
+        if not TENSORBOARD_ENABLED:
+            return
         try:
             self.writer.add_histogram(name, value, step)
         except Exception as e:
@@ -160,6 +167,8 @@ class TensorBoardLogger:
         :param image_tensor: The image tensor to log (typically in CHW format).
         :param step: The step at which to log the image.
         """
+        if not TENSORBOARD_ENABLED:
+            return
         try:
             self.writer.add_image(name, image_tensor, step)
         except Exception as e:
@@ -173,6 +182,8 @@ class TensorBoardLogger:
         :param text: The text to log.
         :param step: The step at which to log the text.
         """
+        if not TENSORBOARD_ENABLED:
+            pass
         try:
             self.writer.add_text(name, text, step)
         except Exception as e:
@@ -185,6 +196,8 @@ class TensorBoardLogger:
         :param metrics_dict: A dictionary where the keys are metric names, and the values are the metric values.
         :param step: The step at which to log the metrics.
         """
+        if not TENSORBOARD_ENABLED:
+            return
         try:
             for name, value in metrics_dict.items():
                 self.log_scalar(name, value, step)
@@ -193,6 +206,8 @@ class TensorBoardLogger:
 
     def close(self):
         """Close the TensorBoard writer when you're done logging."""
+        if not TENSORBOARD_ENABLED:
+            return
         try:
             self.writer.close()
         except Exception as e:

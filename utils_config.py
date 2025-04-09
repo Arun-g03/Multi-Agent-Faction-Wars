@@ -24,8 +24,11 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-LOGGING_ENABLED = True 
+LOGGING_ENABLED = False 
 """Enable logging for debugging"""
+
+TENSORBOARD_ENABLED = False
+"""Enable tensorboard for visualisation"""
 
 
 

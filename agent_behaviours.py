@@ -6,7 +6,8 @@ from utils_config import (
                         ROLE_ACTIONS_MAP, 
                         AgentIDStruc, 
                         TASK_METHODS_MAPPING, 
-                        LOGGING_ENABLED
+                        LOGGING_ENABLED,
+                        TENSORBOARD_ENABLED
                         
                         )
 from env_resources import AppleTree, GoldLump
@@ -203,18 +204,18 @@ class AgentBehaviour:
             reward = 1
         else:
             reward = -1
-
+        if TENSORBOARD_ENABLED:
         # Add TensorBoard logging here too
-        try:
-            episode = getattr(self.agent.faction, "episode", 0)
-            faction_id = self.agent.faction.id
-            TensorBoardLogger().log_scalar(
-                f"Faction_{faction_id}/Task_independent_{task_state.name}",
-                reward,
-                episode
-            )
-        except Exception as e:
-            if LOGGING_ENABLED: logger.log_msg(f"[TensorBoard] Failed to log independent task reward: {e}", level=logging.WARNING)
+            try:
+                episode = getattr(self.agent.faction, "episode", 0)
+                faction_id = self.agent.faction.id
+                TensorBoardLogger().log_scalar(
+                    f"Faction_{faction_id}/Task_independent_{task_state.name}",
+                    reward,
+                    episode
+                )
+            except Exception as e:
+                if LOGGING_ENABLED: logger.log_msg(f"[TensorBoard] Failed to log independent task reward: {e}", level=logging.WARNING)
 
         return reward
 
@@ -270,17 +271,18 @@ class AgentBehaviour:
                 reward += 7  # Bonus for eliminating threats effectively
 
                 # 🧠 Log to TensorBoard
-        try:
-           
-            episode = getattr(agent.faction, "episode", 0)
-            faction_id = agent.faction.id
-            TensorBoardLogger().log_scalar(
-                f"Faction_{faction_id}/Task_{task_type}_{task_state.name}",
-                reward,
-                episode
-            )
-        except Exception as e:
-            if LOGGING_ENABLED: logger.log_msg(f"[TensorBoard] Failed to log task reward: {e}", level=logging.WARNING)
+        if TENSORBOARD_ENABLED:
+            try:
+            
+                episode = getattr(agent.faction, "episode", 0)
+                faction_id = agent.faction.id
+                TensorBoardLogger().log_scalar(
+                    f"Faction_{faction_id}/Task_{task_type}_{task_state.name}",
+                    reward,
+                    episode
+                )
+            except Exception as e:
+                if LOGGING_ENABLED: logger.log_msg(f"[TensorBoard] Failed to log task reward: {e}", level=logging.WARNING)
 
         return reward
 

@@ -41,7 +41,8 @@ from utils_config import (
     ROLE_ACTIONS_MAP,
     AgentIDStruc,
     DEF_AGENT_STATE_SIZE,
-    LOGGING_ENABLED)
+    LOGGING_ENABLED,
+    TENSORBOARD_ENABLED)
 
 """Logging  and profiling for performance and execution analysis"""
 import logging
@@ -595,8 +596,8 @@ class GameManager:
                         break
 
                 # TensorBoard: Episode summary
-                
-                TensorBoardLogger().log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
+                if TENSORBOARD_ENABLED:
+                    TensorBoardLogger().log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
 
                 for faction in self.faction_manager.factions:
                     # Aggregate rewards per role
@@ -613,19 +614,23 @@ class GameManager:
                             role_rewards[role] = role_rewards.get(role, 0) + last_reward
 
                     # Log overall faction reward
-                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
-                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
-                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
-                    TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
+                    if TENSORBOARD_ENABLED:
+                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
+                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
+                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
+                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
+
+                        # Log reward by role
+                    for role, reward in role_rewards.items():
+                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
+                        
                     print(f"Faction {faction.id} total reward: {total_reward}")
                     print(f"Faction {faction.id} gold balance: {faction.gold_balance}")
                     print(f"Faction {faction.id} food balance: {faction.food_balance}")
                     print(f"Faction {faction.id} agents alive: {len(faction.agents)}")
                     print(f"Faction {faction.id} reward by role: {role_rewards}")
 
-                    # Log reward by role
-                    for role, reward in role_rewards.items():
-                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
+                    
                         
                 # 🔁 Train agents at the end of the episode
                 if self.mode == "train":

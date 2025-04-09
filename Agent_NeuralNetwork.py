@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.distributions import Categorical
 import logging
-from utils_config import STATE_FEATURES_MAP, DEF_AGENT_STATE_SIZE, LOGGING_ENABLED, HQ_STRATEGY_OPTIONS 
+from utils_config import STATE_FEATURES_MAP, DEF_AGENT_STATE_SIZE, LOGGING_ENABLED, HQ_STRATEGY_OPTIONS, TENSORBOARD_ENABLED
 from utils_logger import Logger
 from utils_logger import TensorBoardLogger
 
@@ -547,11 +547,11 @@ class PPOModel(nn.Module):
 
                     self.optimizer.zero_grad()
                     loss.backward()
-                    
-                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/PolicyLoss", policy_loss.item(), self.total_updates)
-                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/ValueLoss", value_loss.item(), self.total_updates)
-                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/TotalLoss", loss.item(), self.total_updates)
-                    TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/Entropy", entropy.item(), self.total_updates)
+                    if TENSORBOARD_ENABLED:
+                        TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/PolicyLoss", policy_loss.item(), self.total_updates)
+                        TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/ValueLoss", value_loss.item(), self.total_updates)
+                        TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/TotalLoss", loss.item(), self.total_updates)
+                        TensorBoardLogger().log_scalar(f"Agent_{self.AgentID}/Entropy", entropy.item(), self.total_updates)
 
                     self.optimizer.step()
 
