@@ -155,7 +155,6 @@ def start_game(screen, mode, tensorboard_enabled=True, auto_tensorboard_enabled=
         return None  # Return None to indicate failure
 
 # Run the main function with profiling if enabled
-timestamp = datetime.datetime.now().strftime("%Y_%m_%d %H_%M")
 if __name__ == "__main__":
     if ENABLE_PROFILE_BOOL:
         profile_function(main)

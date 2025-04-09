@@ -244,6 +244,7 @@ class GameRenderer:
                     gatherer_count = sum(1 for agent in faction.agents if agent.role == "gatherer")
 
                     # Display all metrics in the tooltip
+                    
                     overlay_text = (
                         f"Faction ID: {faction.id}\n\n"
                         f"Known Entities:\n"
@@ -254,9 +255,11 @@ class GameRenderer:
                         f"Gold: {faction.gold_balance}\n"
                         f"Food: {faction.food_balance}\n"
                         f"Peacekeepers: {peacekeeper_count}\n"
-                        f"Gatherers: {gatherer_count}"
+                        f"Gatherers: {gatherer_count}\n\n"
+                        f"Current Strategy: {faction.current_strategy}"
                     )
                     self.render_tooltip(overlay_text)
+
 
 
 
@@ -358,12 +361,11 @@ class GameRenderer:
                 if agent_rect.collidepoint(mouse_x, mouse_y):
 
                     
-                    # FOV + interact radius
-                    fov_radius = Agent_field_of_view * CELL_SIZE * camera.zoom
-                    pygame.draw.circle(self.screen, (255, 255, 0), (screen_x, screen_y), fov_radius, width=2)
+                    #Field of View
+                    pygame.draw.circle(self.screen, (255, 255, 0), (screen_x, screen_y), Agent_field_of_view*CELL_SIZE * camera.zoom, width=2)
 
-                    interact_radius = Agent_Interact_Range * CELL_SIZE * camera.zoom
-                    pygame.draw.circle(self.screen, (173, 216, 230), (screen_x, screen_y), interact_radius, width=2)
+                    #Interact Range
+                    pygame.draw.circle(self.screen, (173, 216, 230), (screen_x, screen_y), Agent_Interact_Range*CELL_SIZE * camera.zoom, width=2)
 
                     # 🎯 Highlight task target
                     if isinstance(agent.current_task, dict):
@@ -371,7 +373,7 @@ class GameRenderer:
                         target = agent.current_task.get("target")
 
                         if target:
-                            if LOGGING_ENABLED: logger.debug_log(
+                            if LOGGING_ENABLED: logger.log_msg(
                                 f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
                                 level=logging.DEBUG
                             )
@@ -387,7 +389,7 @@ class GameRenderer:
                                 if target_agent:
                                     target_x, target_y = target_agent.x, target_agent.y
                                 else:
-                                    if LOGGING_ENABLED: logger.debug_log(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
+                                    if LOGGING_ENABLED: logger.log_msg(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
 
                             elif target_position:
                                 target_x, target_y = target_position
@@ -396,7 +398,7 @@ class GameRenderer:
 
                             if target_x is not None and target_y is not None:
                                 target_screen_x, target_screen_y = camera.apply((target_x, target_y))
-                                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
+                                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
 
                                 if task_type == "eliminate":
                                     box_colour = (255, 0, 0)
@@ -412,10 +414,10 @@ class GameRenderer:
                                     CELL_SIZE * camera.zoom
                                 )
 
-                                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
+                                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
                                 pygame.draw.rect(self.screen, box_colour, box_rect, width=2)
                             else:
-                                if LOGGING_ENABLED: logger.debug_log(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
+                                if LOGGING_ENABLED: logger.log_msg(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
 
                     # 📝 Tooltip Info
                     if isinstance(agent.current_task, dict):

@@ -38,7 +38,7 @@ class AgentBehaviour:
 
         
         self.target = None
-        if LOGGING_ENABLED: logger.debug_log(f"initialised behavior for {self.agent.role} with actions: {self.role_actions}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.log_msg(f"initialised behavior for {self.agent.role} with actions: {self.role_actions}.", level=logging.DEBUG)
 
     
 
@@ -63,15 +63,15 @@ class AgentBehaviour:
         """
         Dynamically execute the chosen action based on its required arguments.
         """
-        if LOGGING_ENABLED: logger.debug_log(f"Starting perform_action for agent {self.agent.role}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.log_msg(f"Starting perform_action for agent {self.agent.role}.", level=logging.DEBUG)
         
         role_actions = ROLE_ACTIONS_MAP[self.agent.role]
         action = role_actions[action_index]
 
-        if LOGGING_ENABLED: logger.debug_log(f"Action selected: {action}. Validating action existence.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.log_msg(f"Action selected: {action}. Validating action existence.", level=logging.DEBUG)
 
         if hasattr(self, action):
-            if LOGGING_ENABLED: logger.debug_log(f"Action '{action}' found. Dynamically determining arguments.", level=logging.DEBUG)
+            if LOGGING_ENABLED: logger.log_msg(f"Action '{action}' found. Dynamically determining arguments.", level=logging.DEBUG)
             self.agent.current_action = action_index
             action_method = getattr(self, action)
 
@@ -87,7 +87,7 @@ class AgentBehaviour:
             # Call the method with dynamically determined arguments
             return action_method(*args)
 
-        if LOGGING_ENABLED: logger.debug_log(f"Action '{action}' not implemented for agent {self.agent.role}.", level=logging.WARNING)
+        if LOGGING_ENABLED: logger.log_msg(f"Action '{action}' not implemented for agent {self.agent.role}.", level=logging.WARNING)
         self.agent.current_action = -1
         return TaskState.INVALID
 
@@ -105,12 +105,13 @@ class AgentBehaviour:
    
 
     def perform_task(self, state, resource_manager, agents):
+        # SETUP
         if state is None:
             raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
 
-        if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent.role} performing task. Current task: {self.agent.current_task}", level=logging.INFO)
+        if LOGGING_ENABLED:
+            logger.log_msg(f"Agent {self.agent.role} performing task. Current task: {self.agent.current_task}", level=logging.INFO)
 
-    
         faction_id = self.agent.faction.id
         episode = getattr(self.agent.faction, "episode", 0)
 
@@ -128,20 +129,21 @@ class AgentBehaviour:
                 reward = self.assign_reward_for_independent_action(task_state)
                 return reward, task_state
 
-        # Mark task as ONGOING
+        # DO
         if self.agent.current_task.get("state") != TaskState.ONGOING:
             self.agent.current_task["state"] = TaskState.ONGOING
 
-        # 💡 Cache decision variables for training
         action_index, log_prob, value = self.ai.choose_action(state)
         self.agent.current_action = action_index
         self.agent.log_prob = log_prob
         self.agent.value = value
 
-        if LOGGING_ENABLED: logger.debug_log(
-            f"[PRE-ACTION] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}, State={state}",
-            level=logging.DEBUG
-        )
+        if LOGGING_ENABLED:
+            logger.log_msg(
+                f"[PRE-ACTION] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}, State={state}",
+                level=logging.DEBUG
+            )
+
         if any(x != x or x == float("inf") or x == float("-inf") for x in state):
             print(f"\n[INVALID STATE] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}")
             print(f"State: {state}")
@@ -149,15 +151,29 @@ class AgentBehaviour:
 
         task_state = self.perform_action(action_index, state, resource_manager, agents)
 
-        # Calculate reward using contextual task data
+        #TASK-ACTION VALIDATION
+        task_type = self.agent.current_task.get("type", "unknown")
+        expected_method = TASK_METHODS_MAPPING.get(task_type)
+        actual_method = ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
+
+        if expected_method != actual_method and task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
+            if LOGGING_ENABLED:
+                logger.log_msg(
+                    f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_method}' but expected '{expected_method}' "
+                    f"for task '{task_type}'. Holding state as ONGOING.",
+                    level=logging.INFO
+                )
+            task_state = TaskState.ONGOING
+
+        # RESULT
         reward = self.assign_reward_for_task_action(
             task_state=task_state,
-            task_type=self.agent.current_task.get("type", "unknown"),
+            task_type=task_type,
             agent=self.agent,
             target_position=self.agent.current_task.get("target", {}).get("position", (0, 0)),
             current_position=(self.agent.x, self.agent.y)
         )
-        # Always update task state in current_task
+
         if self.agent.current_task:
             self.agent.current_task["state"] = task_state
 
@@ -167,12 +183,12 @@ class AgentBehaviour:
             log_prob=self.agent.log_prob,
             reward=reward,
             local_value=self.agent.value,
-            global_value=0,  # Or calculated if available
+            global_value=0,
             done=(task_state in [TaskState.SUCCESS, TaskState.FAILURE])
         )
 
-
         return reward, task_state
+
 
 
 
@@ -198,7 +214,7 @@ class AgentBehaviour:
                 episode
             )
         except Exception as e:
-            if LOGGING_ENABLED: logger.debug_log(f"[TensorBoard] Failed to log independent task reward: {e}", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"[TensorBoard] Failed to log independent task reward: {e}", level=logging.WARNING)
 
         return reward
 
@@ -264,7 +280,7 @@ class AgentBehaviour:
                 episode
             )
         except Exception as e:
-            if LOGGING_ENABLED: logger.debug_log(f"[TensorBoard] Failed to log task reward: {e}", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"[TensorBoard] Failed to log task reward: {e}", level=logging.WARNING)
 
         return reward
 
@@ -302,17 +318,17 @@ class AgentBehaviour:
         """
         Handle the eliminate task logic dynamically.
         """
-        if LOGGING_ENABLED: logger.debug_log(f"Agent {self.agent.role} received eliminate task for target: {target}.", level=logging.INFO)
+        if LOGGING_ENABLED: logger.log_msg(f"Agent {self.agent.role} received eliminate task for target: {target}.", level=logging.INFO)
 
         if not target or "position" not in target:
-            if LOGGING_ENABLED: logger.debug_log(f"Invalid eliminate task target: {target}.", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"Invalid eliminate task target: {target}.", level=logging.WARNING)
             return TaskState.FAILURE
 
         target_position = target["position"]
 
         # Check proximity to the target
         if self.agent.is_near(target_position):
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} is in range to eliminate target. Executing eliminate_threat.", level=logging.INFO)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} is in range to eliminate target. Executing eliminate_threat.", level=logging.INFO)
             return self.eliminate_threat(agents)
 
         # Move closer to the target dynamically
@@ -336,7 +352,7 @@ class AgentBehaviour:
             return TaskState.FAILURE
 
         target_position = target_data["position"]
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} handling gather task. Target position: {target_position}", level=logging.INFO)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} handling gather task. Target position: {target_position}", level=logging.INFO)
 
         # Find the actual resource object at the target position
         resource_obj = next(
@@ -353,18 +369,18 @@ class AgentBehaviour:
         if not self.agent.is_near((resource_obj.x, resource_obj.y), threshold=3):
             dx = resource_obj.x - self.agent.x
             dy = resource_obj.y - self.agent.y
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} moving towards resource at ({resource_obj.x}, {resource_obj.y}) (dx: {dx}, dy: {dy}).", level=logging.INFO)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} moving towards resource at ({resource_obj.x}, {resource_obj.y}) (dx: {dx}, dy: {dy}).", level=logging.INFO)
             return self.move_to_target(dx, dy)
 
         # Gather from the object
         if hasattr(resource_obj, "gather") and callable(resource_obj.gather):
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} gathering from resource at {target_position}.", level=logging.INFO)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} gathering from resource at {target_position}.", level=logging.INFO)
             resource_obj.gather(1)
             self.agent.faction.food_balance += 1  # Optional if AppleTree
             return TaskState.SUCCESS
 
         elif hasattr(resource_obj, "mine") and callable(resource_obj.mine):
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} mining gold at {target_position}.", level=logging.INFO)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} mining gold at {target_position}.", level=logging.INFO)
             resource_obj.mine()
             self.agent.faction.gold_balance += 1
             return TaskState.SUCCESS
@@ -380,7 +396,7 @@ class AgentBehaviour:
         """
         Handle exploration by dynamically moving to unexplored areas.
         """
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} executing explore task.", level=logging.INFO)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} executing explore task.", level=logging.INFO)
 
         unexplored_cells = self.find_unexplored_areas()
         if unexplored_cells:
@@ -393,8 +409,25 @@ class AgentBehaviour:
             dy = target_position[1] - self.agent.y
             return self.move_to_target(dx, dy)
         
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} found no unexplored areas.", level=logging.WARNING)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} found no unexplored areas.", level=logging.WARNING)
         return TaskState.FAILURE
+    
+    def handle_move_to_task(self):
+        """
+        Simple movement toward a target position.
+        """
+        task = self.agent.current_task
+        if not task or "target" not in task or "position" not in task["target"]:
+            return TaskState.FAILURE
+
+        target_pos = task["target"]["position"]
+        if self.agent.is_near(target_pos):
+            return TaskState.SUCCESS
+
+        dx = target_pos[0] - self.agent.x
+        dy = target_pos[1] - self.agent.y
+        return self.move_to_target(dx, dy)
+
     
     def move_to_target(self, dx, dy):
         """
@@ -422,23 +455,20 @@ class AgentBehaviour:
 
     def move_up(self):
         self.agent.move(0, -1)
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} moved up to ({self.agent.x}, {self.agent.y}).", level=logging.DEBUG)
-        return TaskState.ONGOING
+        
 
     def move_down(self):
         self.agent.move(0, 1)
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} moved down to ({self.agent.x}, {self.agent.y}).", level=logging.DEBUG)
-        return TaskState.ONGOING
+        
 
     def move_left(self):
         self.agent.move(-1, 0)
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} moved left to ({self.agent.x}, {self.agent.y}).", level=logging.DEBUG)
-        return TaskState.ONGOING
+        
 
     def move_right(self):
         self.agent.move(1, 0)
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} moved right to ({self.agent.x}, {self.agent.y}).", level=logging.DEBUG)
-        return TaskState.ONGOING
+        
+        
 
 
 
@@ -450,11 +480,11 @@ class AgentBehaviour:
         if self.agent.faction.food_balance > 0:
             self.agent.faction.food_balance -= 1
             self.agent.Health = min(100, self.agent.Health + 10)
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} healed with an apple. Health is now {self.agent.Health}.", level=logging.INFO)
-            return TaskState.SUCCESS
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} healed with an apple. Health is now {self.agent.Health}.", level=logging.INFO)
+            
         else:
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} attempted to heal, but no food available.", level=logging.WARNING)
-            return TaskState.FAILURE
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} attempted to heal, but no food available.", level=logging.WARNING)
+            
 
     def explore(self):
         """
@@ -466,7 +496,7 @@ class AgentBehaviour:
                     return
         
         if self.agent.current_task.get("target") is None:
-            if LOGGING_ENABLED: logger.debug_log(f"[EXPLORE] No target set for agent {self.agent.agent_id}", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"[EXPLORE] No target set for agent {self.agent.agent_id}", level=logging.WARNING)
             return TaskState.INVALID
         
         
@@ -481,7 +511,7 @@ class AgentBehaviour:
 
         # Check if agent is close enough
         if abs(dx) <= threshold and abs(dy) <= threshold:
-            if LOGGING_ENABLED: logger.debug_log(f"[EXPLORE COMPLETE] Agent {self.agent.agent_id} reached ({target_x}, {target_y})", level=logging.INFO)
+            if LOGGING_ENABLED: logger.log_msg(f"[EXPLORE COMPLETE] Agent {self.agent.agent_id} reached ({target_x}, {target_y})", level=logging.INFO)
             return TaskState.SUCCESS
 
         # Decide direction based on distance
@@ -492,10 +522,10 @@ class AgentBehaviour:
 
         if hasattr(self, action):
             getattr(self, action)()
-            if LOGGING_ENABLED: logger.debug_log(f"[EXPLORE] Agent {self.agent.agent_id} exploring toward ({target_x}, {target_y}) via '{action}'", level=logging.DEBUG)
+            if LOGGING_ENABLED: logger.log_msg(f"[EXPLORE] Agent {self.agent.agent_id} exploring toward ({target_x}, {target_y}) via '{action}'", level=logging.DEBUG)
             return TaskState.ONGOING
         else:
-            if LOGGING_ENABLED: logger.debug_log(f"[EXPLORE ERROR] Agent {self.agent.agent_id} cannot perform '{action}'", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"[EXPLORE ERROR] Agent {self.agent.agent_id} cannot perform '{action}'", level=logging.WARNING)
             return TaskState.FAILURE
 
 
@@ -516,7 +546,7 @@ class AgentBehaviour:
                     and self.agent.terrain.grid[x][y]["faction"] != self.agent.faction.id
                 ):
                     unexplored.append((x, y))
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} identified unexplored areas: {unexplored}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} identified unexplored areas: {unexplored}.", level=logging.DEBUG)
         return unexplored
 
 
@@ -543,22 +573,22 @@ class AgentBehaviour:
 
         if gold_resources:
             gold_lump = gold_resources[0]  # Select the nearest gold resource
-            if self.agent.is_near(gold_lump, Agent_Interact_Range):
+            if self.agent.is_near(gold_lump, Agent_Interact_Range*CELL_SIZE):
                 gold_lump.mine()
                 self.agent.faction.gold_balance += 1
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} mined gold. Gold balance: {self.agent.faction.gold_balance}.",
                     level=logging.INFO
                 )
                 return TaskState.SUCCESS
             else:
                 # Not in range to mine yet — fail the task this step
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} attempted to mine gold but was not near target at ({gold_lump.x}, {gold_lump.y}). Failure", 
                     level=logging.INFO)
                 return TaskState.FAILURE
 
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} found no gold resources to mine.", level=logging.WARNING)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} found no gold resources to mine.", level=logging.WARNING)
         return TaskState.FAILURE
 
 
@@ -575,25 +605,24 @@ class AgentBehaviour:
 
         if apple_trees:
             tree = apple_trees[0]  # Select the nearest apple tree
-            if self.agent.is_near(tree):
+            if self.agent.is_near(tree, Agent_Interact_Range*CELL_SIZE):
                 tree.gather(1)  # Gather 1 apple
                 self.agent.faction.food_balance += 1
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} foraged an apple. Food balance: {self.agent.faction.food_balance}.",
                     level=logging.INFO
                 )
                 return TaskState.SUCCESS
             else:
                 # Not in range to forage — let the agent learn from failure
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} is not near apple tree at ({tree.x}, {tree.y}). Letting policy handle it.",
                     level=logging.INFO
                 )
                 return TaskState.FAILURE
 
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} found no apple trees nearby to forage.", level=logging.WARNING)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} found no apple trees nearby to forage.", level=logging.WARNING)
         return TaskState.FAILURE
-
 
 
 
@@ -640,33 +669,23 @@ class AgentBehaviour:
             # Execute the determined movement action
             if hasattr(self, action):
                 getattr(self, action)()  # Call the movement method
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} is patrolling towards threat ID {threat_id} at ({target_x}, {target_y}) using action '{action}'.",
                     level=logging.INFO
                 )
                 return TaskState.ONGOING
             else:
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} could not execute movement action '{action}' while patrolling towards threat ID {threat_id}.",
                     level=logging.WARNING
                 )
                 return TaskState.FAILURE  # Penalise for missing movement action
         else:
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} found no threats to patrol towards.", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} found no threats to patrol towards.", level=logging.WARNING)
             return TaskState.FAILURE  # Failure when no threats are found
 
 
 
-
-#    ___ _         _   _____ _                 _   
-#   | __(_)_ _  __| | |_   _| |_  _ _ ___ __ _| |_ 
-#   | _|| | ' \/ _` |   | | | ' \| '_/ -_) _` |  _|
-#   |_| |_|_||_\__,_|   |_| |_||_|_| \___\__,_|\__|
-#                                                  
-
-    
-
-    
 
 #    ___ _ _       _           _         _____ _                 _   
 #   | __| (_)_ __ (_)_ _  __ _| |_ ___  |_   _| |_  _ _ ___ __ _| |_ 
@@ -684,24 +703,24 @@ class AgentBehaviour:
         """
         task = self.agent.current_task
         if not task:
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} has no valid task assigned for elimination.", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} has no valid task assigned for elimination.", level=logging.WARNING)
             return TaskState.FAILURE
 
         threat = task.get("target")
         if not threat or "position" not in threat:
-            if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} could not find a valid threat in the task.", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} could not find a valid threat in the task.", level=logging.WARNING)
             return TaskState.FAILURE
 
         assigned_position = threat["position"]
         assigned_id = threat.get("id", None)
 
-        # ✅ Step 1: Try to attack the assigned threat if within combat range
+        #Step 1: Try to attack the assigned threat if within combat range
         if self.agent.is_near(assigned_position, threshold=Agent_Interact_Range):
             target_agent = next((a for a in agents if a.agent_id == assigned_id), None)
             if target_agent and target_agent.faction.id != self.agent.faction.id:
                 self.event_manager.trigger_attack_animation(position=(target_agent.x, target_agent.y), duration=200)
                 target_agent.Health -= 10
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",
                     level=logging.INFO
                 )
@@ -719,19 +738,19 @@ class AgentBehaviour:
                 ):
                     self.event_manager.trigger_attack_animation(position=(enemy.x, enemy.y), duration=200)
                     enemy.Health -= 10
-                    if LOGGING_ENABLED: logger.debug_log(
+                    if LOGGING_ENABLED: logger.log_msg(
                         f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.",
                         level=logging.INFO
                     )
                     if enemy.Health <= 0:
-                        if LOGGING_ENABLED: logger.debug_log(
+                        if LOGGING_ENABLED: logger.log_msg(
                             f"{self.agent.role} eliminated nearby  {enemy.role}.",
                             level=logging.INFO
                         )
                     return TaskState.ONGOING
 
         # ❌ Nothing in range — fail the task this step
-        if LOGGING_ENABLED: logger.debug_log(f"{self.agent.role} could not reach assigned threat and found no enemies in attack range.", level=logging.INFO)
+        if LOGGING_ENABLED: logger.log_msg(f"{self.agent.role} could not reach assigned threat and found no enemies in attack range.", level=logging.INFO)
         return TaskState.FAILURE
 
 
@@ -744,7 +763,7 @@ class AgentBehaviour:
         Find an agent by its location.
         """
         if not agents or not isinstance(agents, list):
-            if LOGGING_ENABLED: logger.debug_log(f"'agents' is invalid or missing. Cannot find agent by location.", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"'agents' is invalid or missing. Cannot find agent by location.", level=logging.WARNING)
             return None
 
         for agent in agents:
@@ -763,7 +782,7 @@ class AgentBehaviour:
             if threat.get("is_active", True)  # Keep only active threats
         ]
         after_cleanup = len(self.agent.faction.global_state["threats"])
-        if LOGGING_ENABLED: logger.debug_log(
+        if LOGGING_ENABLED: logger.log_msg(
             f"{self.agent.role} cleaned resolved threats. Before: {before_cleanup}, After: {after_cleanup}.",
             level=logging.INFO
         )
@@ -789,14 +808,14 @@ class AgentBehaviour:
         for global_threat in self.agent.faction.global_state.get("threats", []):
             if global_threat.get("id") == threat.get("id"):  # Compare using unique ID
                 global_threat["is_active"] = False
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"{self.agent.role} reported threat ID {threat['id']} at {threat.get('location')} as eliminated.",
                     level=logging.INFO
                 )
                 break  # Stop iteration once the matching threat is found
         else:
             # Log if the threat was not found in the global state
-            if LOGGING_ENABLED: logger.debug_log(
+            if LOGGING_ENABLED: logger.log_msg(
                 f"Threat ID {threat.get('id')} not found in global state during elimination report.",
                 level=logging.WARNING
             )

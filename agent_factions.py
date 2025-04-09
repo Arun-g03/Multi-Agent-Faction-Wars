@@ -17,13 +17,15 @@ from utils_config import (
     NETWORK_TYPE_MAPPING,
     WORLD_HEIGHT,
     WORLD_WIDTH,
-    LOGGING_ENABLED)
+    LOGGING_ENABLED,
+    HQ_STRATEGY_OPTIONS)
 
 
 from utils_helpers import (
     generate_random_colour,
     find_closest_actor
 )
+import time
 import torch
 
 import torch.nn as nn
@@ -57,6 +59,7 @@ class Faction():
             self.resource_manager = resource_manager  # Reference to the resource manager
             self.gold_balance = 0
             self.food_balance = 0
+            self.current_strategy = None
             self.experience_buffer = []
             self.resources = []  # Initialise known resources
             self.threats = []  # Initialise known threats
@@ -88,14 +91,14 @@ class Faction():
 
 
                 if self.network is None:
-                    if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Network failed to Initialise for faction {self.id} (Type: {network_type})", level=logging.ERROR)
+                    if LOGGING_ENABLED: logger.log_msg(f"[ERROR] Network failed to Initialise for faction {self.id} (Type: {network_type})", level=logging.ERROR)
                     raise AttributeError(f"[ERROR] Network failed to Initialise for faction {self.id}")
                 else:
-                    if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Faction {self.id}: Successfully initialised {type(self.network).__name__}", level=logging.INFO)
+                    if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Faction {self.id}: Successfully initialised {type(self.network).__name__}", level=logging.INFO)
 
             except Exception as e:
-                if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Failed to Initialise network for faction {self.id}: {e}", level=logging.ERROR)
-                if LOGGING_ENABLED: logger.debug_log(traceback.format_exc(), level=logging.ERROR)
+                if LOGGING_ENABLED: logger.log_msg(f"[ERROR] Failed to Initialise network for faction {self.id}: {e}", level=logging.ERROR)
+                if LOGGING_ENABLED: logger.log_msg(traceback.format_exc(), level=logging.ERROR)
 
             
             self.communication_system = CommunicationSystem(self.agents, [self])
@@ -142,28 +145,35 @@ class Faction():
         Initialise the network model based on the selected network type.
         """
         try:
-            if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Faction {self.id}: Attempting to Initialise {network_type}...", level=logging.DEBUG)
+            if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Faction {self.id}: Attempting to Initialise {network_type}...", level=logging.DEBUG)
 
             if network_type == "PPOModel":
-                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Initialising PPOModel for faction {self.id} (state_size={state_size}, action_size={action_size})", level=logging.DEBUG)
+                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Initialising PPOModel for faction {self.id} (state_size={state_size}, action_size={action_size})", level=logging.DEBUG)
                 return PPOModel(state_size, action_size)
             elif network_type == "DQNModel":
-                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Initialising DQNModel for faction {self.id} (state_size={state_size}, action_size={action_size})", level=logging.DEBUG)
+                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Initialising DQNModel for faction {self.id} (state_size={state_size}, action_size={action_size})", level=logging.DEBUG)
                 return DQNModel(state_size, action_size)
             elif network_type == "HQNetwork":
-                if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Initialising HQNetwork for faction {self.id} (state_size={state_size}, role_size={role_size}, local_state_size={local_state_size}, global_state_size={global_state_size}, action_size={action_size})", level=logging.DEBUG)
+                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Initialising HQNetwork for faction {self.id} (state_size={state_size}, role_size={role_size}, local_state_size={local_state_size}, global_state_size={global_state_size}, action_size={action_size})", level=logging.DEBUG)
                 return HQ_Network(state_size, role_size, local_state_size, global_state_size, action_size)
             else:
                 raise ValueError(f"[ERROR] Unsupported network type: {network_type}")
 
         except Exception as e:
-            if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Network initialisation failed for faction {self.id} (Type: {network_type}): {e}", level=logging.ERROR)
+            if LOGGING_ENABLED: logger.log_msg(f"[ERROR] Network initialisation failed for faction {self.id} (Type: {network_type}): {e}", level=logging.ERROR)
             
-            if LOGGING_ENABLED: logger.debug_log(traceback.format_exc(), level=logging.ERROR)
+            if LOGGING_ENABLED: logger.log_msg(traceback.format_exc(), level=logging.ERROR)
             return None  #  Prevent crashes by returning None instead of failing silently
 
              
-
+    def update(self, resource_manager, agents):
+        self.calculate_territory(resource_manager.terrain)
+        self.aggregate_faction_state()
+        self.choose_HQ_Strategy()
+        self.assign_high_level_tasks()
+        self.update_tasks(agents)
+        self.choose_HQ_Strategy()
+        
 
     
 
@@ -200,29 +210,21 @@ class Faction():
 
 
     
-#    _             _         _   _             __            _   _                         _ _   _      
-#   | |_ _ __ __ _(_)_ __   | |_| |__   ___   / _| __ _  ___| |_(_) ___  _ __     ___ _ __(_) |_(_) ___ 
-#   | __| '__/ _` | | '_ \  | __| '_ \ / _ \ | |_ / _` |/ __| __| |/ _ \| '_ \   / __| '__| | __| |/ __|
-#   | |_| | | (_| | | | | | | |_| | | |  __/ |  _| (_| | (__| |_| | (_) | | | | | (__| |  | | |_| | (__ 
-#    \__|_|  \__,_|_|_| |_|  \__|_| |_|\___| |_|  \__,_|\___|\__|_|\___/|_| |_|  \___|_|  |_|\__|_|\___|
-#                                                                                                       
-
 
 
   
 
-#       _                                    _         _        __                            _   _                __                     
-#      / \   __ _  __ _ _ __ ___  __ _  __ _| |_ ___  (_)_ __  / _| ___  _ __ _ __ ___   __ _| |_(_) ___  _ __    / _|_ __ ___  _ __ ___  
-#     / _ \ / _` |/ _` | '__/ _ \/ _` |/ _` | __/ _ \ | | '_ \| |_ / _ \| '__| '_ ` _ \ / _` | __| |/ _ \| '_ \  | |_| '__/ _ \| '_ ` _ \ 
-#    / ___ \ (_| | (_| | | |  __/ (_| | (_| | ||  __/ | | | | |  _| (_) | |  | | | | | | (_| | |_| | (_) | | | | |  _| | | (_) | | | | | |
-#   /_/   \_\__, |\__, |_|  \___|\__, |\__,_|\__\___| |_|_| |_|_|  \___/|_|  |_| |_| |_|\__,_|\__|_|\___/|_| |_| |_| |_|  \___/|_| |_| |_|
-#           |___/ |___/          |___/                                                                                                    
-#                           _         _       _                        _       _           _       _        _                             
-#     __ _  __ _  ___ _ __ | |_ ___  (_)_ __ | |_ ___     __ _    __ _| | ___ | |__   __ _| |  ___| |_ __ _| |_ ___                       
-#    / _` |/ _` |/ _ \ '_ \| __/ __| | | '_ \| __/ _ \   / _` |  / _` | |/ _ \| '_ \ / _` | | / __| __/ _` | __/ _ \                      
-#   | (_| | (_| |  __/ | | | |_\__ \ | | | | | || (_) | | (_| | | (_| | | (_) | |_) | (_| | | \__ \ || (_| | ||  __/                      
-#    \__,_|\__, |\___|_| |_|\__|___/ |_|_| |_|\__\___/   \__,_|  \__, |_|\___/|_.__/ \__,_|_| |___/\__\__,_|\__\___|                     
-#          |___/                                                 |___/          
+#       _                                    _                                   _          __                                              _       
+#      / \   __ _  __ _ _ __ ___  __ _  __ _| |_ ___   _ __ ___ _ __   ___  _ __| |_ ___   / _|_ __ ___  _ __ ___     __ _  __ _  ___ _ __ | |_ ___ 
+#     / _ \ / _` |/ _` | '__/ _ \/ _` |/ _` | __/ _ \ | '__/ _ \ '_ \ / _ \| '__| __/ __| | |_| '__/ _ \| '_ ` _ \   / _` |/ _` |/ _ \ '_ \| __/ __|
+#    / ___ \ (_| | (_| | | |  __/ (_| | (_| | ||  __/ | | |  __/ |_) | (_) | |  | |_\__ \ |  _| | | (_) | | | | | | | (_| | (_| |  __/ | | | |_\__ \
+#   /_/   \_\__, |\__, |_|  \___|\__, |\__,_|\__\___| |_|  \___| .__/ \___/|_|   \__|___/ |_| |_|  \___/|_| |_| |_|  \__,_|\__, |\___|_| |_|\__|___/
+#    _      |___/ |___/       _  |___/_           _       _    |_| _                                                       |___/                    
+#   (_)_ __ | |_ ___     __ _| | ___ | |__   __ _| |  ___| |_ __ _| |_ ___                                                                          
+#   | | '_ \| __/ _ \   / _` | |/ _ \| '_ \ / _` | | / __| __/ _` | __/ _ \                                                                         
+#   | | | | | || (_) | | (_| | | (_) | |_) | (_| | | \__ \ || (_| | ||  __/                                                                         
+#   |_|_| |_|\__\___/   \__, |_|\___/|_.__/ \__,_|_| |___/\__\__,_|\__\___|                                                                         
+#                       |___/                                                                                                                       
 
 
     def aggregate_faction_state(self):
@@ -272,7 +274,7 @@ class Faction():
         ]
 
         #  Debug Log to verify correct agent count
-        if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Faction {self.id} State: {self.global_state}")
+        #if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Faction {self.id} State: {self.global_state}")
 
         return self.global_state
 
@@ -297,19 +299,29 @@ class Faction():
         data = report["data"]
 
         if report_type == "threat":
-            # Add or update the threat in the global state
+            threat_id = data.get("id")
+            location = data.get("location")
+
+            if "threats" not in self.global_state:
+                self.global_state["threats"] = []
+
+            # Use string comparison fallback if AgentIDStruc not hashable
             existing_threat = next(
-                (threat for threat in self.global_state["threats"]
-                 if threat["id"] == data["id"]),
+                (t for t in self.global_state["threats"]
+                if str(t.get("id")) == str(threat_id)),
                 None
             )
+
             if existing_threat:
-                if existing_threat["location"] != data["location"]:
-                    existing_threat["location"] = data["location"]
-                    if LOGGING_ENABLED: logger.debug_log(f"Faction {self.id} updated threat ID {data['id']} to location {data['location']}.")
+                if existing_threat["location"] != location:
+                    existing_threat["location"] = location
+                    if LOGGING_ENABLED:
+                        logger.log_msg(f"Faction {self.id} updated threat ID {threat_id} to location {location}.")
             else:
                 self.global_state["threats"].append(data)
-                if LOGGING_ENABLED: logger.debug_log(f"Faction {self.id} added new threat: ID {data['id']} at {data['location']}.")
+                if LOGGING_ENABLED:
+                    logger.log_msg(f"Faction {self.id} added new threat: {data['type']} ID {threat_id} at {location}.")
+
 
         elif report_type == "resource":
             # Extract relevant data from the resource object
@@ -330,28 +342,17 @@ class Faction():
                     pass  # Do nothing if the resource already exists
                 else:
                     self.global_state["resources"].append(resource_data)
-                    if LOGGING_ENABLED: logger.debug_log(f"Faction {self.id} added resource: {resource_data}.")
+                    if LOGGING_ENABLED: logger.log_msg(f"Faction {self.id} added resource: {resource_data}.")
             else:
-                if LOGGING_ENABLED: logger.debug_log(f"Invalid resource object in report for Faction {self.id}: {data}")
+                if LOGGING_ENABLED: logger.log_msg(f"Invalid resource object in report for Faction {self.id}: {data}")
 
         else:
-            if LOGGING_ENABLED: logger.debug_log(f"Unknown report type '{report_type}' received by Faction {self.id}: {report}")
-
-
-
-
-#    ____                 _     _            _        _         _                                         _                
-#   |  _ \ _ __ _____   _(_) __| | ___   ___| |_ __ _| |_ ___  | |_ ___    _ __ ___  __ _ _   _  ___  ___| |_ ___ _ __ ___ 
-#   | |_) | '__/ _ \ \ / / |/ _` |/ _ \ / __| __/ _` | __/ _ \ | __/ _ \  | '__/ _ \/ _` | | | |/ _ \/ __| __/ _ \ '__/ __|
-#   |  __/| | | (_) \ V /| | (_| |  __/ \__ \ || (_| | ||  __/ | || (_) | | | |  __/ (_| | |_| |  __/\__ \ ||  __/ |  \__ \
-#   |_|   |_|  \___/ \_/ |_|\__,_|\___| |___/\__\__,_|\__\___|  \__\___/  |_|  \___|\__, |\__,_|\___||___/\__\___|_|  |___/
-#                                                                                      |_|  
-
+            if LOGGING_ENABLED: logger.log_msg(f"Unknown report type '{report_type}' received by Faction {self.id}: {report}")
 
 
     def provide_state(self):
         """
-        Provide the faction's global state.
+        Provide the faction's global state to a requester.
         """
         return self.global_state
 
@@ -364,14 +365,12 @@ class Faction():
 #                                                |___/                                       
 
 
-
-
     def clean_global_state(self):
         """
         Clean up outdated entries in the global state and ensure required features exist.
         """
 
-        if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Cleaning global state for Faction {self.id} BEFORE reset: {self.global_state}")
+        if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Cleaning global state for Faction {self.id} BEFORE reset: {self.global_state}")
 
         #  Clean up resources (remove depleted)
         if "resources" in self.global_state and isinstance(self.global_state["resources"], list):
@@ -416,7 +415,32 @@ class Faction():
         self.global_state["gold_balance"] = self.global_state.get("gold_balance", 0)
         self.global_state["food_balance"] = self.global_state.get("food_balance", 0)
 
-        if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Cleaned global state for Faction {self.id}: {self.global_state}")
+        if LOGGING_ENABLED:
+            state = self.global_state
+
+            resource_strs = [r.get("location", "?") for r in state.get("resources", [])]
+            threat_strs = [f"{t.get('type', '?')}@{t.get('location', '?')}" for t in state.get("threats", [])]
+
+            formatted_state = (
+                f"\n[GLOBAL STATE] Faction {self.id}\n"
+                f"  Resources     ({state.get('resource_count', 0)}): {resource_strs}\n"
+                f"  Threats       ({state.get('threat_count', 0)}): {threat_strs}\n"
+                f"  Nearest Resource: {state.get('nearest_resource', {}).get('location')}\n"
+                f"  Nearest Threat : {state.get('nearest_threat', {}).get('location')}\n"
+                f"  Friendly Agents: {state.get('friendly_agent_count', 0)}\n"
+                f"  Enemy Agents   : {state.get('enemy_agent_count', 0)}\n"
+                f"  Agent Density  : {state.get('agent_density', 0)} (near HQ)\n"
+                f"  Total Agents   : {state.get('total_agents', 0)}\n"
+                f"  HQ Health      : {state.get('HQ_health', 100)}\n"
+                f"  Gold           : {state.get('gold_balance', 0)}\n"
+                f"  Food           : {state.get('food_balance', 0)}\n"
+            )
+            logger.log_msg(formatted_state, level=logging.DEBUG)
+
+
+
+
+        
 
 
 
@@ -431,12 +455,12 @@ class Faction():
         """
         HQ chooses a strategic action, executes it, and assigns tasks to idle agents accordingly.
         """
-        if LOGGING_ENABLED: logger.debug_log(f"[HQ] Faction {self.id} assigning high-level tasks...", level=logging.INFO)
+        if LOGGING_ENABLED: logger.log_msg(f"[HQ] Faction {self.id} assigning high-level tasks...", level=logging.INFO)
 
-        # 🧠 Step 1: Choose and execute strategy
-        action = self.choose_action()
-        self.perform_action(action)
-        self.current_strategy = action  # Set for reference during agent-level decisions
+        # 🧠 Step 1: Choose and execute FACTION strategy
+        action = self.choose_HQ_Strategy()
+        self.perform_HQ_Strategy(action)
+        
 
         # 🧠 Step 2: Assign tasks to idle agents based on HQ strategy
         for agent in self.agents:
@@ -447,7 +471,7 @@ class Faction():
             if task:
                 agent.current_task = task
 
-                # ✅ Support multiple agents per task (teamwork-ready)
+                #Support multiple agents per task 
                 task_id = task["id"]
                 if task_id not in self.assigned_tasks:
                     self.assigned_tasks[task_id] = []
@@ -456,11 +480,11 @@ class Faction():
 
                 # Optional debug print
                 if LOGGING_ENABLED:
-                    if LOGGING_ENABLED: logger.debug_log(
+                    if LOGGING_ENABLED: logger.log_msg(
                         f"[TASK ASSIGNED] {agent.agent_id} => {task['type']} at {task['target'].get('position')}",
                         level=logging.INFO
                     )
-                    if LOGGING_ENABLED: logger.debug_log(
+                    if LOGGING_ENABLED: logger.log_msg(
                         f"[DEBUG] {agent.agent_id} has task: {agent.current_task}",
                         level=logging.DEBUG
                 )
@@ -469,88 +493,148 @@ class Faction():
     #This is where tasks are created
 
     def assign_task(self, agent) -> Optional[dict]:
-        """
-        Decides the most relevant task for the agent based only on current global state.
-        Supports multiple agents sharing tasks.
-        """
         role = getattr(agent, "role", None)
-
-        MAX_TASK_ASSIGNMENTS = {
-            "eliminate": 2,
-            "gather": 1,
-            "explore": 1,
-        }
+        strategy = self.current_strategy or "NO_PRIORITY"
 
         if role not in ["gatherer", "peacekeeper"]:
-            if LOGGING_ENABLED: logger.debug_log(f"[WARN] Unknown role for agent {agent.agent_id}: {role}", level=logging.WARNING)
+            if LOGGING_ENABLED:
+                logger.log_msg(f"[WARN] Unknown role {agent.agent_id}: {role}", level=logging.WARNING)
             return None
 
-        # ========== GATHERER ==========
         if role == "gatherer":
-            unclaimed_resources = [
-                res for res in self.global_state.get("resources", [])
-                if len(self.assigned_tasks.get(f"Resource-{res['location']}", [])) < MAX_TASK_ASSIGNMENTS["gather"]
+            current = agent.current_task
+            current_type = current["type"] if current else None
+
+            is_resource_task = current_type == "gather"
+
+            # If already gathering, don't override
+            if is_resource_task:
+                return current
+
+            # Otherwise clear task and assign new one
+            if current:
+                if LOGGING_ENABLED:
+                    logger.log_msg(f"[REASSIGN] Gatherer {agent.agent_id} dropping task '{current_type}' for resource assignment.", level=logging.INFO)
+                agent.current_task = None
+
+            if strategy == "COLLECT_GOLD":
+                return self.assign_mining_task(agent)
+
+            elif strategy == "COLLECT_FOOD":
+                return self.assign_forage_task(agent)
+
+            # Fallback: pick best available
+            options = list(filter(None, [
+                self.assign_forage_task(agent),
+                self.assign_mining_task(agent)
+            ]))
+            if options:
+                return random.choice(options)
+
+            return self.assign_explore_task(agent)  # Last fallback
+
+
+        elif strategy == "ATTACK_THREATS":
+            threats = [
+                t for t in self.global_state.get("threats", [])
+                if t["id"].faction_id != self.id
             ]
+            if threats:
+                threat = min(threats, key=lambda t: self.calculate_threat_weight(agent, t))
 
-            if not unclaimed_resources:
-                if LOGGING_ENABLED: logger.debug_log(f"[NO TASK] No resources left for gatherer {agent.agent_id}", level=logging.INFO)
-                return None
+                # Check if the agent already has an eliminate task for this threat
+                current = agent.current_task
+                already_eliminating = current and current.get("type") == "eliminate" and current.get("target", {}).get("id") == threat["id"]
 
-            # Sort by resource weight (distance/amount)
-            nearest_resource = sorted(
-                unclaimed_resources,
-                key=lambda r: self.calculate_resource_weight(
-                    agent,
-                    next((res for res in self.resource_manager.resources if (res.grid_x, res.grid_y) == r["location"]), None)
-                )
-            )[0]
+                if not already_eliminating:
+                    if current:
+                        if LOGGING_ENABLED:
+                            logger.log_msg(f"[REASSIGN] Clearing task '{current['type']}' to reassign eliminate task.", level=logging.INFO)
+                        agent.current_task = None  # Clear old task
 
-            task_id = f"Resource-{nearest_resource['location']}"
-            target = {"position": nearest_resource["location"], "type": nearest_resource["type"]}
-            return create_task(self, "gather", target, task_id)
+                    return self.assign_eliminate_task(agent, threat["id"], threat["type"], threat["location"])
 
-        # ========== PEACEKEEPER ==========
-        if role == "peacekeeper":
-            available_threats = [
-                threat for threat in self.global_state.get("threats", [])
-                if isinstance(threat.get("id"), AgentIDStruc)
-                and threat["id"].faction_id != self.id
-                and threat["id"] != agent.agent_id
-                and len(self.assigned_tasks.get(f"Threat-{threat['id']}", [])) < MAX_TASK_ASSIGNMENTS["eliminate"]
-            ]
+        
+        logger.log_msg(f"Could not assign task to agent {agent.agent_id}(role={role}, strategy={strategy})", level=logging.WARNING)
+        return None
 
-            if available_threats:
-                nearest_threat = sorted(available_threats, key=lambda t: self.calculate_threat_weight(agent, t))[0]
-                task_id = f"Threat-{nearest_threat['id']}"
-                target = {
-                    "position": nearest_threat["location"],
-                    "id": nearest_threat["id"],
-                    "type": "agent"
-                }
-                return create_task(self, "eliminate", target, task_id)
-
-            # === Fallback: Explore unexplored global-state land
-            terrain = self.resource_manager.terrain
-            grid_width = len(terrain.grid)
-            grid_height = len(terrain.grid[0])
-
-            unexplored_cells = [
-                (x, y)
-                for x in range(grid_width)
-                for y in range(grid_height)
-                if terrain.grid[x][y]["faction"] != self.id
-                and len(self.assigned_tasks.get(f"Explore-{x}-{y}", [])) < MAX_TASK_ASSIGNMENTS["explore"]
-            ]
-
-            if unexplored_cells:
-                cell_x, cell_y = random.choice(unexplored_cells)
-                task_id = f"Explore-{cell_x}-{cell_y}"
-                target = {"position": (cell_x, cell_y)}
-                if LOGGING_ENABLED: logger.debug_log(f"[EXPLORE] Agent {agent.agent_id} exploring ({cell_x}, {cell_y})", level=logging.INFO)
-                return create_task(self, "explore", target, task_id)
-
-            if LOGGING_ENABLED: logger.debug_log(f"[NO TASK] No threats or unexplored regions for agent {agent.agent_id}", level=logging.INFO)
+    
+    
+    def assign_move_to_task(self, agent, position, label=None) -> Optional[dict]:
+        """
+        Assigns a simple move_to task to the given agent toward a position.
+        """
+        if not position or not isinstance(position, tuple) or len(position) != 2:
+            if LOGGING_ENABLED:
+                logger.log_msg(f"[MOVE_TO] Invalid target position for agent {agent.agent_id}: {position}", level=logging.WARNING)
             return None
+
+        task_id = label or f"MoveTo-{position[0]}-{position[1]}-{agent.agent_id}"
+        target = {"position": position}
+
+        task = create_task(self, "move_to", target, task_id)
+
+        if LOGGING_ENABLED:
+            logger.log_msg(f"[MOVE_TO] Assigned agent {agent.agent_id} to move to {position} (task: {task_id})", level=logging.INFO)
+
+        return task
+    
+    def assign_eliminate_task(self, agent, target_id, target_type, position) -> Optional[dict]:
+        try:
+            task_id = f"Eliminate-{target_id}"
+            target = {
+                "id": target_id,
+                "type": target_type,
+                "position": position
+            }
+            logger.log_msg(f"Created task: {task_id} for agent {agent.agent_id}", level=logging.INFO)
+            return create_task(self, "eliminate", target, task_id)
+        except Exception as e:
+            logger.log_msg(f"Failed to create eliminate task: {e}", level=logging.ERROR)
+            return None
+        
+    def assign_forage_task(self, agent) -> Optional[dict]:
+        resources = [r for r in self.global_state.get("resources", []) if r["type"] == "AppleTree"]
+        if not resources:
+            return None
+        nearest = min(resources, key=lambda r: self.calculate_resource_weight(agent, r))
+        task_id = f"Forage-{nearest['location']}"
+        target = {"position": nearest["location"], "type": "AppleTree"}
+        logger.log_msg(f"Created task: {task_id} for agent {agent.agent_id}", level=logging.INFO)
+        return create_task(self, "gather", target, task_id)
+
+    def assign_mining_task(self, agent) -> Optional[dict]:
+        resources = [r for r in self.global_state.get("resources", []) if r["type"] == "GoldLump"]
+        if not resources:
+            return None
+        nearest = min(resources, key=lambda r: self.calculate_resource_weight(agent, r))
+        task_id = f"Mine-{nearest['location']}"
+        target = {"position": nearest["location"], "type": "GoldLump"}
+        logger.log_msg (f"Created task: {task_id} for agent {agent.agent_id}", level=logging.INFO)
+        return create_task(self, "gather", target, task_id)
+
+    
+    def assign_explore_task(self, agent) -> Optional[dict]:
+        terrain = self.resource_manager.terrain
+        unexplored_cells = [
+            (x, y)
+            for x in range(len(terrain.grid))
+            for y in range(len(terrain.grid[0]))
+            if terrain.grid[x][y]["faction"] != self.id
+            and terrain.grid[x][y]["type"] == "land"
+            and len(self.assigned_tasks.get(f"Explore-{x}-{y}", [])) < 2
+        ]
+
+        if unexplored_cells:
+            cell_x, cell_y = random.choice(unexplored_cells)
+            return self.assign_move_to_task(agent, (cell_x, cell_y), label=f"Explore-{cell_x}-{cell_y}")
+
+        return None
+
+
+
+
+
 
 
 
@@ -570,13 +654,23 @@ class Faction():
 
 
 
-    def calculate_resource_weight(self, agent, resource):
-        if resource is None:
+    def calculate_resource_weight(self, agent, resource: dict) -> float:
+        """
+        Estimates priority weight for a resource (lower is better).
+        Expects a dict with 'location' and 'quantity'.
+        """
+        if resource is None or "location" not in resource:
             return float("inf")
-        distance = ((resource.grid_x - agent.x // CELL_SIZE) ** 2 +
-                    (resource.grid_y - agent.y // CELL_SIZE) ** 2) ** 0.5
-        weight = distance / (resource.quantity + 1)
+
+        rx, ry = resource["location"]
+        ax, ay = agent.x // CELL_SIZE, agent.y // CELL_SIZE
+
+        distance = ((rx - ax) ** 2 + (ry - ay) ** 2) ** 0.5
+        quantity = resource.get("quantity", 0)
+
+        weight = distance / (quantity + 1)
         return weight
+
 
 
     
@@ -615,43 +709,35 @@ class Faction():
         if task_id in self.assigned_tasks:
             try:
                 self.assigned_tasks[task_id].remove(agent.agent_id)
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"[TASK COMPLETE] Agent {agent.agent_id} removed from task {task_id} ({task_state.name})",
                     level=logging.INFO
                 )
 
                 if not self.assigned_tasks[task_id]:  # All agents finished
                     del self.assigned_tasks[task_id]
-                    if LOGGING_ENABLED: logger.debug_log(f"[TASK CLEARED] Task {task_id} fully cleared.", level=logging.DEBUG)
+                    if LOGGING_ENABLED: logger.log_msg(f"[TASK CLEARED] Task {task_id} fully cleared.", level=logging.DEBUG)
 
             except ValueError:
-                if LOGGING_ENABLED: logger.debug_log(f"[WARN] Agent {agent.agent_id} not in task {task_id} list.", level=logging.WARNING)
+                if LOGGING_ENABLED: logger.log_msg(f"[WARN] Agent {agent.agent_id} not in task {task_id} list.", level=logging.WARNING)
 
 
 
     def update_tasks(self, agents):
-        """
-        Update tasks for all agents and handle their TaskState transitions.
-        """
         for agent in agents:
-            if agent.current_task_state == TaskState.SUCCESS or agent.current_task_state == TaskState.FAILURE:
-                task = agent.current_task
-                if task:
-                    # If the task is complete, mark it and reassigned if needed
-                    self.complete_task(task.get("id"), agent, agent.current_task_state)
+            # Skip agents from other factions
+            if agent.faction != self:
+                continue
 
-                    
-                    # Clear the task only if the task is successfully completed or failed
-                    if task["state"] == TaskState.SUCCESS or task["state"] == TaskState.FAILURE:
-                        agent.current_task = None
-                        agent.update_task_state(TaskState.NONE)  # Reset the task state if the task is cleared
+            # If task completed, clear it
+            if agent.current_task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
+                if agent.current_task:
+                    self.complete_task(agent.current_task["id"], agent, agent.current_task_state)
+                    agent.current_task = None
+                    agent.update_task_state(TaskState.NONE)
 
-                else:
-                    if LOGGING_ENABLED: logger.debug_log(f"No task assigned to agent {agent.agent_id}. Skipping.", level=logging.DEBUG)
-
-
-
-        
+            
+            
         
     
     
@@ -665,12 +751,14 @@ class Faction():
         )
 
     #################################################################################
-    #    _____ _____ ____ _____ ___ _   _  ____      _    ____  _____    _    
-    #   |_   _| ____/ ___|_   _|_ _| \ | |/ ___|    / \  |  _ \| ____|  / \   
-    #     | | |  _| \___ \ | |  | ||  \| | |  _    / _ \ | |_) |  _|   / _ \  
-    #     | | | |___ ___) || |  | || |\  | |_| |  / ___ \|  _ <| |___ / ___ \ 
-    #     |_| |_____|____/ |_| |___|_| \_|\____| /_/   \_\_| \_\_____/_/   \_\
-    #                                                                         
+
+
+    #    _  _  ___     _______                 ___ _            _                 
+    #   | || |/ _ \   / /_   _|__ __ _ _ __   / __| |_ _ _ __ _| |_ ___ __ _ _  _ 
+    #   | __ | (_) | / /  | |/ -_) _` | '  \  \__ \  _| '_/ _` |  _/ -_) _` | || |
+    #   |_||_|\__\_\/_/   |_|\___\__,_|_|_|_| |___/\__|_| \__,_|\__\___\__, |\_, |
+    #                                                                  |___/ |__/ 
+
     ################################################################################
 
 
@@ -678,73 +766,147 @@ class Faction():
 
 
 
-    def count_role(self, role_name):
-        return sum(1 for agent in self.agents if agent.role == role_name)
-
-
-
-
-
-    def choose_action(self):
+    def choose_HQ_Strategy(self):
         """
-        HQ decides the best action based on faction state.
+        HQ chooses a strategy using its neural network (or fallback),
+        and stores it as the current_strategy.
         """
-        if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} evaluating global state...", level=logging.INFO)
+        if LOGGING_ENABLED:
+            logger.log_msg(f"[HQ STRATEGY] Faction {self.id} requesting decision from HQ network...", level=logging.INFO)
 
-        # Immediate defense takes top priority
-        if self.is_under_attack():
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} is under attack — choosing DEFEND_HQ.", level=logging.INFO)
-            return "DEFEND_HQ"
+        strategy = "NO_PRIORITY"  # Default
 
-        # Economy expansion if both gold and food are low
-        if self.gold_balance < 10 and self.food_balance < 10:
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} has low resources — choosing EXPAND_ECONOMY.", level=logging.INFO)
-            return "EXPAND_ECONOMY"
+        if hasattr(self, "network") and self.network:
+            predicted = self.network.predict_strategy(self.global_state)
 
-        # Recruit peacekeepers if under target count
-        if self.gold_balance > 15 and self.count_role("peacekeeper") < INITAL_PEACEKEEPER_COUNT:
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} recruiting peacekeepers — choosing RECRUIT_PEACEKEEPERS.", level=logging.INFO)
-            return "RECRUIT_PEACEKEEPERS"
+            if predicted in HQ_STRATEGY_OPTIONS:
+                strategy = predicted
+                logger.log_msg(f"[HQ STRATEGY] Faction {self.id} network chose strategy: {strategy}", level=logging.INFO)
+            else:
+                logger.log_msg(f"[HQ STRATEGY] Invalid strategy returned: {predicted}. Defaulting to NO_PRIORITY.", level=logging.WARNING)
+        else:
+            logger.log_msg(f"[HQ STRATEGY] No HQ network found. Falling back to NO_PRIORITY.", level=logging.WARNING)
 
-        # Recruit gatherers if under target count
-        if self.gold_balance > 15 and self.count_role("gatherer") < INITAL_GATHERER_COUNT:
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} recruiting gatherers — choosing RECRUIT_GATHERERS.", level=logging.INFO)
-            return "RECRUIT_GATHERERS"
+        self.current_strategy = strategy  #SET current strategy
+        return strategy
 
-        # Offensive action if enemy HQ is exposed
-        if self.should_attack_enemy_hq():
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} identifies enemy HQ vulnerability — choosing ATTACK_ENEMY_HQ.", level=logging.INFO)
-            return "ATTACK_ENEMY_HQ"
 
-        # Default fallback
-        if LOGGING_ENABLED: logger.debug_log(f"[HQ STRATEGY] Faction {self.id} is defaulting to SAVE_GOLD.", level=logging.INFO)
-        return "SAVE_GOLD"
 
     
 
-    def perform_action(self, action):
-        """
-        HQ executes the chosen strategic action and coordinates agents accordingly.
-        """
-        self.current_strategy = action  # Store it for use in assign_task()
+    
 
-        if LOGGING_ENABLED: logger.debug_log(f"[HQ EXECUTE] Faction {self.id} performing strategy: {action}", level=logging.INFO)
+    def perform_HQ_Strategy(self, action):
+        """
+        HQ executes the chosen strategic action if valid.
+        If invalid, it re-evaluates strategy using the HQ network.
+        """
+        if LOGGING_ENABLED:
+            logger.log_msg(f"[HQ EXECUTE] Faction {self.id} attempting strategy: {action}", level=logging.INFO)
 
-        if action == "RECRUIT_PEACEKEEPERS":
+        def retest_strategy():
+            new_action = self.choose_HQ_Strategy()
+            if new_action != action:
+                logger.log_msg(f"[HQ RETEST] Strategy '{action}' invalid. Retesting and switching to '{new_action}'", level=logging.WARNING)
+                self.perform_HQ_Strategy(new_action)
+
+        # ========== STRATEGY: Recruit Peacekeeper ==========
+        if action == "RECRUIT_PEACEKEEPER":
+            if self.gold_balance < 10:
+                logger.log_msg(f"[HQ EXECUTE] Not enough gold to recruit peacekeeper.", level=logging.WARNING)
+                self.current_strategy = None
+                return retest_strategy()
             self.recruit_agent("peacekeeper")
 
-        elif action == "RECRUIT_GATHERERS":
+        # ========== STRATEGY: Recruit Gatherer ==========
+        elif action == "RECRUIT_GATHERER":
+            if self.gold_balance < 10:
+                logger.log_msg(f"[HQ EXECUTE] Not enough gold to recruit gatherer.", level=logging.WARNING)
+                self.current_strategy = None
+                return retest_strategy()
             self.recruit_agent("gatherer")
 
+        # ========== STRATEGY: Defend HQ ==========
         elif action == "DEFEND_HQ":
-            self.defend_hq()
+            hx, hy = self.home_base["position"]
+            threats = self.global_state.get("threats", [])
+            DEFENSE_RADIUS_SQ = 30 ** 2
 
-        elif action == "ATTACK_ENEMY_HQ":
-            self.attack_target = self.select_enemy_hq()
+            nearby_threat_found = False
+            for threat in threats:
+                if not isinstance(threat.get("id"), AgentIDStruc):
+                    continue
+                if threat["id"].faction_id == self.id:
+                    continue  # Skip own faction
+
+                tx, ty = threat["location"]
+                dist_sq = (tx - hx) ** 2 + (ty - hy) ** 2
+                if dist_sq <= DEFENSE_RADIUS_SQ:
+                    nearby_threat_found = True
+                    break
+
+            if not nearby_threat_found:
+                logger.log_msg(f"[HQ STRATEGY] No nearby threats to defend HQ.", level=logging.WARNING)
+                return retest_strategy()
+
+            # Strategy is valid
+            self.defensive_position = self.home_base["position"]
 
 
-        elif action == "SAVE_GOLD":
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ EXECUTE] Faction {self.id} conserving resources.", level=logging.INFO)
+
+
+        # ========== STRATEGY: Attack Threats ==========
+        elif action == "ATTACK_THREATS":
+            if self.global_state.get("threat_count", 0) == 0:
+                logger.log_msg(f"[HQ EXECUTE] No threats to attack.", level=logging.WARNING)
+                self.current_strategy = None
+                return retest_strategy()
+            
+
+        # ========== STRATEGY: Collect Gold ==========
+        elif action == "COLLECT_GOLD":
+            gold_sources = [r for r in self.global_state.get("resources", []) if r["type"] == "gold"]
+            if not gold_sources:
+                logger.log_msg(f"[HQ EXECUTE] No gold resources available.", level=logging.WARNING)
+                self.current_strategy = None
+                return retest_strategy()
+            
+
+        # ========== STRATEGY: Collect Food ==========
+        elif action == "COLLECT_FOOD":
+            food_sources = [r for r in self.global_state.get("resources", []) if r["type"] == "food"]
+            if not food_sources:
+                logger.log_msg(f"[HQ EXECUTE] No food resources available.", level=logging.WARNING)
+                self.current_strategy = None
+                return retest_strategy()
+            
+
+        # ========== STRATEGY: No Priority ==========
+        elif action == "NO_PRIORITY":
+            if LOGGING_ENABLED:
+                logger.log_msg(f"[HQ EXECUTE] Faction {self.id} conserving resources.", level=logging.INFO)
+                time.sleep(5)
+                return retest_strategy()
+                
+
+        # ========== Unknown Strategy ==========
+        else:
+            logger.log_msg(f"[HQ EXECUTE] Unknown strategy '{action}'. Retesting...", level=logging.WARNING)
+            return retest_strategy()
+
+        # ✅ Set current strategy only if it's valid and successful
+        self.current_strategy = action
+
+
+
+
+
+
+#    _  _  ___     _______                 ___ _            _                     _  _             _        _      _   _             
+#   | || |/ _ \   / /_   _|__ __ _ _ __   / __| |_ _ _ __ _| |_ ___ __ _ _  _    /_\| |_ ___ _ __ (_)__    /_\  __| |_(_)___ _ _  ___
+#   | __ | (_) | / /  | |/ -_) _` | '  \  \__ \  _| '_/ _` |  _/ -_) _` | || |  / _ \  _/ _ \ '  \| / _|  / _ \/ _|  _| / _ \ ' \(_-<
+#   |_||_|\__\_\/_/   |_|\___\__,_|_|_|_| |___/\__|_| \__,_|\__\___\__, |\_, | /_/ \_\__\___/_|_|_|_\__| /_/ \_\__|\__|_\___/_||_/__/
+#                                                                  |___/ |__/                                                        
 
 
 
@@ -757,7 +919,7 @@ class Faction():
         cost = 10  # Example recruitment cost per agent
 
         if self.gold_balance < cost:
-            if LOGGING_ENABLED: logger.debug_log(f"[HQ RECRUIT] Faction {self.id} lacks gold to recruit {role}.", level=logging.WARNING)
+            if LOGGING_ENABLED: logger.log_msg(f"[HQ RECRUIT] Faction {self.id} lacks gold to recruit {role}.", level=logging.WARNING)
             return
 
         # Deduct cost and create agent
@@ -766,10 +928,12 @@ class Faction():
         new_agent = self.create_agent(role)
         self.agents.append(new_agent)
 
-        if LOGGING_ENABLED: logger.debug_log(
+        if LOGGING_ENABLED: logger.log_msg(
             f"[HQ RECRUIT] Faction {self.id} recruited new {role} — Gold: {self.gold_balance}, Total agents: {len(self.agents)}",
             level=logging.INFO
         )
+            
+
     def create_agent(self, role: str):
         """
         Spawns a new agent instance of the given role at the faction's HQ.
@@ -789,7 +953,7 @@ class Faction():
             network_type=self.network_type  # PPOModel, etc.
         )
 
-        if LOGGING_ENABLED: logger.debug_log(f"[SPAWN] Created {role} at ({spawn_x}, {spawn_y}) for Faction {self.id}.", level=logging.DEBUG)
+        if LOGGING_ENABLED: logger.log_msg(f"[SPAWN] Created {role} at ({spawn_x}, {spawn_y}) for Faction {self.id}.", level=logging.DEBUG)
         return new_agent
     
     def is_under_attack(self) -> bool:
@@ -797,7 +961,7 @@ class Faction():
         Returns True if enemy agents are within field of view range of the faction HQ.
         """
         hq_x, hq_y = self.home_base["position"]
-        detection_radius = Agent_Interact_Range * CELL_SIZE
+        detection_radius = Agent_Interact_Range
 
         # Scan known threats in the global state
         for threat in self.global_state.get("threats", []):
@@ -813,7 +977,7 @@ class Faction():
             dist_sq = (tx - hq_x) ** 2 + (ty - hq_y) ** 2
 
             if dist_sq <= detection_radius ** 2:
-                if LOGGING_ENABLED: logger.debug_log(
+                if LOGGING_ENABLED: logger.log_msg(
                     f"[HQ THREAT] Faction {self.id} HQ is under threat from enemy agent {threat_id} at {tx, ty}",
                     level=logging.INFO
                 )
@@ -822,142 +986,32 @@ class Faction():
         return False
 
 
-    def select_enemy_hq(self):
-        """
-        Returns the location of the nearest enemy HQ, or None if not visible.
-        """
-        enemy_hqs = [
-            t for t in self.global_state.get("threats", [])
-            if t["type"] == "Faction HQ" and isinstance(t.get("id"), AgentIDStruc) and t["id"].faction_id != self.id
-        ]
-
-        if not enemy_hqs:
-            return None
-
-        # Pick the closest one to the faction HQ
-        my_hq_x, my_hq_y = self.home_base["position"]
-
-        nearest = sorted(enemy_hqs, key=lambda t: (t["location"][0] - my_hq_x) ** 2 + (t["location"][1] - my_hq_y) ** 2)[0]
-        return nearest["location"]
     
-    def defend_hq(self):
-        """
-        Marks the HQ for defense by setting a defensive rally point.
-        """
-        self.defensive_position = self.home_base["position"]
-        if LOGGING_ENABLED: logger.debug_log(f"[HQ DEFENSE] Faction {self.id} rallying units to defend HQ at {self.defensive_position}.", level=logging.INFO)
 
 
 
 
 
 
-#    _____ _    ____ _____ ___ ___  _   _   __  __    _    _   _    _    ____ _____ ____     ____ _        _    ____ ____  
-#   |  ___/ \  / ___|_   _|_ _/ _ \| \ | | |  \/  |  / \  | \ | |  / \  / ___| ____|  _ \   / ___| |      / \  / ___/ ___| 
-#   | |_ / _ \| |     | |  | | | | |  \| | | |\/| | / _ \ |  \| | / _ \| |  _|  _| | |_) | | |   | |     / _ \ \___ \___ \ 
-#   |  _/ ___ \ |___  | |  | | |_| | |\  | | |  | |/ ___ \| |\  |/ ___ \ |_| | |___|  _ <  | |___| |___ / ___ \ ___) |__) |
-#   |_|/_/   \_\____| |_| |___\___/|_| \_| |_|  |_/_/   \_\_| \_/_/   \_\____|_____|_| \_\  \____|_____/_/   \_\____/____/ 
-#                                                                                                                          
-
-
-
-
-class FactionManager:
-    def __init__(self):
-        self.factions = []
-        self.faction_counter = 1  # Initialise a counter for unique IDs
-        if LOGGING_ENABLED: logger.debug_log("FactionManager initialised.", level=logging.INFO)
-
-    def update(self, resource_manager, agents):
-        """
-        Update each faction by delegating tasks to its agents and leveraging the network for high-level decisions.
-        """
-        try:
-            #1 Check factions
-            for faction in self.factions:
-                if not isinstance(faction, Faction):
-                    raise TypeError(f"Invalid faction type: {type(faction)}. Expected Faction instance.")
-
-                #2 Validate network
-                if faction.network is None:
-                    if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Faction {faction.id} has no valid network. Skipping update.", level=logging.ERROR)
-                    continue  #  Skip processing this faction to prevent crashes
-
-                #3 Update faction state
-                faction.calculate_territory(resource_manager.terrain)
-                global_state = faction.aggregate_faction_state()
-                
-                #4 Task management
-                faction.assign_high_level_tasks()
-                faction.update_tasks(agents)
-
-                #5 Log faction status
-                if LOGGING_ENABLED: logger.debug_log(
-                    f"Faction {faction.id} - Gold: {faction.gold_balance}, Food: {faction.food_balance}, "
-                    f"Agent Count: {len(faction.agents)}, Threats: {len(faction.threats)}",
-                    level=logging.INFO,
-                )
-        except Exception as e:
-            if LOGGING_ENABLED: logger.debug_log(f"[ERROR] An error occurred in FactionManager.update: {e}", level=logging.ERROR)
-            import traceback
-            if LOGGING_ENABLED: logger.debug_log(traceback.format_exc(), level=logging.ERROR)
 
 
 
 
 
-    def reset_factions(self, faction_count, resource_manager, agents, game_manager,
-                   state_size=DEF_AGENT_STATE_SIZE, action_size=10, 
-                   role_size=5, local_state_size=10, global_state_size=15, 
-                   network_type="HQNetwork"):
-        """
-        Fully reset the list of factions and assign agents.
-        """
-        self.factions.clear()  #  Ensure previous factions are removed
-        if LOGGING_ENABLED: logger.debug_log("[INFO] Resetting factions...", level=logging.INFO)
 
-        for i in range(faction_count):
-            name = f"Faction {i + 1}"
-            colour = generate_random_colour()
 
-            if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] Creating {name} with network type: {network_type}", level=logging.DEBUG)
 
-            try:
-                new_faction = Faction(
-                    name=name,
-                    colour= colour,
-                    id=i + 1,
-                    resource_manager=resource_manager,
-                    game_manager=game_manager,  #  Pass GameManager to Faction
-                    agents=[],  #  Agents will be assigned after initialisation
-                    state_size=state_size,
-                    action_size=action_size,
-                    role_size=role_size,
-                    local_state_size=local_state_size,
-                    global_state_size=global_state_size,
-                    network_type=network_type
-                )
 
-                if new_faction.network is None:
-                    if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Faction {new_faction.id} failed to Initialise network.", level=logging.ERROR)
-                    raise RuntimeError(f"[ERROR] Faction {new_faction.id} failed to Initialise network.")
 
-                self.factions.append(new_faction)
-                if LOGGING_ENABLED: logger.debug_log(f"[INFO] Successfully created {name} (ID: {new_faction.id})", level=logging.INFO)
 
-            except Exception as e:
-                if LOGGING_ENABLED: logger.debug_log(f"[ERROR] Failed to create {name}: {e}", level=logging.ERROR)
-                import traceback
-                if LOGGING_ENABLED: logger.debug_log(traceback.format_exc(), level=logging.ERROR)
 
-        #  Assign agents to their factions after all factions are created
-        for agent in agents:
-            for faction in self.factions:
-                if agent.faction.id == faction.id:
-                    faction.agents.append(agent)
 
-        #  Debug log to verify agents are assigned correctly
-        for faction in self.factions:
-            if LOGGING_ENABLED: logger.debug_log(f"[DEBUG] {faction.name} Initialised with {len(faction.agents)} agents.", level=logging.INFO)
+
+
+
+
+
+
+
 
 

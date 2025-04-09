@@ -9,67 +9,79 @@ import numpy as np
  # Enables/disables debug logging and visuals
 
 class Logger:
-    def __init__(self, log_file, log_level=logging.INFO, log_to_console=True, clear_logs=True):
-        """
-        Initialise the Logger class with mandatory log file and optional logging level.
-        """
-        # Create a unique logger instance
-        self.logger = logging.getLogger(log_file)
+        def __init__(self, log_file, log_level=logging.INFO, log_to_console=False, clear_logs=True):
+            """
+            Initialise the Logger class with mandatory log file and optional logging level.
+            """
+            # Create a unique logger instance
+            self.logger = logging.getLogger(log_file)
     
         
 
-        # Ensure the LOG directory exists
-        log_directory = "LOG"
-        if not os.path.exists(log_directory):
-            os.makedirs(log_directory)
-            print(f"Created directory: {log_directory}")
+            # Ensure the LOG directory exists
+            log_directory = "LOG"
+            if not os.path.exists(log_directory):
+                os.makedirs(log_directory)
+                print(f"Created directory: {log_directory}")
 
-        # Full path for the log file
-        self.log_file = os.path.join(log_directory, log_file)
-        self.log_level = log_level
+            # Full path for the log file
+            self.log_file = os.path.join(log_directory, log_file)
+            self.log_level = log_level
 
-        # Overwrite the log file at initialisation if clear_logs is True
-        if clear_logs:
-            open(self.log_file, 'w').close()
-            print(f"Logger initialised. Logs will be saved to: {os.path.abspath(self.log_file)}")
+            # Overwrite the log file at initialisation if clear_logs is True
+            if clear_logs:
+                open(self.log_file, 'w').close()
+                print(f"Logger initialised. Logs will be saved to: {os.path.abspath(self.log_file)}")
 
-        self.logger.setLevel(self.log_level)
+            self.logger.setLevel(self.log_level)
 
-        # File handler
-        file_handler = logging.FileHandler(self.log_file)
-        file_handler.setLevel(self.log_level)
-        file_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
-            "%Y-%m-%d %H:%M:%S"
-        )
-        file_handler.setFormatter(file_formatter)
+            # File handler
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setLevel(self.log_level)
+            file_formatter = logging.Formatter(
+                "%(asctime)s - %(levelname)s - %(message)s",
+                "%Y-%m-%d %H:%M:%S"
+            )
+            file_handler.setFormatter(file_formatter)
 
-        # Clear existing handlers (prevents duplicate logs)
-        if self.logger.hasHandlers():
-            self.logger.handlers.clear()
+            # Console handler
+            if log_to_console:
+                console_handler = logging.StreamHandler()
+                console_handler.setLevel(self.log_level)
+                console_formatter = logging.Formatter(
+                    "%(asctime)s - %(levelname)s - %(message)s",
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                console_handler.setFormatter(console_formatter)
+                self.logger.addHandler(console_handler)
 
-        self.logger.addHandler(file_handler)
+            # Clear existing handlers (prevents duplicate logs)
+            if self.logger.hasHandlers():
+                self.logger.handlers.clear()
 
-        # Log initialisation
-        self.logger.info("Logger initialised and log file cleared.")
+            self.logger.addHandler(file_handler)
+
+            # Log initialisation
+            self.logger.info("Logger initialised and log file cleared.")        
         
-    def log(self, message, level=logging.INFO):
-        """
-        Log a message at a specified logging level.
-        """
-        if not LOGGING_ENABLED:
-            return
-            
-        if level == logging.DEBUG:
-            self.logger.debug(message)
-        elif level == logging.INFO:
-            self.logger.info(message)
-        elif level == logging.WARNING:
-            self.logger.warning(message)
-        elif level == logging.ERROR:
-            self.logger.error(message)
-        elif level == logging.CRITICAL:
-            self.logger.critical(message)
+        
+        def log_msg(self, message, level=logging.INFO):
+            """
+            Log a message at a specified logging level.
+            """
+            if not LOGGING_ENABLED:
+                return
+                
+            if level == logging.DEBUG:
+                self.logger.debug(message)
+            elif level == logging.INFO:
+                self.logger.info(message)
+            elif level == logging.WARNING:
+                self.logger.warning(message)
+            elif level == logging.ERROR:
+                self.logger.error(message)
+            elif level == logging.CRITICAL:
+                self.logger.critical(message)
 
     
 

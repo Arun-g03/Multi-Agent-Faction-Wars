@@ -24,7 +24,7 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-LOGGING_ENABLED = False 
+LOGGING_ENABLED = True 
 """Enable logging for debugging"""
 
 
@@ -98,8 +98,8 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
 # World Dimensions
 #Size of the in-game world
-WORLD_WIDTH = 600 # Customise as needed!
-WORLD_HEIGHT = 600 # Customise as needed!
+WORLD_WIDTH = 400 # Customise as needed!
+WORLD_HEIGHT = 400 # Customise as needed!
 
 
 # Perlin Noise Settings
@@ -206,14 +206,13 @@ TASK_TYPE_MAPPING = {
     "none": 0,
     "gather": 1,
     "eliminate": 2,
-    "explore": 3,  
+    "explore": 3,
+    "move_to": 4  
 }
 """
 Define task type mappings to an integer value.
 
-Reference/Access ONLY!
-    
-WARNING: DO NOT MODIFY THESE VALUES!  """
+  """
 
 
 NETWORK_TYPE_MAPPING: dict = {
@@ -226,22 +225,38 @@ NETWORK_TYPE_MAPPING: dict = {
 """
 Mapping of network types to their corresponding interger IDs.
 
-Reference/Access ONLY!
-    
-WARNING: DO NOT MODIFY THESE VALUES! """
+ """
 
 TASK_METHODS_MAPPING = {
     "eliminate": "handle_eliminate_task",
     "gather": "handle_gather_task",
-    "explore": "handle_explore_task", 
+    "explore": "handle_explore_task",
+    "move_to": "handle_move_to_task", 
     #
 } 
 """
-Define a mapping of task types to handler methods.
+Connectes a mapping of task type to its handler methods.
 
-Reference/Access ONLY!
-    
-WARNING: DO NOT MODIFY THESE VALUES! """
+ """
+
+
+
+HQ_STRATEGY_OPTIONS = [
+    "DEFEND_HQ",
+    "ATTACK_THREATS",
+    "COLLECT_GOLD",
+    "COLLECT_FOOD",
+    "RECRUIT_GATHERER",
+    "RECRUIT_PEACEKEEPER",
+    "NO_PRIORITY",
+]
+""" 
+HQ Strategy options for the HQ.
+
+Defines the broad categories of strategies that the HQ can employ.
+
+"""
+
 
 ROLE_ACTIONS_MAP = {
     "gatherer": [
@@ -264,24 +279,12 @@ ROLE_ACTIONS_MAP = {
         "eliminate_threat",
         "explore"
     ],
-    "archer": [
-        "move_up",
-        "move_down",
-        "move_left",
-        "move_right",
-        "shoot_arrow",
-        "heal_with_apple",
-        "eliminate_threat",
-        "explore"
-    ]
+    
 }
 """
 Core actions that can be performed by each role.
 Makes it easier to define actions for each role.
 
-Reference/Access ONLY!
-    
-WARNING: DO NOT MODIFY THESE VALUES!   
 """
    
 
@@ -310,9 +313,7 @@ STATE_FEATURES_MAP = {
 """
 State features mapping structure for the agent.
 
-Reference/Access ONLY!
-    
-WARNING: DO NOT MODIFY THESE VALUES! 
+ 
 """
 
 
@@ -329,7 +330,7 @@ WARNING: DO NOT MODIFY THESE VALUES!
 ## Agent Render Scale Factor
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
-Agent_field_of_view = 10 # Agent field of view # Customise as needed!
+Agent_field_of_view = 5 # Agent field of view # Customise as needed!
 Agent_Interact_Range = 3 # Agent attack range, Anything less will get hit # Customise as needed!
 
 
@@ -360,9 +361,9 @@ HQ_Agent_Spawn_Radius = 5 # Radius around HQ to spawn agents
 Faction_PNG = "images\castle-7440761_1280.png"
 
 #Team Composition
-FACTON_COUNT = 4 # Number of factons # Customise as needed!
-INITAL_GATHERER_COUNT = 4 # Initial number of gatherers for a single faction # Customise as needed!
-INITAL_PEACEKEEPER_COUNT = 4 # Initial number of peacekeepers for a single faction # Customise as needed!
+FACTON_COUNT = 2 # Number of factons # Customise as needed!
+INITAL_GATHERER_COUNT = 3 # Initial number of gatherers for a single faction # Customise as needed!
+INITAL_PEACEKEEPER_COUNT = 3 # Initial number of peacekeepers for a single faction # Customise as needed!
 
 
 #     ____                               
@@ -426,6 +427,6 @@ def create_task(self, task_type, target, task_id=None):
     }
     if task_id:
         task["id"] = task_id
-
+    
     return task
 

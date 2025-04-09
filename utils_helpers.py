@@ -80,7 +80,7 @@ def find_closest_actor(entities, entity_type=None, requester=None):
     """
     if not entities:
         requester_name = getattr(requester, "role", "HQ")
-        logger.log(f"{requester_name} found no valid {entity_type or 'actor'}.", level=logging.WARNING)
+        logger.log_msg(f"{requester_name} found no valid {entity_type or 'actor'}.", level=logging.WARNING)
         return None
 
     closest_entity = None
@@ -100,7 +100,7 @@ def find_closest_actor(entities, entity_type=None, requester=None):
             else:
                 continue  # Skip invalid entries
         except Exception as e:
-            logger.log(f"Skipping invalid entity: {entity}. Error: {e}", level=logging.WARNING)
+            logger.log_msg(f"Skipping invalid entity: {entity}. Error: {e}", level=logging.WARNING)
             continue
 
         dist = ((requester_x - entity_x) ** 2 + (requester_y - entity_y) ** 2) ** 0.5
@@ -110,7 +110,7 @@ def find_closest_actor(entities, entity_type=None, requester=None):
 
     if closest_entity:
         requester_name = getattr(requester, "role", "HQ")
-        logger.log(f"{requester_name} found closest {entity_type}: {closest_entity}", level=logging.INFO)
+        logger.log_msg(f"{requester_name} found closest {entity_type}: {closest_entity}", level=logging.INFO)
 
     return closest_entity
 
