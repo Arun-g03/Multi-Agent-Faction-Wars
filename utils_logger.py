@@ -183,7 +183,7 @@ class TensorBoardLogger:
         :param step: The step at which to log the text.
         """
         if not TENSORBOARD_ENABLED:
-            pass
+            return
         try:
             self.writer.add_text(name, text, step)
         except Exception as e:
