@@ -9,7 +9,7 @@ Purpose: To facilitate communication between agents and the HQ, allowing for the
 
 import logging
 from utils_logger import Logger
-from utils_config import TaskState, LOGGING_ENABLED
+from utils_config import TaskState, ENABLE_LOGGING
     
 
 
@@ -60,18 +60,18 @@ class CommunicationSystem:
             threat_id = data.get("id")
             if threat_id and not any(threat.get("id") == threat_id for threat in agent.known_threats):
                 agent.update_threat_location(data)
-                if LOGGING_ENABLED: logger.log_msg(f"Agent {agent.role} added new threat with ID {threat_id}.", level=logging.INFO)
+                if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} added new threat with ID {threat_id}.", level=logging.INFO)
 
         elif message_type == "request_help":
             agent.update_help_request(data)
-            if LOGGING_ENABLED: logger.log_msg(f"Agent {agent.role} received a help request.", level=logging.INFO)
+            if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} received a help request.", level=logging.INFO)
 
         elif message_type == "status_update":
             agent.update_status(data)
-            if LOGGING_ENABLED: logger.log_msg(f"Agent {agent.role} updated status with data: {data}.", level=logging.INFO)
+            if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} updated status with data: {data}.", level=logging.INFO)
 
         # Log received message
-        if LOGGING_ENABLED: logger.log_msg(f"Agent {agent.role} received message: {message}", level=logging.INFO)
+        if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} received message: {message}", level=logging.INFO)
     
     def agent_to_agent(self, sender, receiver, message):
         """
@@ -85,12 +85,12 @@ class CommunicationSystem:
 
         if message_type == "resource_info":
             receiver.known_resources.append(data)
-            if LOGGING_ENABLED: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about resource at {data['location']}", 
+            if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about resource at {data['location']}", 
                            level=logging.INFO)
             
         elif message_type == "threat_info":
             receiver.known_threats.append(data)
-            if LOGGING_ENABLED: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about threat at {data['location']}", 
+            if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about threat at {data['location']}", 
                            level=logging.INFO)
             
         elif message_type == "help_request":
@@ -99,42 +99,19 @@ class CommunicationSystem:
                 "location": data["location"],
                 "type": data["request_type"]
             })
-            if LOGGING_ENABLED: logger.log_msg(f"Agent {sender.agent_id} requested help from {receiver.agent_id} at {data['location']}", 
+            if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} requested help from {receiver.agent_id} at {data['location']}", 
                            level=logging.INFO)
 
         # Log received message
-        if LOGGING_ENABLED: logger.log_msg(f"Agent {sender.agent_id} sent message to {receiver.agent_id}: {message}", level=logging.INFO)
+        if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} sent message to {receiver.agent_id}: {message}", level=logging.INFO)
 
         
     def agent_to_hq(self, agent, report):
         faction = agent.faction  # Assuming agents have a reference to their faction
         faction.receive_report(report)
-        #if LOGGING_ENABLED: logger.log_msg(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
+        #if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
 
-    def Communicate_Task_to_Agent(self):
-        """
-        Each faction's HQ processes reports and dynamically assigns tasks to agents.
-        """
-        for faction in self.faction:
-            # Ensure global state is updated before assigning tasks
-            faction.clean_global_state()
-
-            if LOGGING_ENABLED: logger.log_msg(f"[HQ] Faction {faction.id} cleaned global state.", level=logging.INFO)
-
-            # Use HQ's neural network to prioritise tasks dynamically
-            faction.assign_high_level_tasks()  # This will internally handle the task assignment
-
-            # Now, just iterate through agents to make sure the tasks are properly assigned
-            for agent in faction.agents:
-                # Check if the agent has a task already
-                if agent.current_task is None:
-                    # If the agent does not have a task, log this and assign a new task
-                    if LOGGING_ENABLED: logger.log_msg(f"[HQ] No task assigned to agent {agent.agent_id} ({agent.role}). No valid resources or threats.", level=logging.WARNING)
-                else:
-                    if LOGGING_ENABLED: logger.log_msg(f"[HQ] Agent {agent.agent_id} already has a task: {agent.current_task}", level=logging.DEBUG)
-
-
-
+   
         
 
         

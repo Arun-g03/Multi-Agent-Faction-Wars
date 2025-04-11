@@ -41,8 +41,8 @@ from utils_config import (
     ROLE_ACTIONS_MAP,
     AgentIDStruc,
     DEF_AGENT_STATE_SIZE,
-    LOGGING_ENABLED,
-    TENSORBOARD_ENABLED)
+    ENABLE_LOGGING,
+    ENABLE_TENSORBOARD)
 
 """Logging  and profiling for performance and execution analysis"""
 import logging
@@ -64,7 +64,7 @@ class GameManager:
         self.logger = Logger(log_file="game_manager_log.txt", log_level=logging.DEBUG)
         self.mode = None  # Default mode is None
         # Log initialisation
-        if LOGGING_ENABLED: self.logger.log_msg("GameManager initialised. Logs cleared for a new game.", level=logging.INFO)
+        if ENABLE_LOGGING: self.logger.log_msg("GameManager initialised. Logs cleared for a new game.", level=logging.INFO)
 
         # Initialise the terrain
         self.terrain = Terrain()
@@ -92,7 +92,11 @@ class GameManager:
         except Exception as e:
             raise(f"Error Initialising GameRenderer: {e}")
             
-        self.current_step = 0
+        
+        """Global variable to track the current step in the episode"""
+        self.current_step = 0  # Initialise the current step
+        
+        """Current step in episode (tick counter)"""        
         self.save_dir = save_dir  # Ensure save_dir is a string (directory path)
         self.max_steps_per_episode = max_steps_per_episode
         self.last_activity_step = 0
@@ -159,19 +163,13 @@ class GameManager:
 
     def step(self):
         try:
-            # Handle camera input
+            # 🧭 Handle camera movement input
             keys = pygame.key.get_pressed()
             self.handle_camera_movement(keys)
 
-            # HQ assigns tasks to agents
-            self.communication_system.Communicate_Task_to_Agent()
-
-            
-
-            # Main agent loop
+            # 👥 Update each agent (movement, task execution, learning)
             for agent in self.agents[:]:
                 try:
-                    # Handle agent death
                     if agent.Health <= 0:
                         print(f"Agent {agent.role} from faction {agent.faction.id} has died.")
                         if agent in agent.faction.agents:
@@ -179,34 +177,33 @@ class GameManager:
                         self.agents.remove(agent)
                         continue
 
-                    # Generate fresh HQ state for each agent
                     hq_state = agent.faction.aggregate_faction_state()
-
-                    # Call  agent's update method
                     agent.update(self.resource_manager, self.agents, hq_state)
 
                 except Exception as e:
                     print(f"An error occurred for agent {agent.role}: {e}")
                     traceback.print_exc()
 
-            # Agents share observations
+            # 🧠 Let agents share what they observed (threats, resources)
             for agent in self.agents:
-                state = self.get_agent_state(agent, agent.faction.aggregate_faction_state())
                 agent.observe(
                     all_agents=self.agents,
                     enemy_hq={"position": agent.faction.home_base["position"]},
                     resource_manager=self.resource_manager
                 )
 
-            # Update faction state
-            self.faction_manager.update(self.resource_manager, self.agents)
+            # Update HQ logic, assign new tasks, and handle strategy switching
+            for faction in self.faction_manager.factions:
+                faction.update(self.resource_manager, self.agents, self.current_step)
 
-            # Advance simulation step
+
+            # 🔁 Increment the simulation step
             self.current_step += 1
 
         except Exception as e:
             print(f"An error occurred in step: {e}")
             traceback.print_exc()
+
 
 
 
@@ -541,7 +538,7 @@ class GameManager:
             while running and (self.episode <= EPISODES_LIMIT):
                 self.reset()
                 print("\033[92m" + f"Starting {self.mode} Episode {self.episode}" + "\033[0m")
-                if LOGGING_ENABLED: self.logger.log_msg(f"Starting {self.mode} Episode", level=logging.INFO)
+                if ENABLE_LOGGING: self.logger.log_msg(f"Starting {self.mode} Episode", level=logging.INFO)
 
                 self.current_step = 0
                 episode_reward = 0
@@ -550,7 +547,7 @@ class GameManager:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             print("[INFO] Window closed. Exiting game...")
-                            if LOGGING_ENABLED:self. logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
+                            if ENABLE_LOGGING:self. logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
                             pygame.quit()
                             sys.exit()
 
@@ -592,11 +589,11 @@ class GameManager:
                     winner = check_victory(self.faction_manager.factions)
                     if winner:
                         print(f"Faction {winner.id} wins! Moving to next episode...")
-                        if LOGGING_ENABLED: self.logger.log_msg(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
+                        if ENABLE_LOGGING: self.logger.log_msg(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
                         break
 
                 # TensorBoard: Episode summary
-                if TENSORBOARD_ENABLED:
+                if ENABLE_TENSORBOARD:
                     TensorBoardLogger().log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
 
                 for faction in self.faction_manager.factions:
@@ -614,16 +611,16 @@ class GameManager:
                             role_rewards[role] = role_rewards.get(role, 0) + last_reward
 
                     # Log overall faction reward
-                    if TENSORBOARD_ENABLED:
+                    if ENABLE_TENSORBOARD:
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
 
                         # Log reward by role
-                    for role, reward in role_rewards.items():
-                        TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
-                        
+                        for role, reward in role_rewards.items():
+                            TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
+                            
                     print(f"Faction {faction.id} total reward: {total_reward}")
                     print(f"Faction {faction.id} gold balance: {faction.gold_balance}")
                     print(f"Faction {faction.id} food balance: {faction.food_balance}")
@@ -634,10 +631,10 @@ class GameManager:
                         
                 # 🔁 Train agents at the end of the episode
                 if self.mode == "train":
-                    if LOGGING_ENABLED: self.logger.log_msg("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
+                    if ENABLE_LOGGING: self.logger.log_msg("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
                     for agent in self.agents:
                         if agent.mode == "train" and len(agent.ai.memory["rewards"]) > 0:
-                            if LOGGING_ENABLED: self.logger.log_msg(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
+                            if ENABLE_LOGGING: self.logger.log_msg(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
                             try:
                                 agent.ai.train(mode="train")
                             except Exception as e:
@@ -662,7 +659,7 @@ class GameManager:
                             self.best_scores_per_role[role] = (best_agent, best_reward)
                             model_path = f"saved_models/Best_{role}_episode_{self.episode}.pth"
                             torch.save(best_agent.ai.state_dict(), model_path)
-                            if LOGGING_ENABLED: self.logger.log_msg(
+                            if ENABLE_LOGGING: self.logger.log_msg(
                                 f"[SAVE] New best {role} model saved at {model_path} with reward {best_reward:.2f}",
                                 level=logging.INFO
                             )
@@ -670,7 +667,7 @@ class GameManager:
 
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")
-                if LOGGING_ENABLED: self.logger.log_msg(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
+                if ENABLE_LOGGING: self.logger.log_msg(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
                 self.episode += 1
 
             if self.mode == "train" and self.episode > EPISODES_LIMIT:

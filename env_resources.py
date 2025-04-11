@@ -13,7 +13,7 @@ from utils_config import (
     GoldLump_Scale_Img, 
     Tree_Scale_Img,
     APPLE_REGEN_TIME,
-    TENSORBOARD_ENABLED)
+    ENABLE_TENSORBOARD)
 
 from utils_logger import TensorBoardLogger
 
@@ -130,7 +130,7 @@ class ResourceManager:
 
         # Log to TensorBoard
         print (f"Generated {self.apple_tree_count} apple trees and {self.gold_count} gold lumps.")
-        if TENSORBOARD_ENABLED:
+        if ENABLE_TENSORBOARD:
             TensorBoardLogger().log_scalar("Resources/AppleTrees_Added", self.apple_tree_count, episode)
             TensorBoardLogger().log_scalar("Resources/GoldLumps_Added", self.gold_count, episode)
 

@@ -24,10 +24,10 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-LOGGING_ENABLED = False 
+ENABLE_LOGGING = True 
 """Enable logging for debugging"""
 
-TENSORBOARD_ENABLED = False
+ENABLE_TENSORBOARD = False
 """Enable tensorboard for visualisation"""
 
 
@@ -333,8 +333,8 @@ State features mapping structure for the agent.
 ## Agent Render Scale Factor
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
-Agent_field_of_view = 5 # Agent field of view # Customise as needed!
-Agent_Interact_Range = 3 # Agent attack range, Anything less will get hit # Customise as needed!
+Agent_field_of_view = 10 # Agent field of view # Customise as needed!
+Agent_Interact_Range = 1 # Agent attack range, Anything less will get hit # Customise as needed!
 
 
 ## File paths for agent images

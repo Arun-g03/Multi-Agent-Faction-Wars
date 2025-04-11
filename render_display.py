@@ -7,7 +7,7 @@ from utils_config import (SCREEN_WIDTH,
                           CELL_SIZE, 
                           Agent_field_of_view, 
                           Agent_Interact_Range,
-                          LOGGING_ENABLED)
+                          ENABLE_LOGGING)
 from env_resources import AppleTree, GoldLump
 import sys
 import traceback
@@ -373,7 +373,7 @@ class GameRenderer:
                         target = agent.current_task.get("target")
 
                         if target:
-                            if LOGGING_ENABLED: logger.log_msg(
+                            if ENABLE_LOGGING: logger.log_msg(
                                 f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
                                 level=logging.DEBUG
                             )
@@ -389,7 +389,7 @@ class GameRenderer:
                                 if target_agent:
                                     target_x, target_y = target_agent.x, target_agent.y
                                 else:
-                                    if LOGGING_ENABLED: logger.log_msg(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
+                                    if ENABLE_LOGGING: logger.log_msg(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
 
                             elif target_position:
                                 target_x, target_y = target_position
@@ -398,7 +398,7 @@ class GameRenderer:
 
                             if target_x is not None and target_y is not None:
                                 target_screen_x, target_screen_y = camera.apply((target_x, target_y))
-                                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
+                                if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
 
                                 if task_type == "eliminate":
                                     box_colour = (255, 0, 0)
@@ -414,10 +414,10 @@ class GameRenderer:
                                     CELL_SIZE * camera.zoom
                                 )
 
-                                if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
+                                if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
                                 pygame.draw.rect(self.screen, box_colour, box_rect, width=2)
                             else:
-                                if LOGGING_ENABLED: logger.log_msg(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
+                                if ENABLE_LOGGING: logger.log_msg(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
 
                     # 📝 Tooltip Info
                     if isinstance(agent.current_task, dict):
@@ -426,13 +426,17 @@ class GameRenderer:
                         target_type = target.get("type", "Unknown") if isinstance(target, dict) else "Unknown"
                         target_position = target.get("position", "Unknown") if isinstance(target, dict) else "Unknown"
                         target_quantity = target.get("quantity", "Unknown") if isinstance(target, dict) else "N/A"
+                        task_state = agent.current_task.get("state", "Unknown")
+
                         task_info = (
                             f"Task: {task_type}\n"
                             f"Target: {target_type} at {target_position}\n"
-                            f"Quantity: {target_quantity}"
+                            f"Quantity: {target_quantity}\n"
+                            f"State: {task_state}"
                         )
                     else:
                         task_info = "Task: None"
+
 
                     action = (
                         agent.role_actions[agent.current_action]
@@ -648,7 +652,7 @@ class MenuRenderer:
 
         return button_rect
 
-    def render_menu(self, tensorboard_enabled, auto_tensorboard_enabled, mode, start_game_callback):
+    def render_menu(self, ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode, start_game_callback):
         """Renders the menu and handles button states."""
         self.screen.fill(BLACK)  # Set the background to black
 
@@ -691,7 +695,7 @@ class MenuRenderer:
 
                 elif start_button_rect.collidepoint(event.pos) and self.selected_mode:
                     print("[INFO] Starting game in mode:", self.selected_mode)
-                    start_game_callback(self.selected_mode, tensorboard_enabled, auto_tensorboard_enabled)
+                    start_game_callback(self.selected_mode, ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD)
                     return False  #  Exit menu and start game
 
         # Update the display

@@ -14,7 +14,7 @@ from utils_config import (
     NETWORK_TYPE_MAPPING,
     WORLD_HEIGHT,
     WORLD_WIDTH,
-    LOGGING_ENABLED,
+    ENABLE_LOGGING,
     HQ_STRATEGY_OPTIONS)
 
 from agent_factions import Faction
@@ -48,7 +48,7 @@ class FactionManager:
     def __init__(self):
         self.factions = []
         self.faction_counter = 1  # Initialise a counter for unique IDs
-        if LOGGING_ENABLED: logger.log_msg("FactionManager initialised.", level=logging.INFO)
+        if ENABLE_LOGGING: logger.log_msg("FactionManager initialised.", level=logging.INFO)
 
     def update(self, resource_manager, agents):
         for faction in self.factions:
@@ -74,13 +74,13 @@ class FactionManager:
         Fully reset the list of factions and assign agents.
         """
         self.factions.clear()  #  Ensure previous factions are removed
-        if LOGGING_ENABLED: logger.log_msg("[INFO] Resetting factions...", level=logging.INFO)
+        if ENABLE_LOGGING: logger.log_msg("[INFO] Resetting factions...", level=logging.INFO)
 
         for i in range(faction_count):
             name = f"Faction {i + 1}"
             colour = generate_random_colour()
 
-            if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] Creating {name} with network type: {network_type}", level=logging.DEBUG)
+            if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Creating {name} with network type: {network_type}", level=logging.DEBUG)
 
             try:
                 new_faction = Faction(
@@ -99,16 +99,16 @@ class FactionManager:
                 )
 
                 if new_faction.network is None:
-                    if LOGGING_ENABLED: logger.log_msg(f"[ERROR] Faction {new_faction.id} failed to Initialise network.", level=logging.ERROR)
+                    if ENABLE_LOGGING: logger.log_msg(f"[ERROR] Faction {new_faction.id} failed to Initialise network.", level=logging.ERROR)
                     raise RuntimeError(f"[ERROR] Faction {new_faction.id} failed to Initialise network.")
 
                 self.factions.append(new_faction)
-                if LOGGING_ENABLED: logger.log_msg(f"[INFO] Successfully created {name} (ID: {new_faction.id})", level=logging.INFO)
+                if ENABLE_LOGGING: logger.log_msg(f"[INFO] Successfully created {name} (ID: {new_faction.id})", level=logging.INFO)
 
             except Exception as e:
-                if LOGGING_ENABLED: logger.log_msg(f"[ERROR] Failed to create {name}: {e}", level=logging.ERROR)
+                if ENABLE_LOGGING: logger.log_msg(f"[ERROR] Failed to create {name}: {e}", level=logging.ERROR)
                 import traceback
-                if LOGGING_ENABLED: logger.log_msg(traceback.format_exc(), level=logging.ERROR)
+                if ENABLE_LOGGING: logger.log_msg(traceback.format_exc(), level=logging.ERROR)
 
         #  Assign agents to their factions after all factions are created
         for agent in agents:
@@ -118,6 +118,6 @@ class FactionManager:
 
         #  Debug log to verify agents are assigned correctly
         for faction in self.factions:
-            if LOGGING_ENABLED: logger.log_msg(f"[DEBUG] {faction.name} Initialised with {len(faction.agents)} agents.", level=logging.INFO)
+            if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] {faction.name} Initialised with {len(faction.agents)} agents.", level=logging.INFO)
 
 

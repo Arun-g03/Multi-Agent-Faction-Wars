@@ -46,8 +46,8 @@ def main():
 
         # Track menu options
         mode = None
-        tensorboard_enabled = False
-        auto_tensorboard_enabled = False
+        ENABLE_TENSORBOARD = False
+        auto_ENABLE_TENSORBOARD = False
         clock = pygame.time.Clock()
 
         # Main loop
@@ -61,7 +61,7 @@ def main():
 
             if is_menu:
                 is_menu = menu_renderer.render_menu(
-                    tensorboard_enabled, auto_tensorboard_enabled, mode,
+                    ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode,
                     start_game_callback=lambda m, d, t: start_game(screen, m, d, t)
                 )
 
@@ -70,8 +70,8 @@ def main():
                     game_manager = start_game(
                         screen=screen,
                         mode=menu_renderer.selected_mode,
-                        tensorboard_enabled=tensorboard_enabled,
-                        auto_tensorboard_enabled=auto_tensorboard_enabled
+                        ENABLE_TENSORBOARD=ENABLE_TENSORBOARD,
+                        auto_ENABLE_TENSORBOARD=auto_ENABLE_TENSORBOARD
                     )
 
                     if game_manager is None:
@@ -119,8 +119,8 @@ def main():
                         traceback.print_exc()
                         break
                 else:
-                    print("[ERROR] Game manager or Game Renderer is None. Returning to menu.")
                     is_menu = True
+                    print("[ERROR] Game manager or Game Renderer is None. Returning to menu.")
 
         print("[INFO] Exiting game...")
         pygame.quit()  # Ensure Pygame fully shuts down
@@ -132,7 +132,7 @@ def main():
         pygame.quit()
         sys.exit()
 
-def start_game(screen, mode, tensorboard_enabled=True, auto_tensorboard_enabled=True):
+def start_game(screen, mode, ENABLE_TENSORBOARD=True, auto_ENABLE_TENSORBOARD=True):
     """
     Initialises and starts the game.
     """
