@@ -223,10 +223,9 @@ class AppleTree:
         if self.quantity > 0:
             gathered = min(amount, self.quantity)
             self.quantity -= gathered
-            print(f"Apple Tree at ({self.grid_x}, {self.grid_y}) foraged. Remaining: {self.quantity}")
-
+            print("\033[92m" + f"Apple Tree at ({self.grid_x}, {self.grid_y}) foraged. Remaining: {self.quantity}" + "\033[0m")
             if self.is_depleted():
-                print(f"Apple Tree at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain.")
+                print("\033[92m" + f"Apple Tree at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain." + "\033[0m")                
                 self.remove_from_terrain()
 
             return gathered
@@ -261,7 +260,7 @@ class AppleTree:
         if self in self.resource_manager.resources:
             self.resource_manager.resources.remove(self)
             self.resource_manager.apple_tree_count -= 1
-            print(f"Resource successfully removed: Apple Tree at ({self.grid_x}, {self.grid_y})")
+            print("\033[92m" + f"Resource successfully removed: Apple Tree at ({self.grid_x}, {self.grid_y})" + "\033[0m")        
         else:
             print(f"Apple Tree at ({self.grid_x}, {self.grid_y}) not found in resource manager.")
 
@@ -323,8 +322,7 @@ class GoldLump:
         """Mine gold from the lump and credit it using the provided callback."""
         if self.quantity > 0:
             self.quantity -= 1
-            print(f"Gold Lump at ({self.grid_x}, {self.grid_y}) mined. Remaining: {self.quantity}")
-
+            print(f"\033[32mGold Lump at ({self.grid_x}, {self.grid_y}) mined. Remaining: {self.quantity}\033[0m")
             if credit_callback:
                 credit_callback(1)  # Credit the mined gold to the faction
 
@@ -352,7 +350,7 @@ class GoldLump:
     
     def remove_from_terrain(self):
         """Remove the gold lump from the terrain and mark it as no longer available."""
-        print(f"Attempting to remove Gold Lump at ({self.grid_x}, {self.grid_y}). Quantity: {self.quantity}")
+        #print(f"Attempting to remove Gold Lump at ({self.grid_x}, {self.grid_y}). Quantity: {self.quantity}")
         
         # Ensure resource is actually depleted
         if self.quantity > 0:
@@ -363,10 +361,9 @@ class GoldLump:
         self.terrain.grid[self.grid_x][self.grid_y]['resource_type'] = None
         if self in self.resource_manager.resources:
             self.resource_manager.resources.remove(self)
-            print(f"Resource successfully removed: Gold Lump at ({self.grid_x}, {self.grid_y})")
+            #print(f"\033[31mResource successfully removed: Gold Lump at ({self.grid_x}, {self.grid_y})\033[0m")        
         else:
-            print(f"Gold Lump at ({self.grid_x}, {self.grid_y}) not found in resource manager.")
-
+            raise RuntimeError(f"Gold Lump at ({self.grid_x}, {self.grid_y}) not found in resource manager.")
 
 
 

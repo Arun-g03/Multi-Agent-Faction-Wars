@@ -95,7 +95,8 @@ class FactionManager:
                     role_size=role_size,
                     local_state_size=local_state_size,
                     global_state_size=global_state_size,
-                    network_type=network_type
+                    network_type=network_type,
+                    mode="train"
                 )
 
                 if new_faction.network is None:

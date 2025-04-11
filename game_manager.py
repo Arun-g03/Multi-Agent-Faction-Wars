@@ -587,6 +587,7 @@ class GameManager:
                         self.handle_event(event)
 
                     winner = check_victory(self.faction_manager.factions)
+                    winner_id = winner.id if winner else None
                     if winner:
                         print(f"Faction {winner.id} wins! Moving to next episode...")
                         if ENABLE_LOGGING: self.logger.log_msg(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
@@ -663,6 +664,24 @@ class GameManager:
                                 f"[SAVE] New best {role} model saved at {model_path} with reward {best_reward:.2f}",
                                 level=logging.INFO
                             )
+
+                    for faction in self.faction_manager.factions:
+                        is_winner = (faction.id == winner_id)
+                        hq_reward = faction.compute_hq_reward(victory=is_winner)
+
+                        if hasattr(faction.network, "update_memory_rewards"):
+                            faction.network.update_memory_rewards(hq_reward)
+
+                        if hasattr(faction.network, "train") and faction.network.hq_memory:
+                            try:
+                                if ENABLE_LOGGING:
+                                    self.logger.log_msg(f"[HQ TRAIN] Training strategy network for Faction {faction.id} with {len(faction.hq_memory)} samples.", level=logging.INFO)
+                                faction.network.train(faction.hq_memory, faction.optimizer)
+                                faction.hq_memory.clear()
+                            except Exception as e:
+                                print(f"[HQ TRAIN ERROR] Failed to train HQ network for Faction {faction.id}: {e}")
+                                traceback.print_exc()
+
 
 
                 # Wrap up the episode

@@ -55,7 +55,8 @@ def main():
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    print("[INFO] Window closed. Exiting game...")
+                    print("\033[91m[INFO] Window closed. Exiting game..\033[0m")  
+                    
                     running = False  # Stop the loop
                     break  # Exit event processing
 
@@ -97,7 +98,7 @@ def main():
                         running = game_manager.run()  # Run the game loop and check if it should continue
 
                         if not running:  # If `False`, stop execution
-                            print("[INFO] Exiting game after run() stopped.")
+                            print("\033[91m[INFO] Exiting game after run() stopped.\033[0m")
                             pygame.quit()
                             sys.exit()
 
@@ -122,7 +123,7 @@ def main():
                     is_menu = True
                     print("[ERROR] Game manager or Game Renderer is None. Returning to menu.")
 
-        print("[INFO] Exiting game...")
+        print("\033[91m[INFO] Exiting game...\033[0m")        
         pygame.quit()  # Ensure Pygame fully shuts down
         sys.exit()  # Ensure Python exits completely
 

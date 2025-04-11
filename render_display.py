@@ -273,65 +273,46 @@ class GameRenderer:
 
 
     def render_hud(self, screen, episode, step, factions, resource_counts):
-        """
-        Render the HUD with game statistics.
-        :param screen: The Pygame display surface.
-        :param episode: Current episode number.
-        :param step: Current step in the episode.
-        :param factions: List of factions for leaderboard stats.
-        :param resource_counts: Dictionary with counts of resources.
-        """
-        # Create a transparent background surface
-        hud_background = pygame.Surface((300, 320))  # Increased height to accommodate all elements
-        hud_background.set_alpha(128)  # Transparency (0-255)
-        hud_background.fill((0, 0, 0))  # Fill with black colour
+        font = get_font(20)
+        lines = []
 
-        # Blit the transparent background onto the main screen
-        screen.blit(hud_background, (10, 10))  # Slight offset from corner for better visibility
+        # Episode and Step
+        lines.append(font.render(f"Episode: {episode} | Step: {step}", True, (255, 255, 255)))
 
-        # Font for HUD text
-        font = get_font(20)        
+        # Time
+        elapsed_time = pygame.time.get_ticks() // 1000
+        hours, minutes, seconds = elapsed_time // 3600, (elapsed_time % 3600) // 60, elapsed_time % 60
+        lines.append(font.render(f"Time: {hours:02d}:{minutes:02d}:{seconds:02d}", True, (255, 255, 255)))
 
-        # Display Episode and Step
-        episode_text = font.render(f"Episode: {episode} | Step: {step}", True, (255, 255, 255))
-        screen.blit(episode_text, (20, 20))
+        # Resources
+        lines.append(font.render("Resources available:", True, (255, 255, 255)))
+        lines.append(font.render(f"Gold Lumps: {resource_counts.get('gold_lumps', 0)}, Gold: {resource_counts.get('gold_quantity', 0)}", True, (255, 255, 255)))
+        lines.append(font.render(f"Apple Trees: {resource_counts.get('apple_trees', 0)}, Apples: {resource_counts.get('apple_quantity', 0)}", True, (255, 255, 255)))
 
-        # Display elapsed time
-        elapsed_time = pygame.time.get_ticks() // 1000  # Convert milliseconds to seconds
-        hours = elapsed_time // 3600
-        minutes = (elapsed_time % 3600) // 60
-        seconds = elapsed_time % 60
-        time_text = font.render(f"Time: {hours:02d}:{minutes:02d}:{seconds:02d}", True, (255, 255, 255))
-        screen.blit(time_text, (20, 50))
-
-        # Display Resource Counts
-        gold_lumps = resource_counts.get("gold_lumps", 0)
-        gold_quantity = resource_counts.get("gold_quantity", 0)
-        tree_count = resource_counts.get("apple_trees", 0)
-        apple_count = resource_counts.get("apple_quantity", 0)
-        resources_header = font.render("Resources available:", True, (255, 255, 255))
-        screen.blit(resources_header, (20, 80))
-        resource_text_gold = font.render(f"Gold Lumps: {gold_lumps}, Gold: {gold_quantity}", True, (255, 255, 255))
-        resource_text_apple = font.render(f"Apple Trees: {tree_count}, Apples: {apple_count}", True, (255, 255, 255))
-        screen.blit(resource_text_gold, (20, 110))
-        screen.blit(resource_text_apple, (20, 140))
-
-        # Display Faction Leaderboard
-        leaderboard_text = font.render("Faction Leaderboard:", True, (255, 255, 255))
-        screen.blit(leaderboard_text, (20, 180))
-
-        # Sort factions by gold balance and display the top 4
+        # Leaderboard
+        lines.append(font.render("Faction Leaderboard:", True, (255, 255, 255)))
         sorted_factions = sorted(factions, key=lambda f: f.gold_balance, reverse=True)
-        for i, faction in enumerate(sorted_factions[:4]):
-            faction_text = font.render(
-                f"{i + 1}. Faction {faction.id} - Gold: {faction.gold_balance}, Agents: {len(faction.agents)}",
-                True,
-                (255, 255, 255),
-            )
-            screen.blit(faction_text, (20, 210 + i * 30))
+        for faction in sorted_factions[:4]:
+            lines.append(font.render(f"Faction {faction.id} - Gold: {faction.gold_balance}, Food: {faction.food_balance}, Agents: {len(faction.agents)}", True, (255, 255, 255)))
 
-        # Update the display
+        # 🧮 Compute background size dynamically
+        padding = 10
+        line_height = font.get_height() + 4
+        max_width = max(line.get_width() for line in lines)
+        total_height = len(lines) * line_height
+
+        # 🎨 Create dynamic HUD background
+        hud_background = pygame.Surface((max_width + 2 * padding, total_height + 2 * padding))
+        hud_background.set_alpha(128)
+        hud_background.fill((0, 0, 0))
+        screen.blit(hud_background, (10, 10))
+
+        # 🖼 Draw text lines
+        for i, line in enumerate(lines):
+            screen.blit(line, (10 + padding, 10 + padding + i * line_height))
+
         pygame.display.update()
+
 #       _                    _       
 #      / \   __ _  ___ _ __ | |_ ___ 
 #     / _ \ / _` |/ _ \ '_ \| __/ __|
@@ -547,7 +528,8 @@ class GameRenderer:
             "frame_duration": frame_duration,
             "current_frame": 0,
             "total_frames": frame_count,
-            "duration": duration
+            "duration": duration,
+            "z_index": 100  # Add high z-index to ensure animation appears in front
         })
 
     def update_animations(self):

@@ -18,7 +18,8 @@ from utils_config import (
     WORLD_HEIGHT,
     WORLD_WIDTH,
     ENABLE_LOGGING,
-    HQ_STRATEGY_OPTIONS)
+    HQ_STRATEGY_OPTIONS,
+    Gold_Cost_for_Agent)
 
 
 from utils_helpers import (
@@ -49,7 +50,7 @@ logger = Logger(log_file="agent_factions.txt", log_level=logging.DEBUG)
 
 
 class Faction():
-    def __init__(self,game_manager, name, colour, id, resource_manager, agents, state_size, action_size, role_size, local_state_size, global_state_size, network_type="HQNetwork"):
+    def __init__(self,game_manager, name, colour, id, resource_manager, agents, state_size, action_size, role_size, local_state_size, global_state_size, network_type="HQNetwork", mode : str = "train"):
         try:
             # Initialise Faction-specific attributes
             self.name = name
@@ -67,6 +68,8 @@ class Faction():
             self.unvisited_cells = set()
             self.reports = []
             self.create_task = create_task
+            self.mode = mode
+            
             # Initialise home_base with default values
             self.home_base = {
                 "position": (0,0),  # To be set during initialisation
@@ -187,13 +190,16 @@ class Faction():
         if current_step % self.strategy_update_interval == 0 or self.needs_strategy_retest:
             new_strategy = self.choose_HQ_Strategy()
             if new_strategy != self.current_strategy:
+                print("\033[92m" + f"Faction {self.id} has changed HQ from {self.current_strategy} to {new_strategy}." + "\033[0m")                
                 self.perform_HQ_Strategy(new_strategy)
-            self.current_strategy = new_strategy
+            else:
+                print("\033[93m" + f"Faction {self.id} maintained HQ strategy: {self.current_strategy}" + "\033[0m")            
+                self.current_strategy = new_strategy
             self.needs_strategy_retest = False
-            print(f"Faction {self.id} has updated strategy after {self.strategy_update_interval} steps.")
-        else:
-            self.update_tasks(agents)
             
+            
+        
+        self.update_tasks(agents)            
 
         if any(agent.current_task is None for agent in self.agents):
             self.assign_high_level_tasks()        
@@ -503,16 +509,33 @@ class Faction():
         
 
 
-
+    """
+        
     
-#       _            _               _            _          _                                 _       
-#      / \   ___ ___(_) __ _ _ __   | |_ __ _ ___| | _____  | |_ ___     __ _  __ _  ___ _ __ | |_ ___ 
-#     / _ \ / __/ __| |/ _` | '_ \  | __/ _` / __| |/ / __| | __/ _ \   / _` |/ _` |/ _ \ '_ \| __/ __|
-#    / ___ \\__ \__ \ | (_| | | | | | || (_| \__ \   <\__ \ | || (_) | | (_| | (_| |  __/ | | | |_\__ \
-#   /_/   \_\___/___/_|\__, |_| |_|  \__\__,_|___/_|\_\___/  \__\___/   \__,_|\__, |\___|_| |_|\__|___/
-#                      |___/                                                  |___/          
+    #       _    ____ ____ ___ ____ _   _   _   _ ___ ____ _   _       _     _______     _______ _       _____  _    ____  _  __
+    #      / \  / ___/ ___|_ _/ ___| \ | | | | | |_ _/ ___| | | |     | |   | ____\ \   / / ____| |     |_   _|/ \  / ___|| |/ /
+    #     / _ \ \___ \___ \| | |  _|  \| | | |_| || | |  _| |_| |_____| |   |  _|  \ \ / /|  _| | |       | | / _ \ \___ \| ' / 
+    #    / ___ \ ___) |__) | | |_| | |\  | |  _  || | |_| |  _  |_____| |___| |___  \ V / | |___| |___    | |/ ___ \ ___) | . \ 
+    #   /_/   \_\____/____/___\____|_| \_| |_| |_|___\____|_| |_|     |_____|_____|  \_/  |_____|_____|   |_/_/   \_\____/|_|\_\
+    #                                                                                                                           
+
+    ========================================================================================================
+    """
+
     def assign_high_level_tasks(self):
         """
+        HQ network chooses a strategy according to HQ_STRATEGY_OPTIONS
+        HQ_STRATEGY_OPTIONS = [
+            "DEFEND_HQ",
+            "ATTACK_THREATS",
+            "COLLECT_GOLD",
+            "COLLECT_FOOD",
+            "RECRUIT_GATHERER",
+            "RECRUIT_PEACEKEEPER",
+            "NO_PRIORITY",
+        ]
+
+
         HQ chooses a strategic action, executes it, and assigns tasks to idle agents accordingly.
         """
         if ENABLE_LOGGING: logger.log_msg(f"[HQ] Faction {self.id} assigning high-level tasks...", level=logging.INFO)
@@ -544,6 +567,17 @@ class Faction():
                         level=logging.DEBUG
                 )
 
+
+    """
+        
+    #       _            _               _            _          _                                 _       
+    #      / \   ___ ___(_) __ _ _ __   | |_ __ _ ___| | _____  | |_ ___     __ _  __ _  ___ _ __ | |_ ___ 
+    #     / _ \ / __/ __| |/ _` | '_ \  | __/ _` / __| |/ / __| | __/ _ \   / _` |/ _` |/ _ \ '_ \| __/ __|
+    #    / ___ \\__ \__ \ | (_| | | | | | || (_| \__ \   <\__ \ | || (_) | | (_| | (_| |  __/ | | | |_\__ \
+    #   /_/   \_\___/___/_|\__, |_| |_|  \__\__,_|___/_|\_\___/  \__\___/   \__,_|\__, |\___|_| |_|\__|___/
+    #                      |___/                                                  |___/          
+    ========================================================================================================
+    """
 
     #This is where tasks are created
 
@@ -616,6 +650,20 @@ class Faction():
             return None
         
     
+
+
+
+    """
+
+            #    _____  _    ____  _  __  _   _    _    _   _ ____  _     _____ ____  ____  
+            #   |_   _|/ \  / ___|| |/ / | | | |  / \  | \ | |  _ \| |   | ____|  _ \/ ___| 
+            #     | | / _ \ \___ \| ' /  | |_| | / _ \ |  \| | | | | |   |  _| | |_) \___ \ 
+            #     | |/ ___ \ ___) | . \  |  _  |/ ___ \| |\  | |_| | |___| |___|  _ < ___) |
+            #     |_/_/   \_\____/|_|\_\ |_| |_/_/   \_\_| \_|____/|_____|_____|_| \_\____/ 
+            #                                                                               
+    ================================================================================================
+    
+    """
     
     def assign_move_to_task(self, agent, position, label=None) -> Optional[dict]:
         """
@@ -697,16 +745,16 @@ class Faction():
 
 
 
+    """
 
-
-#     ____      _            _       _         _            _                   _       _     _       
-#    / ___|__ _| | ___ _   _| | __ _| |_ ___  | |_ __ _ ___| | __ __      _____(_) __ _| |__ | |_ ___ 
-#   | |   / _` | |/ __| | | | |/ _` | __/ _ \ | __/ _` / __| |/ / \ \ /\ / / _ \ |/ _` | '_ \| __/ __|
-#   | |__| (_| | | (__| |_| | | (_| | ||  __/ | || (_| \__ \   <   \ V  V /  __/ | (_| | | | | |_\__ \
-#    \____\__,_|_|\___|\__,_|_|\__,_|\__\___|  \__\__,_|___/_|\_\   \_/\_/ \___|_|\__, |_| |_|\__|___/
-#                                                                                 |___/  
-
-
+    #     ____      _            _       _         _            _                   _       _     _       
+    #    / ___|__ _| | ___ _   _| | __ _| |_ ___  | |_ __ _ ___| | __ __      _____(_) __ _| |__ | |_ ___ 
+    #   | |   / _` | |/ __| | | | |/ _` | __/ _ \ | __/ _` / __| |/ / \ \ /\ / / _ \ |/ _` | '_ \| __/ __|
+    #   | |__| (_| | | (__| |_| | | (_| | ||  __/ | || (_| \__ \   <   \ V  V /  __/ | (_| | | | | |_\__ \
+    #    \____\__,_|_|\___|\__,_|_|\__,_|\__\___|  \__\__,_|___/_|\_\   \_/\_/ \___|_|\__, |_| |_|\__|___/
+    #                                                                                 |___/  
+    =======================================================================================================
+    """
 
 
 
@@ -873,27 +921,37 @@ class Faction():
 
         # ========== STRATEGY: Recruit Peacekeeper ==========
         if action == "RECRUIT_PEACEKEEPER":
-            if self.gold_balance < 10:
+            if self.gold_balance > Gold_Cost_for_Agent:
+                self.recruit_agent("peacekeeper")
+            else:
                 logger.log_msg(f"[HQ EXECUTE] Not enough gold to recruit peacekeeper.", level=logging.WARNING)
                 self.current_strategy = None
                 return retest_strategy()
-            self.recruit_agent("peacekeeper")
 
         # ========== STRATEGY: Recruit Gatherer ==========
         elif action == "RECRUIT_GATHERER":
-            if self.gold_balance < 10:
+            if self.gold_balance > Gold_Cost_for_Agent:
+                self.recruit_agent("gatherer")
+            else:
                 logger.log_msg(f"[HQ EXECUTE] Not enough gold to recruit gatherer.", level=logging.WARNING)
                 self.current_strategy = None
                 return retest_strategy()
-            self.recruit_agent("gatherer")
 
         # ========== STRATEGY: Defend HQ ==========
         elif action == "DEFEND_HQ":
-            hx, hy = self.home_base["position"]
-            threats = self.global_state.get("threats", [])
-            DEFENSE_RADIUS_SQ = 30 ** 2
+            DEFENSE_RADIUS = 100  # pixels
+            DEFENSE_RADIUS_SQ = DEFENSE_RADIUS ** 2
 
+            # Convert HQ position to pixel coords if needed
+            hx, hy = self.home_base["position"]
+            if isinstance(hx, int) and hx < WORLD_WIDTH:
+                hx *= CELL_SIZE
+                hy *= CELL_SIZE
+            hq_pos = (hx, hy)
+
+            threats = self.global_state.get("threats", [])
             nearby_threat_found = False
+
             for threat in threats:
                 if not isinstance(threat.get("id"), AgentIDStruc):
                     continue
@@ -901,6 +959,10 @@ class Faction():
                     continue  # Skip own faction
 
                 tx, ty = threat["location"]
+                if isinstance(tx, int) and tx < WORLD_WIDTH:
+                    tx *= CELL_SIZE
+                    ty *= CELL_SIZE
+
                 dist_sq = (tx - hx) ** 2 + (ty - hy) ** 2
                 if dist_sq <= DEFENSE_RADIUS_SQ:
                     nearby_threat_found = True
@@ -910,8 +972,25 @@ class Faction():
                 logger.log_msg(f"[HQ STRATEGY] No nearby threats to defend HQ.", level=logging.WARNING)
                 return retest_strategy()
 
-            # Strategy is valid
-            self.defensive_position = self.home_base["position"]
+            # ✅ Strategy is valid — assign peacekeepers to move to HQ
+            self.defensive_position = hq_pos
+            logger.log_msg(f"[HQ STRATEGY] Nearby threat detected. Assigning peacekeepers to defend HQ at {hq_pos}.", level=logging.INFO)
+
+            for agent in self.agents:
+                if agent.role != "peacekeeper":
+                    continue
+
+                current = agent.current_task
+                already_defending = (
+                    current and current.get("type") == "move_to" and
+                    current.get("target", {}).get("position") == hq_pos
+                )
+
+                if not already_defending:
+                    agent.current_task = self.assign_move_to_task(agent, hq_pos, label="DefendHQ")
+                    agent.update_task_state(TaskState.PENDING)
+                    logger.log_msg(f"[DEFEND ASSIGN] Peacekeeper {agent.agent_id} assigned to move to HQ.", level=logging.INFO)
+
 
 
 
@@ -959,6 +1038,42 @@ class Faction():
         self.current_strategy = action
 
 
+    def compute_hq_reward(self, victory: bool = False) -> float:
+        """
+        Computes the HQ reward at the end of an episode.
+        This scalar reward trains the HQ strategy network.
+        """
+        reward = 0
+
+        # Weights — adjust freely
+        w_gold = 0.01
+        w_food = 0.01
+        w_agents = 1.0
+        w_tasks = 0.2
+        w_threats = 0.3
+        w_victory = 10.0
+
+        # Basic resource/agent reward
+        reward += self.gold_balance * w_gold
+        reward += self.food_balance * w_food
+        reward += len(self.agents) * w_agents
+
+        # Optional: tasks completed (requires tracking if desired)
+        if hasattr(self, "tasks_completed"):
+            reward += self.tasks_completed * w_tasks
+
+        # Optional: threats eliminated (you can track this too)
+        if hasattr(self, "threats_eliminated"):
+            reward += self.threats_eliminated * w_threats
+
+        # Win bonus
+        if victory:
+            reward += w_victory
+
+        return reward
+
+
+
 
 
 
@@ -977,46 +1092,53 @@ class Faction():
         """
         Recruits an agent of the given role if resources allow.
         """
-        cost = 10  # Example recruitment cost per agent
+        try:
+            cost = Gold_Cost_for_Agent  # Example recruitment cost per agent
 
-        if self.gold_balance < cost:
-            if ENABLE_LOGGING: logger.log_msg(f"[HQ RECRUIT] Faction {self.id} lacks gold to recruit {role}.", level=logging.WARNING)
-            return
+            if self.gold_balance < cost:
+                if ENABLE_LOGGING: logger.log_msg(f"[HQ RECRUIT] Faction {self.id} lacks gold to recruit {role}.", level=logging.WARNING)
+                return
 
-        # Deduct cost and create agent
-        self.gold_balance -= cost
+            # Deduct cost and create agent
+            self.gold_balance -= cost
 
-        new_agent = self.create_agent(role)
-        self.agents.append(new_agent)
+            new_agent = self.create_agent(role)
+            self.agents.append(new_agent)
 
-        if ENABLE_LOGGING: logger.log_msg(
-            f"[HQ RECRUIT] Faction {self.id} recruited new {role} — Gold: {self.gold_balance}, Total agents: {len(self.agents)}",
-            level=logging.INFO
-        )
-            
+            if ENABLE_LOGGING: logger.log_msg(
+                f"[HQ RECRUIT] Faction {self.id} recruited new {role} — Gold: {self.gold_balance}, Total agents: {len(self.agents)}",
+                level=logging.INFO
+            )
+        except Exception as e:
+            if ENABLE_LOGGING: logger.log_msg(f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}", level=logging.ERROR)
+            raise ValueError (f"Failed to create {role} agent: {str(e)}")
+                    
 
     def create_agent(self, role: str):
         """
         Spawns a new agent instance of the given role at the faction's HQ.
         """
-        from agent_base import Agent  # or wherever your base class is defined
+        try:
+            from agent_base import Agent  # or wherever your base class is defined
 
-        spawn_x, spawn_y = self.home_base["position"]
+            spawn_x, spawn_y = self.home_base["position"]
 
-        agent_id = AgentIDStruc(faction_id=self.id, agent_id=len(self.agents) + 1)
+            agent_id = AgentIDStruc(faction_id=self.id, agent_id=len(self.agents) + 1)
 
-        new_agent = Agent(
-            agent_id=agent_id,
-            x=spawn_x,
-            y=spawn_y,
-            faction=self,
-            role=role,
-            network_type=self.network_type  # PPOModel, etc.
-        )
+            new_agent = Agent(
+                agent_id=agent_id,
+                x=spawn_x,
+                y=spawn_y,
+                faction=self,
+                role=role,
+                network_type=self.network_type  # PPOModel, etc.
+            )
 
-        if ENABLE_LOGGING: logger.log_msg(f"[SPAWN] Created {role} at ({spawn_x}, {spawn_y}) for Faction {self.id}.", level=logging.DEBUG)
-        return new_agent
-    
+            if ENABLE_LOGGING: logger.log_msg(f"[SPAWN] Created {role} at ({spawn_x}, {spawn_y}) for Faction {self.id}.", level=logging.DEBUG)
+            return new_agent
+        except Exception as e:
+            if ENABLE_LOGGING: logger.log_msg(f"[SPAWN] Error creating {role} agent: {str(e)}\nTraceback: {traceback.format_exc()}", level=logging.ERROR)
+            raise ValueError (f"Failed to create {role} agent: {str(e)}")
     def is_under_attack(self) -> bool:
         """
         Returns True if enemy agents are within field of view range of the faction HQ.

@@ -20,6 +20,11 @@ if torch.cuda.is_available():
         print("\033[93m**Agent Networks**\nNo GPU detected.\nUsing CPU.\nNote training will be slower.\n\033[0m")
 
 
+
+#I was gonna break the file up but instead, i like that all the neural network parts are together
+
+
+
 #       _   _   _             _   _               _                          
 #      / \ | |_| |_ ___ _ __ | |_(_) ___  _ __   | |    __ _ _   _  ___ _ __ 
 #     / _ \| __| __/ _ \ '_ \| __| |/ _ \| '_ \  | |   / _` | | | |/ _ \ '__|
@@ -86,6 +91,9 @@ class HQ_Network(nn.Module):
         self.actor = nn.Linear(128, action_size)
         self.critic = nn.Linear(128, 1)
 
+
+        self.hq_memory = []
+
     def update_network(self, new_input_size):
         """
         Update the network structure dynamically when the input size changes.
@@ -122,6 +130,23 @@ class HQ_Network(nn.Module):
         task_assignment = self.actor(x)
 
         return task_assignment, self.critic(x)
+
+    def add_memory(self, state: list, action: int, reward: float = 0.0):
+        self.hq_memory.append({
+            "state": state,
+            "action": action,
+            "reward": reward
+        })
+
+    def update_memory_rewards(self, total_reward: float):
+        for m in self.hq_memory:
+            m["reward"] = total_reward
+
+    def clear_memory(self):
+        self.hq_memory = []
+
+    def has_memory(self):
+        return len(self.hq_memory) > 0
 
         
     
@@ -190,20 +215,32 @@ class HQ_Network(nn.Module):
         try:
             # 1. Encode the global state into a fixed-size input vector
             state_vector = self.encode_state(global_state)
+            logger.log_msg(f"[INFO] Predicting strategy for global state: {global_state}", level=logging.DEBUG)
+            logger.log_msg(f"[DEBUG] Encoded state vector: {state_vector}", level=logging.DEBUG)
 
             # 2. Convert to tensor and run forward pass
             with torch.no_grad():
                 input_tensor = torch.tensor(state_vector, dtype=torch.float32).unsqueeze(0)  # Add batch dim
                 logits, _ = self.forward(input_tensor, torch.zeros(0), torch.zeros(0), torch.zeros(0))
 
+            # 🔍 Log raw logits
+            logits_list = logits.squeeze(0).tolist()
+            for i, value in enumerate(logits_list):
+                logger.log_msg(f"[LOGITS] {self.strategy_labels[i]}: {value:.4f}", level=logging.INFO)
 
             # 3. Choose the strategy with highest score
             action_index = torch.argmax(logits).item()
+            selected_strategy = self.strategy_labels[action_index]
+            self.add_memory(state_vector, action_index)
+            logger.log_msg(f"[HQ STRATEGY] Selected: {selected_strategy} (index: {action_index})", level=logging.INFO)
 
-            return self.strategy_labels[action_index]
+            return selected_strategy
         finally:
-            # Clear the reentrant flag
-            delattr(self, 'predicting')    
+            delattr(self, 'predicting')
+
+
+
+
     def encode_state(self, global_state: dict) -> list:
         """
         Converts the global state dictionary into a flat list of features
@@ -220,6 +257,54 @@ class HQ_Network(nn.Module):
             global_state.get("agent_density", 0),
             # Add any other numeric signals you want the HQ to learn from
         ]
+    
+
+    def train(self, memory, optimizer, gamma=0.99):
+        """
+        Trains the HQ strategy model using policy gradient.
+        :param memory: A list of dicts with keys: 'state', 'action', 'reward'
+        :param optimizer: Torch optimizer
+        :param gamma: Discount factor for future rewards
+        """
+        if not memory:
+            logger.log_msg("[HQ TRAIN] No memory to train on.", level=logging.WARNING)
+            return
+
+        # Prepare batches
+        states = torch.tensor([m['state'] for m in memory], dtype=torch.float32).to(self.device)
+        actions = torch.tensor([m['action'] for m in memory], dtype=torch.long).to(self.device)
+        rewards = [m['reward'] for m in memory]
+
+        # Compute discounted returns
+        returns = []
+        G = 0
+        for r in reversed(rewards):
+            G = r + gamma * G
+            returns.insert(0, G)
+        returns = torch.tensor(returns, dtype=torch.float32).to(self.device)
+
+        # Normalize returns (helps with stability)
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+
+        # Forward pass
+        logits, values = self.forward(states, torch.zeros_like(states), torch.zeros_like(states), torch.zeros_like(states))
+        probs = torch.softmax(logits, dim=-1)
+        dist = torch.distributions.Categorical(probs)
+        log_probs = dist.log_prob(actions)
+
+        # Compute loss
+        advantage = returns - values.squeeze(-1)
+        policy_loss = -(log_probs * advantage.detach()).mean()
+        value_loss = advantage.pow(2).mean()
+        loss = policy_loss + 0.5 * value_loss
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # Logging
+        logger.log_msg(f"[HQ TRAIN] Loss: {loss.item():.4f}, Policy: {policy_loss.item():.4f}, Value: {value_loss.item():.4f}", level=logging.INFO)
+
 
 
 

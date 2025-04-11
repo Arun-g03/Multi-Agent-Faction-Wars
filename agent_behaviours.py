@@ -11,6 +11,7 @@ from utils_config import (
                         
                         )
 from env_resources import AppleTree, GoldLump
+
 import random
 import logging
 from utils_logger import Logger
@@ -19,6 +20,9 @@ import inspect
 from utils_helpers import (
     find_closest_actor
     )
+
+import pygame
+
 
 logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)
 
@@ -106,18 +110,22 @@ class AgentBehaviour:
    
 
     def perform_task(self, state, resource_manager, agents):
-        # SETUP
         if state is None:
             raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
 
-        
         faction_id = self.agent.faction.id
-        episode = getattr(self.agent.faction, "episode", 0)
 
-        
+        # Early invalidation of stale or unreachable task
+        if self.agent.current_task:
+            task_type = self.agent.current_task.get("type")
+            task_target = self.agent.current_task.get("target")
+            if not self.is_task_valid(task_type, task_target, resource_manager, agents):
+                logger.log_msg(f"[TASK INVALIDATED] Agent {self.agent.agent_id} dropping invalid task: {self.agent.current_task}", level=logging.WARNING)
+                self.agent.current_task = None
+                self.agent.update_task_state(TaskState.NONE)
 
+        #  Agent has no task — act independently
         if not self.agent.current_task:
-            # 💡 Always choose action and cache
             action_index, log_prob, value = self.ai.choose_action(state)
             self.agent.current_action = action_index
             self.agent.log_prob = log_prob
@@ -125,55 +133,40 @@ class AgentBehaviour:
 
             task_state = self.perform_action(action_index, state, resource_manager, agents)
             reward = self.assign_reward_for_independent_action(task_state)
-            return reward, task_state
 
             if ENABLE_LOGGING:
-             logger.log_msg(f"Agent {self.agent.role} No task. Current task: {self.agent.current_task}. Self behaving", level=logging.INFO)
+                logger.log_msg(f"[SELF] Agent {self.agent.role} has no task. Acting independently with action index {action_index}.", level=logging.INFO)
 
+            return reward, task_state
 
-        # DO
+        #  Task is ongoing
         if self.agent.current_task.get("state") != TaskState.ONGOING:
             self.agent.current_task["state"] = TaskState.ONGOING
 
         if ENABLE_LOGGING:
-            logger.log_msg(f"Agent {self.agent.role} performing task. Current task: {self.agent.current_task}", level=logging.INFO)
-
-        
-
+            logger.log_msg(f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}", level=logging.INFO)
 
         action_index, log_prob, value = self.ai.choose_action(state)
         self.agent.current_action = action_index
         self.agent.log_prob = log_prob
         self.agent.value = value
 
-        if ENABLE_LOGGING:
-            logger.log_msg(
-                f"[PRE-ACTION] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}, State={state}",
-                level=logging.DEBUG
-            )
-
         if any(x != x or x == float("inf") or x == float("-inf") for x in state):
-            print(f"\n[INVALID STATE] AgentID={self.agent.agent_id}, Role={self.agent.role}, Faction={faction_id}")
-            print(f"State: {state}")
-            raise ValueError("Agent state contains NaN or Inf values.")
+            raise ValueError(f"[🔥 INVALID STATE] Agent {self.agent.agent_id} has NaN/Inf in state.")
 
         task_state = self.perform_action(action_index, state, resource_manager, agents)
 
-        #TASK-ACTION VALIDATION
+        # 🧠 Optional task-action consistency check
         task_type = self.agent.current_task.get("type", "unknown")
         expected_method = TASK_METHODS_MAPPING.get(task_type)
         actual_method = ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
-
         if expected_method != actual_method and task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
-            if ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_method}' but expected '{expected_method}' "
-                    f"for task '{task_type}'. Holding state as ONGOING.",
-                    level=logging.INFO
-                )
+            logger.log_msg(
+                f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_method}' but expected '{expected_method}' for task '{task_type}'.",
+                level=logging.INFO
+            )
             task_state = TaskState.ONGOING
 
-        # RESULT
         reward = self.assign_reward_for_task_action(
             task_state=task_state,
             task_type=task_type,
@@ -182,8 +175,7 @@ class AgentBehaviour:
             current_position=(self.agent.x, self.agent.y)
         )
 
-        if self.agent.current_task:
-            self.agent.current_task["state"] = task_state
+        self.agent.current_task["state"] = task_state
 
         self.agent.ai.store_transition(
             state=state,
@@ -195,17 +187,46 @@ class AgentBehaviour:
             done=(task_state in [TaskState.SUCCESS, TaskState.FAILURE])
         )
 
-        # ✅ Clear task if complete
+        # Final cleanup on task end
         if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
-            if ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[TASK COMPLETE] Agent {self.agent.agent_id} completed task '{task_type}' with result: {task_state.name}.",
-                    level=logging.INFO
-                )
+            logger.log_msg(
+                f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.",
+                level=logging.INFO
+            )
             self.agent.current_task = None
             self.agent.update_task_state(TaskState.NONE)
 
         return reward, task_state
+
+    
+
+    def is_task_valid(self, task_type, target, resource_manager, agents):
+        """
+        Check if the task's target still exists and is valid.
+        """
+        if not target or "position" not in target:
+            return False
+
+        position = target["position"]
+
+        if task_type == "gather":
+            for res in resource_manager.resources:
+                if hasattr(res, "grid_x") and (res.grid_x, res.grid_y) == position and not res.is_depleted():
+                    return True
+            return False
+
+        if task_type == "eliminate":
+            for agent in agents:
+                if getattr(agent, "agent_id", None) == target.get("id") and agent.Health > 0:
+                    return True
+            return False
+
+        if task_type == "explore":
+            # Consider explore tasks valid unless you want stricter rules
+            return True
+
+        return False  # Default to invalid
+
 
 
 
@@ -497,7 +518,7 @@ class AgentBehaviour:
         Heal the agent using an apple from its faction's food balance.
         """
         
-        if self.agent.faction.food_balance > 0:
+        if self.agent.Health < 100 and self.agent.faction.food_balance > 0:
             self.agent.faction.food_balance -= 1
             self.agent.Health = min(100, self.agent.Health + 10)
             if ENABLE_LOGGING: logger.log_msg(f"{self.agent.role} healed with an apple. Health is now {self.agent.Health}.", level=logging.INFO)
@@ -505,7 +526,6 @@ class AgentBehaviour:
         else:
             if ENABLE_LOGGING: logger.log_msg(f"{self.agent.role} attempted to heal, but no food available.", level=logging.WARNING)
             
-
     def explore(self):
         """
         Guides the agent toward a previously chosen unexplored cell.
@@ -586,30 +606,57 @@ class AgentBehaviour:
         Returns:
             TaskState: The state of the task (SUCCESS, FAILURE, ONGOING).
         """
+        
+
+        # Define interaction radius (in pixels)
+        interact_radius = Agent_Interact_Range * CELL_SIZE
+        grid_radius = Agent_Interact_Range
+
+        # 🔍 Detect valid gold lumps within range
         gold_resources = [
-            resource for resource in self.agent.detect_resources(self.agent.resource_manager, threshold=Agent_Interact_Range)
-            if isinstance(resource, GoldLump) and not resource.is_depleted()
+            res for res in self.agent.detect_resources(self.agent.resource_manager, threshold=grid_radius)
+            if isinstance(res, GoldLump) and not res.is_depleted()
         ]
 
+
+        # 🎯 Visual debug: draw search range and target (if any)
+        if ENABLE_LOGGING:
+            screen = self.agent.event_manager.renderer.screen
+            center = (int(self.agent.x), int(self.agent.y))
+            pygame.draw.circle(screen, (255, 215, 0), center, interact_radius, 2)  # Gold = search ring
+
         if gold_resources:
-            gold_lump = gold_resources[0]  # Select the nearest gold resource
-            if self.agent.is_near(gold_lump, Agent_Interact_Range):
+            gold_lump = gold_resources[0]
+
+            if ENABLE_LOGGING:
+                pygame.draw.circle(screen, (255, 0, 0), (int(gold_lump.x), int(gold_lump.y)), 5)  # Red dot = target
+
+            # ✅ In range → mine
+            if self.agent.is_near(gold_lump, interact_radius):
                 gold_lump.mine()
                 self.agent.faction.gold_balance += 1
-                if ENABLE_LOGGING: logger.log_msg(
-                    f"{self.agent.role} mined gold. Gold balance: {self.agent.faction.gold_balance}.",
+
+                if ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"{self.agent.role} mined gold at ({gold_lump.x}, {gold_lump.y}). "
+                        f"Gold balance: {self.agent.faction.gold_balance}.",
+                        level=logging.INFO
+                    )
+                return TaskState.SUCCESS
+
+            # ❌ Not close enough
+            if ENABLE_LOGGING:
+                logger.log_msg(
+                    f"{self.agent.role} saw gold at ({gold_lump.x}, {gold_lump.y}) but is out of range. Mining failed.",
                     level=logging.INFO
                 )
-                return TaskState.SUCCESS
-            else:
-                # Not in range to mine yet — fail the task this step
-                if ENABLE_LOGGING: logger.log_msg(
-                    f"{self.agent.role} attempted to mine gold but was not near target at ({gold_lump.x}, {gold_lump.y}). Failure", 
-                    level=logging.INFO)
-                return TaskState.FAILURE
+            return TaskState.FAILURE
 
-        if ENABLE_LOGGING: logger.log_msg(f"{self.agent.role} found no gold resources to mine.", level=logging.WARNING)
+        # ❌ No gold detected
+        if ENABLE_LOGGING:
+            logger.log_msg(f"{self.agent.role} found no gold within range to mine.", level=logging.WARNING)
         return TaskState.FAILURE
+
 
 
 
@@ -712,7 +759,7 @@ class AgentBehaviour:
 #   | _|| | | '  \| | ' \/ _` |  _/ -_)   | | | ' \| '_/ -_) _` |  _|
 #   |___|_|_|_|_|_|_|_||_\__,_|\__\___|   |_| |_||_|_| \___\__,_|\__|
 #                                                                    
-
+    #Attack logic for peacekeepers
 
 
     def eliminate_threat(self, agents):
@@ -735,15 +782,14 @@ class AgentBehaviour:
         assigned_id = threat.get("id", None)
 
         #Step 1: Try to attack the assigned threat if within combat range
-        if self.agent.is_near(assigned_position, threshold=Agent_Interact_Range):
+        if self.agent.is_near(assigned_position, threshold=Agent_Interact_Range*CELL_SIZE):
             target_agent = next((a for a in agents if a.agent_id == assigned_id), None)
             if target_agent and target_agent.faction.id != self.agent.faction.id:
                 self.event_manager.trigger_attack_animation(position=(target_agent.x, target_agent.y), duration=200)
                 target_agent.Health -= 10
-                if ENABLE_LOGGING: logger.log_msg(
-                    f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",
-                    level=logging.INFO
-                )
+                if ENABLE_LOGGING: 
+                    logger.log_msg(f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",level=logging.INFO)
+                    print(f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.")
                 if target_agent.Health <= 0:
                     self.report_threat_eliminated(threat)
                     return TaskState.SUCCESS
@@ -754,7 +800,7 @@ class AgentBehaviour:
             for enemy in agents:
                 if (
                     enemy.faction.id != self.agent.faction.id and
-                    self.agent.is_near((enemy.x, enemy.y), threshold=Agent_Interact_Range)
+                    self.agent.is_near((enemy.x, enemy.y), threshold=Agent_Interact_Range*CELL_SIZE)
                 ):
                     self.event_manager.trigger_attack_animation(position=(enemy.x, enemy.y), duration=200)
                     enemy.Health -= 10

@@ -47,7 +47,7 @@ ENABLE_TENSORBOARD = False
 #More training equals better results... probably.
 
 EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 2000 #How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 1000 #How many steps to take per episode/ How long should a game last
 
 #Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
 
@@ -334,15 +334,18 @@ State features mapping structure for the agent.
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
 Agent_field_of_view = 10 # Agent field of view # Customise as needed!
-Agent_Interact_Range = 1 # Agent attack range, Anything less will get hit # Customise as needed!
+Agent_Interact_Range = 3 # Agent interact range, Anything inside will be interactable
 
 
 ## File paths for agent images
 Peacekeeper_PNG = 'images\peacekeeper.png' #Path to peacekeeper image
 Gatherer_PNG = 'images\gatherer.png' #Path to gatherer image
 
+Gold_Cost_for_Agent = 10 # Gold cost for an agent
 
-DEF_AGENT_STATE_SIZE = 7 + len(TASK_TYPE_MAPPING) # Agent state size 
+
+DEF_AGENT_STATE_SIZE = 10 + len(TASK_TYPE_MAPPING)
+
 """
 WARNING: DO NOT MODIFY THE STATE SIZE! 
 Controls the information that is sent to/used by the agent model.

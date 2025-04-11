@@ -328,7 +328,30 @@ class BaseAgent:
             if state is None:
                 raise RuntimeError(f"[CRITICAL] Agent {self.agent_id} received a None state from get_state")
 
-            if ENABLE_LOGGING: logger.log_msg(f"{self.role} state retrieved: {state}", level=logging.DEBUG)
+            if ENABLE_LOGGING:
+                # Split state for readability
+                core = state[:7]  # position, health, nearest threat/resource
+                task_one_hot = state[7:7+len(TASK_TYPE_MAPPING)]
+                task_info = state[7+len(TASK_TYPE_MAPPING):]  # e.g., target_x, target_y, current_action_norm
+
+                # Map task type index back to name (if any bit is 1)
+                try:
+                    task_type_index = task_one_hot.index(1)
+                    task_type_name = list(TASK_TYPE_MAPPING.keys())[task_type_index]
+                except ValueError:
+                    task_type_name = "none"
+
+                logger.log_msg(
+                    f"\n[STATE DEBUG] Agent {self.agent_id} ({self.role}) State:\n"
+                    f" - Position: ({core[0]*WORLD_WIDTH:.1f}, {core[1]*WORLD_HEIGHT:.1f})\n"
+                    f" - Health: {core[2]*100:.0f}\n"
+                    f" - Nearest Threat: ({core[3]*WORLD_WIDTH:.1f}, {core[4]*WORLD_HEIGHT:.1f})\n"
+                    f" - Nearest Resource: ({core[5]*WORLD_WIDTH:.1f}, {core[6]*WORLD_HEIGHT:.1f})\n"
+                    f" - Task Type: {task_type_name}\n"
+                    f" - Task Target: ({task_info[0]*WORLD_WIDTH:.1f}, {task_info[1]*WORLD_HEIGHT:.1f})\n"
+                    f" - Current Action Index: {int(task_info[2]*len(self.role_actions)) if task_info[2] >= 0 else 'None'}\n",
+                    level=logging.DEBUG
+                )
 
             # Execute the current task or decide on a new action
             reward, task_state = self.perform_task(state, resource_manager, agents)
@@ -557,47 +580,51 @@ class BaseAgent:
 #    |___/                                           |___/                                       
 
     def get_state(self, resource_manager, agents, faction, hq_state=None):
-        """
-        Generate the agent's state representation based on local perception and HQ state.
-        Optimized to reduce redundant `is_within_detection_range` calls.
-        """
         if hq_state is None:
             raise ValueError(f"[ERROR] hq_state is None for agent {self.role} in faction {self.faction.id}!")
 
-        #  Convert threats/resources into (x, y) tuples for vectorized processing
-        threats_positions = [threat["location"] for threat in hq_state["threats"]]
-        resources_positions = [(res["location"][0], res["location"][1]) for res in hq_state["resources"]]
+        # ✅ Use actual agent perception functions
+        perceived_threats = self.detect_threats(agents, hq_state)
+        perceived_resources = self.detect_resources(resource_manager)
 
-        #  Batch detection instead of calling `is_within_detection_range` multiple times
-        perceived_threats = [threat for threat, pos in zip(hq_state["threats"], threats_positions) if self.is_within_detection_range(pos)]
-        perceived_resources = [res for res, pos in zip(hq_state["resources"], resources_positions) if self.is_within_detection_range(pos)]
-
-        #  Nearest threat/resource calculation **only using perceived entities**
+        # 🔍 Find closest ones
         nearest_threat = find_closest_actor(perceived_threats, entity_type="threat", requester=self) if perceived_threats else None
         nearest_resource = find_closest_actor(perceived_resources, entity_type="resource", requester=self) if perceived_resources else None
 
-        #  Construct normalised state vector
+        # 🧠 Build base state vector
         core_state = [
             self.x / WORLD_WIDTH,
             self.y / WORLD_HEIGHT,
             self.Health / 100,
             nearest_threat["location"][0] / WORLD_WIDTH if nearest_threat else -1,
             nearest_threat["location"][1] / WORLD_HEIGHT if nearest_threat else -1,
-            nearest_resource["location"][0] / WORLD_WIDTH if nearest_resource else -1,
-            nearest_resource["location"][1] / WORLD_HEIGHT if nearest_resource else -1,
+            nearest_resource.x / WORLD_WIDTH if nearest_resource else -1,
+            nearest_resource.y / WORLD_HEIGHT if nearest_resource else -1,
         ]
 
-        # Append one-hot for task type or role (must match TASK_TYPE_MAPPING)
+        # ✅ Task encoding
         one_hot_task = [0] * len(TASK_TYPE_MAPPING)
-        # Optional: determine current task type and mark active bit
         if self.current_task:
-            task_type_index = TASK_TYPE_MAPPING.get(self.current_task.get("type", "none"), None)
+            task_type_index = TASK_TYPE_MAPPING.get(self.current_task.get("type", "none"))
             if task_type_index is not None:
                 one_hot_task[task_type_index] = 1
-        state = core_state + one_hot_task
 
-        if ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} state: {state}", level=logging.DEBUG)
+        # ✅ Task-specific info
+        task_target = self.current_task.get("target", {}).get("position", (-1, -1)) if self.current_task else (-1, -1)
+        task_target_x = task_target[0] / WORLD_WIDTH
+        task_target_y = task_target[1] / WORLD_HEIGHT
+        current_action_norm = self.current_action / len(self.role_actions) if getattr(self, "current_action", -1) >= 0 else -1
+
+        task_info = [task_target_x, task_target_y, current_action_norm]
+
+        state = core_state + one_hot_task + task_info
+
+        # 🪵 Log for debugging
+        if ENABLE_LOGGING:
+            logger.log_msg(f"[STATE DEBUG] Agent {self.agent_id} ({self.role}) state generated. Core={core_state}, Task={one_hot_task}, Target={task_info}", level=logging.DEBUG)
+
         return state
+
 
 
 
