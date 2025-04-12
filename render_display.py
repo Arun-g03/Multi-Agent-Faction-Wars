@@ -585,16 +585,13 @@ DARK_GREY = (50, 50, 50)
 #   | |  | |/ ___ \ | || |\  | | |  | | |___| |\  | |_| |
 #   |_|  |_/_/   \_\___|_| \_| |_|  |_|_____|_| \_|\___/ 
 #                                                        
-check_icon = pygame.font.SysFont(None, 40).render('✔', True, GREEN)
-cross_icon = pygame.font.SysFont(None, 40).render('❌', True, RED)
-
 
 
 class MenuRenderer:
     def __init__(self, screen):
         self.screen = screen
         self.font = pygame.font.SysFont(FONT_NAME, 24)
-        self.selected_mode = None  #  Store mode persistently
+        self.selected_mode = None
         print("MenuRenderer initialised")
 
     def draw_text(self, surface, text, font, size, colour, x, y):
@@ -605,7 +602,6 @@ class MenuRenderer:
 
     def create_button(self, surface, text, font, size, colour, hover_colour, click_colour, x, y, width, height, state='normal', icon=None):
         button_rect = pygame.Rect(x, y, width, height)
-
         if button_rect.collidepoint(pygame.mouse.get_pos()):
             if state == 'normal':
                 pygame.draw.rect(surface, hover_colour, button_rect)
@@ -625,34 +621,47 @@ class MenuRenderer:
         return button_rect
 
     def render_menu(self, ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode, start_game_callback):
-        import utils_config
         self.screen.fill(BLACK)
         SCREEN_WIDTH = utils_config.SCREEN_WIDTH
+        SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
+
+        button_width = 250
+        button_height = 60
+        button_font_size = 22
+        button_spacing = 20
+
+        center_x = SCREEN_WIDTH // 2 - button_width // 2
+        base_y = 250
+
+        self.draw_text(self.screen, "Choose Mode", FONT_NAME, 28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
 
         check_icon = pygame.font.SysFont(FONT_NAME, 40).render('✔', True, GREEN)
         cross_icon = pygame.font.SysFont(FONT_NAME, 40).render('❌', True, RED)
 
+        half_width = button_width // 2 + 10
+
         train_button_rect = self.create_button(
-            self.screen, "Training", FONT_NAME, 20, GREEN, (0, 255, 0), (0, 200, 0),
-            SCREEN_WIDTH // 4, 330, 150, 50
+            self.screen, "Training", FONT_NAME, button_font_size, GREEN, (0, 200, 0), (0, 100, 0),
+            SCREEN_WIDTH // 2 - half_width - 150, base_y, button_width, button_height
         )
         evaluate_button_rect = self.create_button(
-            self.screen, "Evaluation", FONT_NAME, 20, BLUE, (0, 0, 255), (0, 0, 200),
-            SCREEN_WIDTH // 2, 330, 150, 50
+            self.screen, "Evaluation", FONT_NAME, button_font_size, BLUE, (0, 0, 255), (0, 0, 200),
+            SCREEN_WIDTH // 2 + 50, base_y, button_width, button_height
         )
-
-       
         start_button_rect = self.create_button(
-            self.screen, "Start Simulation", FONT_NAME, 25, BLUE if self.selected_mode else GREY, 
-            (50, 100, 255) if self.selected_mode else (100, 100, 100), 
+            self.screen, "Start Simulation", FONT_NAME, button_font_size, BLUE if self.selected_mode else GREY,
+            (50, 100, 255) if self.selected_mode else (100, 100, 100),
             (30, 70, 200) if self.selected_mode else (70, 70, 70),
-            SCREEN_WIDTH // 3, 600, 200, 60
+            center_x, base_y + (button_height + button_spacing) * 2, button_width, button_height
+        )
+        settings_button_rect = self.create_button(
+            self.screen, "Settings", FONT_NAME, button_font_size, GREY, (180, 180, 180), (100, 100, 100),
+            center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
         )
 
-        # Settings Button
-        settings_button_rect = self.create_button(
-            self.screen, "Settings", FONT_NAME, 20, (150, 150, 150), (180, 180, 180), (100, 100, 100),
-            SCREEN_WIDTH // 3, 500, 200, 50
+        exit_button_rect = self.create_button(
+            self.screen, "Exit", FONT_NAME, button_font_size, RED, (255, 0, 0), (200, 0, 0),
+            center_x, base_y + (button_height + button_spacing) * 4, button_width, button_height
         )
 
         for event in pygame.event.get():
@@ -681,19 +690,18 @@ class MenuRenderer:
 
                     if settings_menu.saved:
                         updated = settings_menu.get_settings()
-
-                        # ✅ Apply to utils_config module
-                        import utils_config
                         for key, value in updated.items():
                             if hasattr(utils_config, key):
                                 setattr(utils_config, key, value)
-
                         print("[INFO] Updated settings:", updated)
+
+                elif exit_button_rect.collidepoint(event.pos):
+                    print("[INFO] Exiting game...")
+                    pygame.quit()
+                    sys.exit()
+
         pygame.display.flip()
         return True
-
-
-
 
 
 class SettingsMenu:
