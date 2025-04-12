@@ -1,13 +1,5 @@
 import pygame
-from utils_config import (SCREEN_WIDTH, 
-                          SCREEN_HEIGHT, 
-                          SCALING_FACTOR, 
-                          Tree_Scale_Img, 
-                          GoldLump_Scale_Img, 
-                          CELL_SIZE, 
-                          Agent_field_of_view, 
-                          Agent_Interact_Range,
-                          ENABLE_LOGGING)
+import utils_config
 from env_resources import AppleTree, GoldLump
 import sys
 import traceback
@@ -79,11 +71,11 @@ class GameRenderer:
 
                 # Calculate the size of the resource for collision detection
                 if isinstance(resource, AppleTree):
-                    final_size = int(CELL_SIZE * SCALING_FACTOR * camera.zoom * Tree_Scale_Img)
+                    final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR * camera.zoom * utils_config.Tree_Scale_Img)
                 elif isinstance(resource, GoldLump):
-                    final_size = int(CELL_SIZE * SCALING_FACTOR * camera.zoom * GoldLump_Scale_Img)
+                    final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR * camera.zoom * utils_config.GoldLump_Scale_Img)
                 else:
-                    final_size = CELL_SIZE  # Fallback for unknown resources
+                    final_size = utils_config.CELL_SIZE  # Fallback for unknown resources
 
                 # Create a rectangle for resource collision detection
                 resource_rect = pygame.Rect(
@@ -117,8 +109,8 @@ class GameRenderer:
                 world_mouse_y = (mouse_y / camera.zoom) + camera.y
 
                 # Convert world coordinates to grid coordinates
-                mouse_grid_x = int(world_mouse_x // CELL_SIZE)
-                mouse_grid_y = int(world_mouse_y // CELL_SIZE)
+                mouse_grid_x = int(world_mouse_x // utils_config.CELL_SIZE)
+                mouse_grid_y = int(world_mouse_y // utils_config.CELL_SIZE)
 
                 # Create the tooltip text for the world-relative cell and screen position
                 cell_tooltip_text = (
@@ -190,17 +182,17 @@ class GameRenderer:
                         
                     # Highlight resources
                     for resource in faction.global_state["resources"]:
-                        resource_screen_x = (resource["location"][0] * CELL_SIZE - camera.x) * camera.zoom
-                        resource_screen_y = (resource["location"][1] * CELL_SIZE - camera.y) * camera.zoom
+                        resource_screen_x = (resource["location"][0] * utils_config.CELL_SIZE - camera.x) * camera.zoom
+                        resource_screen_y = (resource["location"][1] * utils_config.CELL_SIZE - camera.y) * camera.zoom
 
                         pygame.draw.rect(
                             self.screen,
                             (0, 255, 0),  # Green colour for highlighting resources
                             pygame.Rect(
-                                resource_screen_x - CELL_SIZE * camera.zoom // 2,
-                                resource_screen_y - CELL_SIZE * camera.zoom // 2,
-                                CELL_SIZE * camera.zoom,
-                                CELL_SIZE * camera.zoom
+                                resource_screen_x - utils_config.CELL_SIZE * camera.zoom // 2,
+                                resource_screen_y - utils_config.CELL_SIZE * camera.zoom // 2,
+                                utils_config.CELL_SIZE * camera.zoom,
+                                utils_config.CELL_SIZE * camera.zoom
                             ),
                             width=2
                         )
@@ -218,7 +210,7 @@ class GameRenderer:
                             threat_screen_y = (threat_y - camera.y) * camera.zoom
 
                             # Draw the threat box
-                            box_size = CELL_SIZE * camera.zoom
+                            box_size = utils_config.CELL_SIZE * camera.zoom
                             pygame.draw.rect(
                                 self.screen,
                                 (255, 0, 0),  # Red colour for threats
@@ -343,10 +335,10 @@ class GameRenderer:
 
                     
                     #Field of View
-                    pygame.draw.circle(self.screen, (255, 255, 0), (screen_x, screen_y), Agent_field_of_view*CELL_SIZE * camera.zoom, width=2)
+                    pygame.draw.circle(self.screen, (255, 255, 0), (screen_x, screen_y), utils_config.Agent_field_of_view*utils_config.CELL_SIZE * camera.zoom, width=2)
 
                     #Interact Range
-                    pygame.draw.circle(self.screen, (173, 216, 230), (screen_x, screen_y), Agent_Interact_Range*CELL_SIZE * camera.zoom, width=2)
+                    pygame.draw.circle(self.screen, (173, 216, 230), (screen_x, screen_y), utils_config.Agent_Interact_Range*utils_config.CELL_SIZE * camera.zoom, width=2)
 
                     # 🎯 Highlight task target
                     if isinstance(agent.current_task, dict):
@@ -354,7 +346,7 @@ class GameRenderer:
                         target = agent.current_task.get("target")
 
                         if target:
-                            if ENABLE_LOGGING: logger.log_msg(
+                            if utils_config.ENABLE_LOGGING: logger.log_msg(
                                 f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
                                 level=logging.DEBUG
                             )
@@ -370,16 +362,16 @@ class GameRenderer:
                                 if target_agent:
                                     target_x, target_y = target_agent.x, target_agent.y
                                 else:
-                                    if ENABLE_LOGGING: logger.log_msg(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
+                                    if utils_config.ENABLE_LOGGING: logger.log_msg(f"[WARN] Target agent {target_id} not found.", level=logging.WARNING)
 
                             elif target_position:
                                 target_x, target_y = target_position
-                                target_x *= CELL_SIZE
-                                target_y *= CELL_SIZE
+                                target_x *= utils_config.CELL_SIZE
+                                target_y *= utils_config.CELL_SIZE
 
                             if target_x is not None and target_y is not None:
                                 target_screen_x, target_screen_y = camera.apply((target_x, target_y))
-                                if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
+                                if utils_config.ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Target Screen Coordinates: ({target_screen_x}, {target_screen_y})", level=logging.DEBUG)
 
                                 if task_type == "eliminate":
                                     box_colour = (255, 0, 0)
@@ -389,16 +381,16 @@ class GameRenderer:
                                     box_colour = (255, 255, 0)
 
                                 box_rect = pygame.Rect(
-                                    target_screen_x - (CELL_SIZE * camera.zoom) // 2,
-                                    target_screen_y - (CELL_SIZE * camera.zoom) // 2,
-                                    CELL_SIZE * camera.zoom,
-                                    CELL_SIZE * camera.zoom
+                                    target_screen_x - (utils_config.CELL_SIZE * camera.zoom) // 2,
+                                    target_screen_y - (utils_config.CELL_SIZE * camera.zoom) // 2,
+                                    utils_config.CELL_SIZE * camera.zoom,
+                                    utils_config.CELL_SIZE * camera.zoom
                                 )
 
-                                if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
+                                if utils_config.ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Drawing Box: {box_rect}", level=logging.DEBUG)
                                 pygame.draw.rect(self.screen, box_colour, box_rect, width=2)
                             else:
-                                if ENABLE_LOGGING: logger.log_msg(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
+                                if utils_config.ENABLE_LOGGING: logger.log_msg(f"[ERROR] No valid target coordinates for Agent {agent.agent_id}", level=logging.ERROR)
 
                     # 📝 Tooltip Info
                     if isinstance(agent.current_task, dict):
@@ -570,12 +562,13 @@ AUTOMATIC_TB_TEXT = "Automatically open TensorBoard after simulation?"
 # Define some colours
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-GREY = (50, 50, 50)  # Dark grey background for buttons
 BLUE = (50, 100, 255)
 GREEN = (50, 255, 50)
 RED = (255, 50, 50)
-
+GREY = (100, 100, 100)
+DARK_GREY = (50, 50, 50)
 # Define icons
+
 
 
 
@@ -595,6 +588,8 @@ RED = (255, 50, 50)
 check_icon = pygame.font.SysFont(None, 40).render('✔', True, GREEN)
 cross_icon = pygame.font.SysFont(None, 40).render('❌', True, RED)
 
+
+
 class MenuRenderer:
     def __init__(self, screen):
         self.screen = screen
@@ -603,46 +598,40 @@ class MenuRenderer:
         print("MenuRenderer initialised")
 
     def draw_text(self, surface, text, font, size, colour, x, y):
-        """Helper function to draw text on the screen"""
         font_obj = pygame.font.SysFont(font, size)
         text_surface = font_obj.render(text, True, colour)
         text_rect = text_surface.get_rect(center=(x, y))
         surface.blit(text_surface, text_rect)
 
     def create_button(self, surface, text, font, size, colour, hover_colour, click_colour, x, y, width, height, state='normal', icon=None):
-        """Helper function to create buttons with hover and click feedback, and an icon (check or cross)"""
         button_rect = pygame.Rect(x, y, width, height)
 
-        # Check for mouse hover
         if button_rect.collidepoint(pygame.mouse.get_pos()):
             if state == 'normal':
-                pygame.draw.rect(surface, hover_colour, button_rect)  # Hover state
+                pygame.draw.rect(surface, hover_colour, button_rect)
             elif state == 'clicked':
-                pygame.draw.rect(surface, click_colour, button_rect)  # Clicked state
+                pygame.draw.rect(surface, click_colour, button_rect)
         else:
-            pygame.draw.rect(surface, colour, button_rect)  # Normal state
+            pygame.draw.rect(surface, colour, button_rect)
 
-        # Draw the main text
         self.draw_text(surface, text, font, size, WHITE, x + width / 2, y + height / 2)
 
-        # If there's an icon, display it with padding
         if icon:
-            icon_size = 40  # Increase icon size
-            icon_x = x + width - icon_size - 10  # Add padding on the right
-            icon_y = y + (height // 2) - (icon_size // 2)  # Centre the icon vertically
+            icon_size = 40
+            icon_x = x + width - icon_size - 10
+            icon_y = y + (height // 2) - (icon_size // 2)
             surface.blit(icon, (icon_x, icon_y))
 
         return button_rect
 
     def render_menu(self, ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode, start_game_callback):
-        """Renders the menu and handles button states."""
-        self.screen.fill(BLACK)  # Set the background to black
+        import utils_config
+        self.screen.fill(BLACK)
+        SCREEN_WIDTH = utils_config.SCREEN_WIDTH
 
-        # Initialise icons for buttons
         check_icon = pygame.font.SysFont(FONT_NAME, 40).render('✔', True, GREEN)
         cross_icon = pygame.font.SysFont(FONT_NAME, 40).render('❌', True, RED)
 
-        # Training vs Evaluation Mode
         train_button_rect = self.create_button(
             self.screen, "Training", FONT_NAME, 20, GREEN, (0, 255, 0), (0, 200, 0),
             SCREEN_WIDTH // 4, 330, 150, 50
@@ -651,16 +640,21 @@ class MenuRenderer:
             self.screen, "Evaluation", FONT_NAME, 20, BLUE, (0, 0, 255), (0, 0, 200),
             SCREEN_WIDTH // 2, 330, 150, 50
         )
-        GRAY = (100, 100, 100)  # Light grey
-        # Start Simulation Button (Disabled if no mode selected)
+
+       
         start_button_rect = self.create_button(
-            self.screen, "Start Simulation", FONT_NAME, 25, BLUE if self.selected_mode else GRAY, 
+            self.screen, "Start Simulation", FONT_NAME, 25, BLUE if self.selected_mode else GREY, 
             (50, 100, 255) if self.selected_mode else (100, 100, 100), 
             (30, 70, 200) if self.selected_mode else (70, 70, 70),
             SCREEN_WIDTH // 3, 600, 200, 60
         )
 
-        # Handle events
+        # Settings Button
+        settings_button_rect = self.create_button(
+            self.screen, "Settings", FONT_NAME, 20, (150, 150, 150), (180, 180, 180), (100, 100, 100),
+            SCREEN_WIDTH // 3, 500, 200, 50
+        )
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -668,18 +662,226 @@ class MenuRenderer:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if train_button_rect.collidepoint(event.pos):
-                    self.selected_mode = 'train'  #  Store mode 
+                    self.selected_mode = 'train'
                     print("[INFO] Training mode selected.")
 
                 elif evaluate_button_rect.collidepoint(event.pos):
-                    self.selected_mode = 'evaluate'  #  Store mode 
+                    self.selected_mode = 'evaluate'
                     print("[INFO] Evaluation mode selected.")
 
                 elif start_button_rect.collidepoint(event.pos) and self.selected_mode:
                     print("[INFO] Starting game in mode:", self.selected_mode)
-                    start_game_callback(self.selected_mode, ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD)
-                    return False  #  Exit menu and start game
+                    start_game_callback(self.selected_mode, utils_config.ENABLE_TENSORBOARD, utils_config.ENABLE_TENSORBOARD)
+                    return False
 
-        # Update the display
+                elif settings_button_rect.collidepoint(event.pos):
+                    settings_menu = SettingsMenu(self.screen)
+                    while settings_menu.render():
+                        pass
+
+                    if settings_menu.saved:
+                        updated = settings_menu.get_settings()
+
+                        # ✅ Apply to utils_config module
+                        import utils_config
+                        for key, value in updated.items():
+                            if hasattr(utils_config, key):
+                                setattr(utils_config, key, value)
+
+                        print("[INFO] Updated settings:", updated)
         pygame.display.flip()
-        return True  #  Stay in the menu until "Start Simulation" is clicked
+        return True
+
+
+
+
+
+class SettingsMenu:
+    def __init__(self, screen):
+        self.screen = screen
+        self.font = pygame.font.SysFont(FONT_NAME, 24)
+        self.selected_category = "debugging"
+        self.saved = False
+
+        # Define category labels
+        self.sidebar_items = [
+            "debugging", "episode settings", "screen",
+            "world", "resources", "agent", "faction"
+        ]
+
+        # Store config state and original defaults
+        self.settings_by_category = {}
+        self.defaults = {}
+
+        raw_settings = {
+            "debugging": [
+                ("TensorBoard", "ENABLE_TENSORBOARD"),
+                ("Logging", "ENABLE_LOGGING"),
+                ("Profiling", "ENABLE_PROFILE_BOOL"),
+                
+            ],
+            "episode settings": [
+                ("Episodes", "EPISODES_LIMIT", 5),
+                ("Steps per Episode", "STEPS_PER_EPISODE", 100),
+            ],
+            "screen": [
+                ("FPS", "FPS", 5),
+                ("Width", "SCREEN_WIDTH", 50),
+                ("Height", "SCREEN_HEIGHT", 50),
+                ("Cell Size", "CELL_SIZE", 1),
+            ],
+            "world": [
+                ("World Width", "WORLD_WIDTH", 50),
+                ("World Height", "WORLD_HEIGHT", 50),
+                ("Terrain Seed", "Terrain_Seed", 1),
+                ("Noise Scale", "NOISE_SCALE", 0.1),
+                ("Octaves", "NOISE_OCTAVES", 1),
+                ("Persistence", "NOISE_PERSISTENCE", 0.1),
+                ("Lacunarity", "NOISE_LACUNARITY", 0.1),
+                ("Water Coverage", "WATER_COVERAGE", 0.01),
+            ],
+            "resources": [
+                ("Tree Density", "TREE_DENSITY", 0.01),
+                ("Apple Regen Time", "APPLE_REGEN_TIME", 1),
+                ("Gold Zone Probability", "GOLD_ZONE_PROBABILITY", 0.01),
+                ("Gold Spawn Density", "GOLD_SPAWN_DENSITY", 0.01),
+            ],
+            "agent": [
+                ("Field of View", "Agent_field_of_view", 1),
+                ("Interact Range", "Agent_Interact_Range", 1),
+                ("Gold Cost for Agent", "Gold_Cost_for_Agent", 1),
+            ],
+            "faction": [
+                ("Spawn Radius", "HQ_SPAWN_RADIUS", 5),
+                ("Agent Spawn Radius", "HQ_Agent_Spawn_Radius", 2),
+                ("Faction Count", "FACTON_COUNT", 1),
+                ("Initial Gatherers", "INITAL_GATHERER_COUNT", 1),
+                ("Initial Peacekeepers", "INITAL_PEACEKEEPER_COUNT", 1),
+            ]
+        }
+
+        for category, fields in raw_settings.items():
+            self.settings_by_category[category] = []
+            for item in fields:
+                label, key = item[:2]
+                value = getattr(utils_config, key)
+                self.defaults[key] = value
+                setting = {"label": label, "key": key, "value": value}
+                if len(item) == 3:
+                    setting["step"] = item[2]
+                else:
+                    setting["options"] = [True, False]
+                self.settings_by_category[category].append(setting)
+
+        self.check_icon = pygame.font.SysFont(FONT_NAME, 40).render('✔', True, GREEN)
+        self.cross_icon = pygame.font.SysFont(FONT_NAME, 40).render('❌', True, RED)
+
+    def draw_text(self, text, size, colour, x, y):
+        font_obj = pygame.font.SysFont(FONT_NAME, size)
+        text_surface = font_obj.render(text, True, colour)
+        text_rect = text_surface.get_rect(topleft=(x, y))
+        self.screen.blit(text_surface, text_rect)
+
+    def create_button(self, text, font, size, colour, hover_colour, click_colour, x, y, width, height, icon=None):
+        button_rect = pygame.Rect(x, y, width, height)
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_pressed = pygame.mouse.get_pressed()[0]
+
+        if button_rect.collidepoint(mouse_pos):
+            pygame.draw.rect(self.screen, click_colour if mouse_pressed else hover_colour, button_rect)
+        else:
+            pygame.draw.rect(self.screen, colour, button_rect)
+
+        self.draw_text(text, size, WHITE, x + 10, y + 10)
+
+        if icon:
+            icon_size = 40
+            icon_x = x + width - icon_size - 10
+            icon_y = y + (height // 2) - (icon_size // 2)
+            self.screen.blit(icon, (icon_x, icon_y))
+
+        return button_rect
+
+    def render(self):
+        self.screen.fill(BLACK)
+
+        for idx, label in enumerate(self.sidebar_items):
+            y = 80 + idx * 60
+            selected = (label == self.selected_category)
+            color = GREY if selected else DARK_GREY
+            btn = self.create_button(label.upper(), FONT_NAME, 20, color, (120,120,120), (180,180,180), 20, y, 200, 40)
+            if pygame.mouse.get_pressed()[0] and btn.collidepoint(pygame.mouse.get_pos()):
+                self.selected_category = label
+
+        settings = self.settings_by_category.get(self.selected_category, [])
+        step_buttons = []
+        for i, setting in enumerate(settings):
+            y = 80 + i * 60
+            label = setting["label"]
+            val = setting["value"]
+            self.draw_text(f"{label}:", 20, WHITE, 250, y)
+            self.draw_text(str(val), 20, GREEN if val else RED, 600, y)
+
+            if "options" in setting:
+                toggle_btn = pygame.Rect(700, y, 40, 30)
+                pygame.draw.rect(self.screen, DARK_GREY, toggle_btn)
+                icon = self.check_icon if setting["value"] else self.cross_icon
+                self.screen.blit(icon, (toggle_btn.x + 4, toggle_btn.y + 2))
+                step_buttons.append(("toggle", toggle_btn, setting))
+
+            elif "step" in setting:
+                minus_btn = pygame.Rect(700, y, 30, 30)
+                plus_btn = pygame.Rect(740, y, 30, 30)
+                default_btn = pygame.Rect(780, y, 80, 30)
+                pygame.draw.rect(self.screen, RED, minus_btn)
+                pygame.draw.rect(self.screen, GREEN, plus_btn)
+                pygame.draw.rect(self.screen, GREY, default_btn)
+                self.draw_text("-", 20, WHITE, minus_btn.x + 10, minus_btn.y + 5)
+                self.draw_text("+", 20, WHITE, plus_btn.x + 10, plus_btn.y + 5)
+                self.draw_text("Reset", 18, WHITE, default_btn.x + 10, default_btn.y + 5)
+                step_buttons.append(("minus", minus_btn, setting))
+                step_buttons.append(("plus", plus_btn, setting))
+                step_buttons.append(("reset", default_btn, setting))
+
+        back_btn = self.create_button("Back", FONT_NAME, 20, GREY, (180, 180, 180), (120, 120, 120), 250, 500, 150, 50)
+        save_return_btn = self.create_button("Save and Return", FONT_NAME, 20, BLUE, (80, 80, 255), (50, 50, 200), 450, 500, 250, 50)
+        reset_all_btn = self.create_button("Reset All", FONT_NAME, 20, GREY, (180, 180, 180), (120, 120, 120), 20, 500, 200, 50)
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if back_btn.collidepoint(event.pos):
+                    return False
+                if save_return_btn.collidepoint(event.pos):
+                    self.saved = True
+                    return False
+                if reset_all_btn.collidepoint(event.pos):
+                    for settings in self.settings_by_category.values():
+                        for setting in settings:
+                            setting["value"] = self.defaults.get(setting["key"], setting["value"])
+                for action, rect, setting in step_buttons:
+                    if rect.collidepoint(event.pos):
+                        if action == "toggle":
+                            options = setting["options"]
+                            current_index = options.index(setting["value"])
+                            setting["value"] = options[(current_index + 1) % len(options)]
+                        elif action == "minus":
+                            setting["value"] = round(setting["value"] - setting["step"], 3)
+                        elif action == "plus":
+                            setting["value"] = round(setting["value"] + setting["step"], 3)
+                        elif action == "reset":
+                            default_val = self.defaults.get(setting["key"], setting["value"])
+                            setting["value"] = default_val
+
+        return True
+
+    def get_settings(self):
+        settings = {}
+        for cat in self.settings_by_category.values():
+            for setting in cat:
+                settings[setting["key"]] = setting["value"]
+        return settings

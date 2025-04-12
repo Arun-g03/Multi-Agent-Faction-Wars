@@ -1,19 +1,7 @@
 import pygame
 import random
 import time
-from utils_config import (
-    CELL_SIZE, 
-    GOLD_IMAGE_PATH, 
-    TREE_IMAGE_PATH, 
-    TREE_DENSITY, 
-    GOLD_ZONE_PROBABILITY, 
-    GOLD_SPAWN_DENSITY, 
-    SCALING_FACTOR, 
-    SCREEN_HEIGHT, 
-    GoldLump_Scale_Img, 
-    Tree_Scale_Img,
-    APPLE_REGEN_TIME,
-    ENABLE_TENSORBOARD)
+import utils_config
 
 from utils_logger import TensorBoardLogger
 
@@ -56,9 +44,9 @@ class ResourceManager:
         self.gold_count = 0
 
         # Use default density/probability if not provided (for startup)
-        tree_density = tree_density if tree_density is not None else TREE_DENSITY
-        gold_zone_probability = gold_zone_probability if gold_zone_probability is not None else GOLD_ZONE_PROBABILITY
-        gold_spawn_density = gold_spawn_density if gold_spawn_density is not None else GOLD_SPAWN_DENSITY
+        tree_density = tree_density if tree_density is not None else utils_config.TREE_DENSITY
+        gold_zone_probability = gold_zone_probability if gold_zone_probability is not None else utils_config.GOLD_ZONE_PROBABILITY
+        gold_spawn_density = gold_spawn_density if gold_spawn_density is not None else utils_config.GOLD_SPAWN_DENSITY
 
         # Track how many resources have been added
         added_trees = 0
@@ -81,7 +69,7 @@ class ResourceManager:
 
                     # Add specific number of trees
                     if add_trees > 0 and added_trees < add_trees:
-                        self.resources.append(AppleTree(x * CELL_SIZE, y * CELL_SIZE, x, y, self.terrain, self))
+                        self.resources.append(AppleTree(x * utils_config.CELL_SIZE, y * utils_config.CELL_SIZE, x, y, self.terrain, self))
                         cell['occupied'] = True
                         cell['resource_type'] = 'apple_tree'
                         self.apple_tree_count += 1
@@ -91,7 +79,7 @@ class ResourceManager:
                     # Add specific number of gold lumps
                     if add_gold_lumps > 0 and added_gold_lumps < add_gold_lumps:
                         gold_lump = GoldLump(
-                            x * CELL_SIZE, y * CELL_SIZE, x, y,
+                            x * utils_config.CELL_SIZE, y * utils_config.CELL_SIZE, x, y,
                             self.terrain, self
                         )
                         self.resources.append(gold_lump)
@@ -103,7 +91,7 @@ class ResourceManager:
 
                     # Use density/probability for startup
                     if add_trees == 0 and random.random() < tree_density:
-                        self.resources.append(AppleTree(x * CELL_SIZE, y * CELL_SIZE, x, y, self.terrain, self))
+                        self.resources.append(AppleTree(x * utils_config.CELL_SIZE, y * utils_config.CELL_SIZE, x, y, self.terrain, self))
                         cell['occupied'] = True
                         cell['resource_type'] = 'apple_tree'
                         self.apple_tree_count += 1
@@ -118,7 +106,7 @@ class ResourceManager:
                                     if gold_cell['type'] == 'land' and not gold_cell['occupied']:
                                         if random.random() < gold_spawn_density:
                                             gold_lump = GoldLump(
-                                                nx * CELL_SIZE, ny * CELL_SIZE, nx, ny,
+                                                nx * utils_config.CELL_SIZE, ny * utils_config.CELL_SIZE, nx, ny,
                                                 self.terrain, self
                                             )
                                             self.resources.append(gold_lump)
@@ -130,7 +118,7 @@ class ResourceManager:
 
         # Log to TensorBoard
         print (f"Generated {self.apple_tree_count} apple trees and {self.gold_count} gold lumps.")
-        if ENABLE_TENSORBOARD:
+        if utils_config.ENABLE_TENSORBOARD:
             TensorBoardLogger().log_scalar("Resources/AppleTrees_Added", self.apple_tree_count, episode)
             TensorBoardLogger().log_scalar("Resources/GoldLumps_Added", self.gold_count, episode)
 
@@ -193,7 +181,7 @@ class AppleTree:
         self.last_regen_time = time.time()  # Track last regeneration time
 
         # Load the sprite sheet
-        sprite_sheet = pygame.image.load(TREE_IMAGE_PATH).convert_alpha()
+        sprite_sheet = pygame.image.load(utils_config.TREE_IMAGE_PATH).convert_alpha()
 
         # Dimensions of the sprite sheet and individual sprites
         sprite_width = sprite_sheet.get_width() // 6  # Assuming 6 frames horizontally
@@ -208,7 +196,7 @@ class AppleTree:
     def update(self):
         """Update the tree's apple quantity based on regeneration time."""
         current_time = time.time()
-        if current_time - self.last_regen_time >= APPLE_REGEN_TIME and self.quantity < self.max_quantity:  # 10 seconds
+        if current_time - self.last_regen_time >= utils_config.APPLE_REGEN_TIME and self.quantity < self.max_quantity:  # 10 seconds
             self.quantity += 1
             self.last_regen_time = current_time
             
@@ -272,13 +260,13 @@ class AppleTree:
         screen_x = (self.x - camera.x) * camera.zoom
         screen_y = (self.y - camera.y) * camera.zoom
 
-        # Calculate the final size of the tree, incorporating Tree_Scale_Img
-        final_size = int(CELL_SIZE * SCALING_FACTOR * camera.zoom * Tree_Scale_Img)
+        # Calculate the final size of the tree, incorporating utils_config.Tree_Scale_Img
+        final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR * camera.zoom * utils_config.Tree_Scale_Img)
         tree_image_scaled = pygame.transform.scale(self.image, (final_size, final_size))
 
         # Offset the image so the bottom (stump) aligns with the cell and shift left by half its width
         offset_x = final_size // 2  # Half the width
-        offset_y = final_size - CELL_SIZE * camera.zoom  # Ensure alignment with the cell
+        offset_y = final_size - utils_config.CELL_SIZE * camera.zoom  # Ensure alignment with the cell
         screen.blit(tree_image_scaled, (screen_x - offset_x, screen_y - offset_y))
         
 
@@ -314,8 +302,8 @@ class GoldLump:
         self.resource_manager = resource_manager
 
         # Load and scale the gold image
-        self.image = pygame.image.load(GOLD_IMAGE_PATH).convert_alpha()
-        image_size = int(SCREEN_HEIGHT * 0.03)  # Scale to 3% of screen height
+        self.image = pygame.image.load(utils_config.GOLD_IMAGE_PATH).convert_alpha()
+        image_size = int(utils_config.SCREEN_HEIGHT * 0.03)  # Scale to 3% of screen height
         self.image = pygame.transform.scale(self.image, (image_size, image_size))
 
     def mine(self, credit_callback=None):
@@ -376,8 +364,8 @@ class GoldLump:
         screen_x = (self.x - camera.x) * camera.zoom
         screen_y = (self.y - camera.y) * camera.zoom
 
-        # Calculate the final size based on CELL_SIZE, SCALING_FACTOR, and camera zoom
-        final_size = int(CELL_SIZE * SCALING_FACTOR * camera.zoom * GoldLump_Scale_Img)
+        # Calculate the final size based on utils_config.CELL_SIZE, utils_config.SCALING_FACTOR, and camera zoom
+        final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR * camera.zoom * utils_config.GoldLump_Scale_Img)
         gold_image_scaled = pygame.transform.scale(self.image, (final_size, final_size))
 
         # Offset the image to center it within the grid cell
@@ -396,10 +384,10 @@ class GoldLump:
 #         raise NotImplementedError("Boulder class is not implemented yet.")
 #         self.grid_x = grid_x
 #         self.grid_y = grid_y
-#         self.x = grid_x * CELL_SIZE  # Convert grid to screen coordinates
-#         self.y = grid_y * CELL_SIZE
-#         self.width = CELL_SIZE
-#         self.height = CELL_SIZE
+#         self.x = grid_x * utils_config.CELL_SIZE  # Convert grid to screen coordinates
+#         self.y = grid_y * utils_config.CELL_SIZE
+#         self.width = utils_config.CELL_SIZE
+#         self.height = utils_config.CELL_SIZE
         
 
 #     def render(self, screen, camera):

@@ -82,6 +82,7 @@ FPS = 240  # Frames per second # Customise as needed!
 # Screen Dimensions
 
 ASPECT_RATIO = 0.6 # Customise as needed!
+"Allows to change the size of the game window without changing x,y resolution"
 
 SCREEN_WIDTH = 1920 * ASPECT_RATIO
 SCREEN_HEIGHT = 1080 * ASPECT_RATIO
@@ -435,4 +436,6 @@ def create_task(self, task_type, target, task_id=None):
         task["id"] = task_id
     
     return task
+
+
 

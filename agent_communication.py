@@ -9,7 +9,7 @@ Purpose: To facilitate communication between agents and the HQ, allowing for the
 
 import logging
 from utils_logger import Logger
-from utils_config import TaskState, ENABLE_LOGGING
+import utils_config
     
 
 
@@ -60,18 +60,18 @@ class CommunicationSystem:
             threat_id = data.get("id")
             if threat_id and not any(threat.get("id") == threat_id for threat in agent.known_threats):
                 agent.update_threat_location(data)
-                if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} added new threat with ID {threat_id}.", level=logging.INFO)
+                if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} added new threat with ID {threat_id}.", level=logging.INFO)
 
         elif message_type == "request_help":
             agent.update_help_request(data)
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} received a help request.", level=logging.INFO)
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} received a help request.", level=logging.INFO)
 
         elif message_type == "status_update":
             agent.update_status(data)
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} updated status with data: {data}.", level=logging.INFO)
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} updated status with data: {data}.", level=logging.INFO)
 
         # Log received message
-        if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} received message: {message}", level=logging.INFO)
+        if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} received message: {message}", level=logging.INFO)
     
     def agent_to_agent(self, sender, receiver, message):
         """
@@ -85,12 +85,12 @@ class CommunicationSystem:
 
         if message_type == "resource_info":
             receiver.known_resources.append(data)
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about resource at {data['location']}", 
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about resource at {data['location']}", 
                            level=logging.INFO)
             
         elif message_type == "threat_info":
             receiver.known_threats.append(data)
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about threat at {data['location']}", 
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} informed {receiver.agent_id} about threat at {data['location']}", 
                            level=logging.INFO)
             
         elif message_type == "help_request":
@@ -99,17 +99,17 @@ class CommunicationSystem:
                 "location": data["location"],
                 "type": data["request_type"]
             })
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} requested help from {receiver.agent_id} at {data['location']}", 
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} requested help from {receiver.agent_id} at {data['location']}", 
                            level=logging.INFO)
 
         # Log received message
-        if ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} sent message to {receiver.agent_id}: {message}", level=logging.INFO)
+        if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {sender.agent_id} sent message to {receiver.agent_id}: {message}", level=logging.INFO)
 
         
     def agent_to_hq(self, agent, report):
         faction = agent.faction  # Assuming agents have a reference to their faction
         faction.receive_report(report)
-        #if ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
+        #if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
 
    
         

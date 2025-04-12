@@ -7,25 +7,11 @@ Base class for agents.
 import traceback
 
 import pygame
+import utils_config
 from Agent_NeuralNetwork import PPOModel, DQNModel  # Import the network models
 from agent_behaviours import AgentBehaviour # Import behavior classes
 from agent_factions import Faction
-from utils_config import (
-        SCREEN_WIDTH, 
-        SCREEN_HEIGHT, 
-        AGENT_SCALE_FACTOR, 
-        CELL_SIZE, 
-        Agent_field_of_view, 
-        WORLD_HEIGHT, 
-        WORLD_WIDTH, 
-        TaskState,
-        AgentIDStruc,
-        create_task,
-        TASK_TYPE_MAPPING,
-        DEF_AGENT_STATE_SIZE,
-        ROLE_ACTIONS_MAP,
-        NETWORK_TYPE_MAPPING,
-        ENABLE_LOGGING )
+import utils_config
 
 from utils_helpers import (
     find_closest_actor
@@ -100,15 +86,15 @@ class BaseAgent:
                 agent_id,#Unique identifier for the agent.
                 communication_system,#Reference to the communication system object.
                 event_manager : object = None,#Placeholder for the event manager object.
-                state_size = DEF_AGENT_STATE_SIZE,
+                state_size = utils_config.DEF_AGENT_STATE_SIZE,
                 mode : str = "train",#Default mode is "train".
                 network_type : str = "PPOModel"#Default network type is PPOModel.
             ):
             """
             Initialise the agent with a specific network model (e.g., PPO, DQN, etc.).
             """
-            # Convert string network type to integer using NETWORK_TYPE_MAPPING
-            network_type_int = NETWORK_TYPE_MAPPING.get(network_type, 1)  # Default to "none" if not found
+            # Convert string network type to integer using utils_config.NETWORK_TYPE_MAPPING
+            network_type_int = utils_config.NETWORK_TYPE_MAPPING.get(network_type, 1)  # Default to "none" if not found
 
             # Agent-specific initialisation
             self.x : float = x
@@ -118,17 +104,17 @@ class BaseAgent:
             self.terrain = terrain
             self.resource_manager = resource_manager
             self.role_actions = role_actions[role]
-            self.agent_id = AgentIDStruc(faction.id, agent_id)
+            self.agent_id = utils_config.AgentIDStruc(faction.id, agent_id)
             
             # Ensure a valid state size is always used
-            self.state_size = state_size if state_size is not None else DEF_AGENT_STATE_SIZE
+            self.state_size = state_size if state_size is not None else utils_config.DEF_AGENT_STATE_SIZE
 
             self.communication_system = communication_system
             self.event_manager = event_manager
             self.mode = mode
             self.Health = 100
             self.speed = 1
-            self.local_view = Agent_field_of_view
+            self.local_view = utils_config.Agent_field_of_view
             self.update_detection_range()
 
             # Initialise the network (model) first
@@ -150,11 +136,11 @@ class BaseAgent:
             )
             
             self.current_task = None ## Initialise the current task with None
-            self.current_task_state = TaskState.NONE ## Initialise the current task state with TaskState.NONE
+            self.current_task_state = utils_config.TaskState.NONE ## Initialise the current task state with utils_config.TaskState.NONE
             
             # Initialise other components
             self.experience_buffer = []  # Temporary experience buffer (for training, works like memory)
-            self.create_task = create_task #Initiaises the structure for the task creation/handling
+            self.create_task = utils_config.create_task #Initiaises the structure for the task creation/handling
 
 
 
@@ -165,7 +151,7 @@ class BaseAgent:
         """
         Initialise the network model based on the selected network type.
         """
-        if network_type_int == NETWORK_TYPE_MAPPING["PPOModel"]:
+        if network_type_int == utils_config.NETWORK_TYPE_MAPPING["PPOModel"]:
             print(
                 "\033[93m"
                 + f"Initialising PPOModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}"
@@ -177,7 +163,7 @@ class BaseAgent:
                 action_size=action_size
             )
 
-        elif network_type_int == NETWORK_TYPE_MAPPING["DQNModel"]:
+        elif network_type_int == utils_config.NETWORK_TYPE_MAPPING["DQNModel"]:
             print(
                 "\033[93m"
                 + f"Initialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}"
@@ -196,62 +182,97 @@ class BaseAgent:
 
 
     def can_move_to(self, new_x, new_y):
-        # Calculate the grid coordinates based on position
-        grid_x = new_x // CELL_SIZE
-        grid_y = new_y // CELL_SIZE
+        try:
+            grid_x = int(new_x // utils_config.CELL_SIZE)
+            grid_y = int(new_y // utils_config.CELL_SIZE)
 
-        # Check bounds
-        if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(self.terrain.grid[0]):
-            return self.terrain.grid[grid_x][grid_y]['type'] == 'land'
-        if ENABLE_LOGGING: logger.log_msg(f"Attempted to move to invalid position: ({new_x}, {new_y})", level=logging.ERROR)
-        return False
+            if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(self.terrain.grid[0]):
+                tile = self.terrain.grid[grid_x][grid_y]
 
-    def move(self, dx, dy):
-        # Calculate new potential position
-        new_x = self.x + dx * self.speed
-        new_y = self.y + dy * self.speed
+                tile_type = None
+                if isinstance(tile, dict):
+                    tile_type = tile.get('type')
+                elif hasattr(tile, 'dtype') and 'type' in tile.dtype.names:
+                    tile_type = tile['type']
 
-        # Convert pixel coordinates to grid coordinates
-        grid_x = new_x // CELL_SIZE
-        grid_y = new_y // CELL_SIZE
+                return tile_type == 'land'
 
-        # Check if the new position is valid and on land
-        if self.can_move_to(new_x, new_y):
-            # Mark the current cell as the agent's faction territory
-            current_grid_x = self.x // CELL_SIZE
-            current_grid_y = self.y // CELL_SIZE
-            self.terrain.grid[current_grid_x][current_grid_y]['faction'] = self.faction.id
-
-            # Update the agent's position
-            self.x = new_x
-            self.y = new_y
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {self.role} moved to ({new_x}, {new_y})")
-
-            # Update position history
-            if not hasattr(self, "recent_positions"):
-                self.recent_positions = []  # Initialise history if not present
-            self.recent_positions.append((self.x, self.y))
-            if len(self.recent_positions) > 10:  # Increase history size for better detection
-                self.recent_positions.pop(0)
-
-            # Check for being stuck
-            unique_positions = len(set(self.recent_positions))
-            if unique_positions <= 2:  # Threshold for "stuck" detection (more sensitive)
-                if ENABLE_LOGGING: logger.log_msg(
-                        f"Agent {self.role} is likely stuck. "
-                        f"Recent positions: {self.recent_positions}. Penalising.",
+            else:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[WARN] Out-of-bounds grid access: ({grid_x}, {grid_y})",
                         level=logging.WARNING
                     )
-                self.Health -= 2  # Example penalty (health loss)
-                if ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id}{self.role} has been penalised for being stuck.")
-                if self.Health <= 0:
-                    print(f"Agent {self.role} has died from being stuck.")
-            # Mark the new cell as the agent's faction territory
-            grid_x = new_x // CELL_SIZE
-            grid_y = new_y // CELL_SIZE
-            self.terrain.grid[grid_x][grid_y]['faction'] = self.faction.id
-        else:
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {self.role} attempted invalid move to ({new_x}, {new_y}).", level=logging.ERROR)
+                return False
+
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[ERROR] Exception in can_move_to({new_x}, {new_y}): {repr(e)}",
+                    level=logging.ERROR
+                )
+            return False
+
+
+
+
+            
+
+    def move(self, dx, dy):
+        try:
+            # Calculate new potential position
+            new_x = self.x + dx * self.speed
+            new_y = self.y + dy * self.speed
+
+            # Convert pixel coordinates to grid coordinates
+            grid_x = int(new_x // utils_config.CELL_SIZE)
+            grid_y = int(new_y // utils_config.CELL_SIZE)
+            current_grid_x = int(self.x // utils_config.CELL_SIZE)
+            current_grid_y = int(self.y // utils_config.CELL_SIZE)
+
+            # Check if the new position is valid and on land
+            if self.can_move_to(new_x, new_y):
+                # Mark the current cell as faction territory (with bounds check)
+                if 0 <= current_grid_x < len(self.terrain.grid) and 0 <= current_grid_y < len(self.terrain.grid[0]):
+                    self.terrain.grid[current_grid_x][current_grid_y]['faction'] = self.faction.id
+
+                # Update agent position
+                self.x = new_x
+                self.y = new_y
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(f"Agent {self.agent_id} ({self.role}) moved to ({new_x}, {new_y})")
+
+                # Update position history
+                self.recent_positions = getattr(self, "recent_positions", [])
+                self.recent_positions.append((self.x, self.y))
+                if len(self.recent_positions) > 10:
+                    self.recent_positions.pop(0)
+
+                # Check if stuck
+                if len(set(self.recent_positions)) <= 2:
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"Agent {self.agent_id} ({self.role}) is likely stuck. "
+                            f"Recent positions: {self.recent_positions}. Penalising.",
+                            level=logging.WARNING
+                        )
+                    self.Health -= 2
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(f"Agent {self.agent_id} ({self.role}) has been penalised for being stuck.")
+                    if self.Health <= 0:
+                        print(f"Agent {self.agent_id} ({self.role}) has died from being stuck.")
+
+                # Mark new cell as faction territory (with bounds check)
+                if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(self.terrain.grid[0]):
+                    self.terrain.grid[grid_x][grid_y]['faction'] = self.faction.id
+            else:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(f"Agent {self.agent_id} ({self.role}) attempted invalid move to ({new_x}, {new_y}).", level=logging.ERROR)
+
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[ERROR] Exception during move(): {repr(e)}", level=logging.ERROR)
+
 
 
 
@@ -301,10 +322,10 @@ class BaseAgent:
     def update_task_state(self, task_state):
         """
         Update the current task state for the agent.
-        :param task_state: The new state of the current task (TaskState).
+        :param task_state: The new state of the current task (utils_config.TaskState).
         """
         self.current_task_state = task_state
-        if ENABLE_LOGGING: logger.log_msg(f"{self.role} task state updated to {task_state}.", level=logging.DEBUG)
+        if utils_config.ENABLE_LOGGING: logger.log_msg(f"{self.role} task state updated to {task_state}.", level=logging.DEBUG)
 
     
     def update(self, resource_manager, agents, hq_state):
@@ -318,7 +339,7 @@ class BaseAgent:
         self._perception_cache = None
         try:
             # Log the current task before performing it
-            if ENABLE_LOGGING: logger.log_msg(
+            if utils_config.ENABLE_LOGGING: logger.log_msg(
                     f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
                     level=logging.DEBUG
                 )
@@ -328,27 +349,27 @@ class BaseAgent:
             if state is None:
                 raise RuntimeError(f"[CRITICAL] Agent {self.agent_id} received a None state from get_state")
 
-            if ENABLE_LOGGING:
+            if utils_config.ENABLE_LOGGING:
                 # Split state for readability
                 core = state[:7]  # position, health, nearest threat/resource
-                task_one_hot = state[7:7+len(TASK_TYPE_MAPPING)]
-                task_info = state[7+len(TASK_TYPE_MAPPING):]  # e.g., target_x, target_y, current_action_norm
+                task_one_hot = state[7:7+len(utils_config.TASK_TYPE_MAPPING)]
+                task_info = state[7+len(utils_config.TASK_TYPE_MAPPING):]  # e.g., target_x, target_y, current_action_norm
 
                 # Map task type index back to name (if any bit is 1)
                 try:
                     task_type_index = task_one_hot.index(1)
-                    task_type_name = list(TASK_TYPE_MAPPING.keys())[task_type_index]
+                    task_type_name = list(utils_config.TASK_TYPE_MAPPING.keys())[task_type_index]
                 except ValueError:
                     task_type_name = "none"
 
                 logger.log_msg(
                     f"\n[STATE DEBUG] Agent {self.agent_id} ({self.role}) State:\n"
-                    f" - Position: ({core[0]*WORLD_WIDTH:.1f}, {core[1]*WORLD_HEIGHT:.1f})\n"
+                    f" - Position: ({core[0]*(utils_config.WORLD_WIDTH):.1f}, {core[1]*utils_config.WORLD_HEIGHT:.1f})\n"
                     f" - Health: {core[2]*100:.0f}\n"
-                    f" - Nearest Threat: ({core[3]*WORLD_WIDTH:.1f}, {core[4]*WORLD_HEIGHT:.1f})\n"
-                    f" - Nearest Resource: ({core[5]*WORLD_WIDTH:.1f}, {core[6]*WORLD_HEIGHT:.1f})\n"
+                    f" - Nearest Threat: ({core[3]*(utils_config.WORLD_WIDTH):.1f}, {core[4]*utils_config.WORLD_HEIGHT:.1f})\n"
+                    f" - Nearest Resource: ({core[5]*utils_config.WORLD_WIDTH:.1f}, {core[6]*utils_config.WORLD_HEIGHT:.1f})\n"
                     f" - Task Type: {task_type_name}\n"
-                    f" - Task Target: ({task_info[0]*WORLD_WIDTH:.1f}, {task_info[1]*WORLD_HEIGHT:.1f})\n"
+                    f" - Task Target: ({task_info[0]*utils_config.WORLD_WIDTH:.1f}, {task_info[1]*utils_config.WORLD_HEIGHT:.1f})\n"
                     f" - Current Action Index: {int(task_info[2]*len(self.role_actions)) if task_info[2] >= 0 else 'None'}\n",
                     level=logging.DEBUG
                 )
@@ -361,16 +382,16 @@ class BaseAgent:
             self.observe(agents, {"position": self.faction.home_base["position"]}, resource_manager)
 
             # Log the task state and reward for centralised learning
-            if task_state in [TaskState.SUCCESS, TaskState.FAILURE]:
+            if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
                 next_state = self.get_state(resource_manager, agents, self.faction, hq_state)
-                done = task_state in [TaskState.SUCCESS, TaskState.FAILURE]
+                done = task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]
 
                 # Report the agent's experience to the HQ
                 self.report_experience_to_hq(state, self.current_task, reward, next_state, done)
 
             # Handle health-related conditions
             if self.Health <= 0:
-                if ENABLE_LOGGING: logger.log_msg(f"{self.role} has died and will be removed from the game.", level=logging.WARNING)
+                if utils_config.ENABLE_LOGGING: logger.log_msg(f"{self.role} has died and will be removed from the game.", level=logging.WARNING)
                 print(f"{self.role} has died and will be removed from the game.")
 
         except Exception as e:
@@ -411,11 +432,11 @@ class BaseAgent:
 
         # Log all observed threats
         if observed_threats:
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} observed threats: {observed_threats}", level=logging.DEBUG)        
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} observed threats: {observed_threats}", level=logging.DEBUG)        
 
         for threat in observed_threats:
             # Ensure the threat is from a different faction
-            if isinstance(threat["id"], AgentIDStruc):
+            if isinstance(threat["id"], utils_config.AgentIDStruc):
                 if threat["id"].faction_id == self.faction.id:
                     continue  # Skip friendly threats
             else:
@@ -435,7 +456,7 @@ class BaseAgent:
                 self.communication_system.agent_to_hq(self, {"type": "resource", "data": resource})
 
         # Log reported resources
-        if ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} observed resources: {observed_resources}", level=logging.DEBUG)
+        if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} observed resources: {observed_resources}", level=logging.DEBUG)
 
 
 
@@ -447,13 +468,13 @@ class BaseAgent:
 
 
 
-    def detect_resources(self, resource_manager, threshold=Agent_field_of_view):
+    def detect_resources(self, resource_manager, threshold=utils_config.Agent_field_of_view):
         """
         Detect resources within the given threshold distance (in grid units).
         """
         detected_resources = []
-        agent_grid_x = self.x // CELL_SIZE
-        agent_grid_y = self.y // CELL_SIZE
+        agent_grid_x = self.x // utils_config.CELL_SIZE
+        agent_grid_y = self.y // utils_config.CELL_SIZE
         #print(f"Agent {self.agent_id} is at grid position ({agent_grid_x}, {agent_grid_y})")
 
         for resource in resource_manager.resources:
@@ -492,11 +513,11 @@ class BaseAgent:
             distance = ((agent.x - self.x) ** 2 + (agent.y - self.y) ** 2) ** 0.5
 
             # Ensure the agent is within perception radius
-            if distance > self.local_view * CELL_SIZE:
+            if distance > self.local_view * utils_config.CELL_SIZE:
                 continue
 
             # Ensure valid IDs and attributes
-            if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, AgentIDStruc):
+            if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, utils_config.AgentIDStruc):
                 logger.warning(
                     f"Invalid agent detected by Agent {self.agent_id}: {agent}. Skipping threat detection."
                 )
@@ -519,7 +540,7 @@ class BaseAgent:
             }
             threats.append(threat)
 
-            if ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} detected threat: AgentID {agent.agent_id}, "
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {self.agent_id} detected threat: AgentID {agent.agent_id}, "
                     f"Faction {agent.agent_id.faction_id}, at location ({agent.x}, {agent.y}).",
                     level=logging.DEBUG
                 )
@@ -527,16 +548,16 @@ class BaseAgent:
         # Detect enemy HQ
         if "position" in enemy_hq and enemy_hq.get("faction_id") is not None:
             distance_to_hq = ((enemy_hq["position"][0] - self.x) ** 2 + (enemy_hq["position"][1] - self.y) ** 2) ** 0.5
-            if distance_to_hq <= self.local_view * CELL_SIZE:
+            if distance_to_hq <= self.local_view * utils_config.CELL_SIZE:
                 threat = {
-                    "id": AgentIDStruc(faction_id=enemy_hq["faction_id"], agent_id="HQ"),  # Use AgentID for HQ
+                    "id": utils_config.AgentIDStruc(faction_id=enemy_hq["faction_id"], agent_id="HQ"),  # Use AgentID for HQ
                     "faction": enemy_hq["faction_id"],  # Use the faction ID from HQ
                     "type": "Faction HQ",
                     "location": enemy_hq["position"],
                 }
                 threats.append(threat)
 
-                if ENABLE_LOGGING: logger.log_msg(
+                if utils_config.ENABLE_LOGGING: logger.log_msg(
                     f"Agent {self.agent_id} detected enemy HQ at location {enemy_hq['position']}.",
                     level=logging.DEBUG
                 )
@@ -593,26 +614,26 @@ class BaseAgent:
 
         # 🧠 Build base state vector
         core_state = [
-            self.x / WORLD_WIDTH,
-            self.y / WORLD_HEIGHT,
+            self.x / utils_config.WORLD_WIDTH,
+            self.y / utils_config.WORLD_HEIGHT,
             self.Health / 100,
-            nearest_threat["location"][0] / WORLD_WIDTH if nearest_threat else -1,
-            nearest_threat["location"][1] / WORLD_HEIGHT if nearest_threat else -1,
-            nearest_resource.x / WORLD_WIDTH if nearest_resource else -1,
-            nearest_resource.y / WORLD_HEIGHT if nearest_resource else -1,
+            nearest_threat["location"][0] / utils_config.WORLD_WIDTH if nearest_threat else -1,
+            nearest_threat["location"][1] / utils_config.WORLD_HEIGHT if nearest_threat else -1,
+            nearest_resource.x / utils_config.WORLD_WIDTH if nearest_resource else -1,
+            nearest_resource.y / utils_config.WORLD_HEIGHT if nearest_resource else -1,
         ]
 
         # ✅ Task encoding
-        one_hot_task = [0] * len(TASK_TYPE_MAPPING)
+        one_hot_task = [0] * len(utils_config.TASK_TYPE_MAPPING)
         if self.current_task:
-            task_type_index = TASK_TYPE_MAPPING.get(self.current_task.get("type", "none"))
+            task_type_index = utils_config.TASK_TYPE_MAPPING.get(self.current_task.get("type", "none"))
             if task_type_index is not None:
                 one_hot_task[task_type_index] = 1
 
         # ✅ Task-specific info
         task_target = self.current_task.get("target", {}).get("position", (-1, -1)) if self.current_task else (-1, -1)
-        task_target_x = task_target[0] / WORLD_WIDTH
-        task_target_y = task_target[1] / WORLD_HEIGHT
+        task_target_x = task_target[0] / utils_config.WORLD_WIDTH
+        task_target_y = task_target[1] / utils_config.WORLD_HEIGHT
         current_action_norm = self.current_action / len(self.role_actions) if getattr(self, "current_action", -1) >= 0 else -1
 
         task_info = [task_target_x, task_target_y, current_action_norm]
@@ -620,7 +641,7 @@ class BaseAgent:
         state = core_state + one_hot_task + task_info
 
         # 🪵 Log for debugging
-        if ENABLE_LOGGING:
+        if utils_config.ENABLE_LOGGING:
             logger.log_msg(f"[STATE DEBUG] Agent {self.agent_id} ({self.role}) state generated. Core={core_state}, Task={one_hot_task}, Target={task_info}", level=logging.DEBUG)
 
         return state
@@ -630,8 +651,8 @@ class BaseAgent:
 
 
     def update_detection_range(self):
-        # Call this whenever self.local_view or CELL_SIZE changes.
-        detection_range = self.local_view * CELL_SIZE
+        # Call this whenever self.local_view or utils_config.CELL_SIZE changes.
+        detection_range = self.local_view * utils_config.CELL_SIZE
         self.detection_range_squared = detection_range * detection_range
 
     def is_within_detection_range(self, target_position):
@@ -700,7 +721,7 @@ class Peacekeeper(BaseAgent):
     try:
         
     
-        def __init__(self, x, y, faction, base_sprite_path, terrain, agents, resource_manager, agent_id, role_actions, communication_system, state_size=DEF_AGENT_STATE_SIZE, event_manager=None, mode="train", network_type="PPOModel"):
+        def __init__(self, x, y, faction, base_sprite_path, terrain, agents, resource_manager, agent_id, role_actions, communication_system, state_size=utils_config.DEF_AGENT_STATE_SIZE, event_manager=None, mode="train", network_type="PPOModel"):
             super().__init__(
                 x=x,
                 y=y,
@@ -716,7 +737,7 @@ class Peacekeeper(BaseAgent):
                 network_type=network_type  
             )
             self.base_sprite = pygame.image.load(base_sprite_path).convert_alpha()
-            sprite_size = int(SCREEN_HEIGHT * AGENT_SCALE_FACTOR)
+            sprite_size = int(utils_config.SCREEN_HEIGHT * utils_config.AGENT_SCALE_FACTOR)
             self.base_sprite = pygame.transform.scale(self.base_sprite, (sprite_size, sprite_size))
             self.sprite = tint_sprite(self.base_sprite, faction.colour) if faction and hasattr(faction, 'colour') else self.base_sprite
 
@@ -744,7 +765,7 @@ class Peacekeeper(BaseAgent):
 class Gatherer(BaseAgent):
     try:
     
-        def __init__(self, x, y, faction, base_sprite_path, terrain, agents, resource_manager, agent_id, role_actions, communication_system, state_size=DEF_AGENT_STATE_SIZE, event_manager=None, mode="train", network_type="PPOModel"):
+        def __init__(self, x, y, faction, base_sprite_path, terrain, agents, resource_manager, agent_id, role_actions, communication_system, state_size=utils_config.DEF_AGENT_STATE_SIZE, event_manager=None, mode="train", network_type="PPOModel"):
             super().__init__(
                 x=x,
                 y=y,
@@ -760,7 +781,7 @@ class Gatherer(BaseAgent):
                 network_type=network_type  
             )
             self.base_sprite = pygame.image.load(base_sprite_path).convert_alpha()
-            sprite_size = int(SCREEN_HEIGHT * AGENT_SCALE_FACTOR)
+            sprite_size = int(utils_config.SCREEN_HEIGHT * utils_config.AGENT_SCALE_FACTOR)
             self.base_sprite = pygame.transform.scale(self.base_sprite, (sprite_size, sprite_size))
             self.sprite = tint_sprite(self.base_sprite, faction.colour) if faction and hasattr(faction, 'colour') else self.base_sprite
 

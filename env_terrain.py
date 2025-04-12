@@ -2,25 +2,7 @@ import pygame
 import noise
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from utils_config import (
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    WORLD_WIDTH,
-    WORLD_HEIGHT,
-    NOISE_SCALE,
-    NOISE_OCTAVES,
-    NOISE_PERSISTENCE,
-    NOISE_LACUNARITY,
-    WATER_COVERAGE,
-    CELL_SIZE,
-    Terrain_Seed,
-    GREEN,
-    BLUE,
-    Grass_Texture_Path,
-    Water_Texture_Path,
-    WaterAnimationToggle,
-    RandomiseTerrainBool
-)
+import utils_config
 
 from camera import Camera
 
@@ -33,7 +15,7 @@ class Terrain:
         
         Generate the terrain using Perlin noise and create a structured array for each cell.
         """
-        self.grid = self.generate_noise_map(WORLD_WIDTH // CELL_SIZE, WORLD_HEIGHT // CELL_SIZE, NOISE_SCALE, NOISE_OCTAVES, NOISE_PERSISTENCE, NOISE_LACUNARITY)
+        self.grid = self.generate_noise_map(utils_config.WORLD_WIDTH // utils_config.CELL_SIZE, utils_config.WORLD_HEIGHT // utils_config.CELL_SIZE, utils_config.NOISE_SCALE, utils_config.NOISE_OCTAVES, utils_config.NOISE_PERSISTENCE, utils_config.NOISE_LACUNARITY)
         self.grid = self.smooth_noise_map(self.grid)
         
 
@@ -46,7 +28,7 @@ class Terrain:
     #    \__, |\___|_| |_|\___|_|  \__,_|\__\___| | .__/ \___|_|  |_|_|_| |_| |_| |_|\___/|_|___/\___|
     #    |___/                                    |_|                                                 
 
-    def generate_noise_map(self, width, height, scale, octaves, persistence, lacunarity, random=RandomiseTerrainBool):
+    def generate_noise_map(self, width, height, scale, octaves, persistence, lacunarity, random=utils_config.RandomiseTerrainBool):
         """
         Generate Perlin noise-based terrain with structured data for each cell.
         """
@@ -72,7 +54,7 @@ class Terrain:
         nx, ny = np.meshgrid(x_indices, y_indices)
 
         noise_map = np.zeros((width, height))
-        base_seed = np.random.randint(0, 1000) if random else Terrain_Seed
+        base_seed = np.random.randint(0, 1000) if random else utils_config.Terrain_Seed
         for i in range(width):
             for j in range(height):
                 noise_map[i][j] = noise.pnoise2(
@@ -86,7 +68,7 @@ class Terrain:
                                                 base=base_seed)
 
         # Apply water threshold
-        threshold = np.percentile(noise_map, WATER_COVERAGE * 100)
+        threshold = np.percentile(noise_map, utils_config.WATER_COVERAGE * 100)
         
         for i in range(width):
             for j in range(height):
@@ -134,7 +116,7 @@ class Terrain:
         :param factions: List of all factions to map faction IDs to colours.
         :param render_ids: Boolean to toggle rendering of faction IDs on cells.
         """
-        cell_size = CELL_SIZE * camera.zoom
+        utils_config.CELL_SIZE = utils_config.CELL_SIZE * camera.zoom
         grid_width = len(self.grid)
         grid_height = len(self.grid[0])
 
@@ -144,13 +126,13 @@ class Terrain:
         from render_display import get_font
 
         # Initialise Pygame font for rendering text
-        font = get_font(int(cell_size * 0.5))  # Adjust font size to cell size
+        font = get_font(int(utils_config.CELL_SIZE * 0.5))  # Adjust font size to cell size
 
         # Load the grass texture
-        grass_texture = pygame.image.load(Grass_Texture_Path).convert_alpha()
+        grass_texture = pygame.image.load(utils_config.Grass_Texture_Path).convert_alpha()
 
         # Load water textures (animate water)
-        water_sprite_sheet = pygame.image.load(Water_Texture_Path).convert_alpha()
+        water_sprite_sheet = pygame.image.load(utils_config.Water_Texture_Path).convert_alpha()
 
         # Define the frames for the water animation (frames 3, 4, and 5)
         water_frames = []
@@ -168,29 +150,29 @@ class Terrain:
 
         for x in range(grid_width):
             for y in range(grid_height):
-                world_x = (x * cell_size) - camera.x * camera.zoom
-                world_y = (y * cell_size) - camera.y * camera.zoom
+                world_x = (x * utils_config.CELL_SIZE) - camera.x * camera.zoom
+                world_y = (y * utils_config.CELL_SIZE) - camera.y * camera.zoom
 
                 cell = self.grid[x][y]
 
                 if cell['type'] == 'water':
                     # Animate the water texture and apply on screen
                     
-                    play_animation = WaterAnimationToggle  # bool to toggle the animation
+                    play_animation = utils_config.WaterAnimationToggle  # bool to toggle the animation
                     if play_animation:
                         frame = water_frames[current_frame]
-                        scaled_frame = pygame.transform.scale(frame, (int(cell_size), int(cell_size)))
+                        scaled_frame = pygame.transform.scale(frame, (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)))
                         screen.blit(scaled_frame, (world_x, world_y))                
                     else:
                         static_frame = water_frames[0]  # Use the first frame as static
-                        scaled_static_frame = pygame.transform.scale(static_frame, (int(cell_size), int(cell_size)))
+                        scaled_static_frame = pygame.transform.scale(static_frame, (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)))
                         screen.blit(scaled_static_frame, (world_x, world_y))                
                 elif cell['type'] == 'land':
                     # Scale the grass texture to fit the cell size
-                    scaled_grass_texture = pygame.transform.scale(grass_texture, (int(cell_size), int(cell_size)))
+                    scaled_grass_texture = pygame.transform.scale(grass_texture, (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)))
 
                     # Create a tint surface and scale it to fit the cell size
-                    tint_surface = pygame.Surface((int(cell_size), int(cell_size)), pygame.SRCALPHA)
+                    tint_surface = pygame.Surface((int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)), pygame.SRCALPHA)
                     tint_colour = (0,160,0,255)  # Adjust tint colour and transparency (R, G, B, A)
                     tint_surface.fill(tint_colour)
 
@@ -204,29 +186,29 @@ class Terrain:
                     # If the cell is owned by a faction, overlay the faction's colour with some transparency
                     if cell['faction'] != 'None':
                         faction_colour = faction_colours.get(cell['faction'], (0, 255, 0))  # Default to green
-                        overlay = pygame.Surface((int(cell_size), int(cell_size)), pygame.SRCALPHA)
+                        overlay = pygame.Surface((int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)), pygame.SRCALPHA)
                         overlay.fill((*faction_colour, 128))  # Semi-transparent overlay
                         screen.blit(overlay, (world_x, world_y))
                 else:
                     # Default fallback for other cell types (e.g., green for undefined cells)
-                    rect = pygame.Rect(world_x, world_y, cell_size, cell_size)
+                    rect = pygame.Rect(world_x, world_y, utils_config.CELL_SIZE, utils_config.CELL_SIZE)
                     pygame.draw.rect(screen, GREEN, rect)
 
                 # Render faction ID only if render_ids is True
                 if render_ids:
                     faction_id = cell['faction'] if cell['faction'] != 'None' else '0'
                     text = font.render(str(faction_id), True, (255, 255, 255))  # White text
-                    text_rect = text.get_rect(center=(world_x + cell_size // 2, world_y + cell_size // 2))
+                    text_rect = text.get_rect(center=(world_x + utils_config.CELL_SIZE // 2, world_y + utils_config.CELL_SIZE // 2))
                     screen.blit(text, text_rect)
 
 
 
         """ # Draw gridlines
         for x in range(grid_width + 1):
-            start_x = (x * cell_size) - camera.x * camera.zoom
-            pygame.draw.line(screen, (255, 255, 255), (start_x, 0), (start_x, SCREEN_HEIGHT), 1)  # Vertical lines
+            start_x = (x * utils_config.CELL_SIZE) - camera.x * camera.zoom
+            pygame.draw.line(screen, (255, 255, 255), (start_x, 0), (start_x, utils_config.SCREEN_HEIGHT), 1)  # Vertical lines
 
         for y in range(grid_height + 1):
-            start_y = (y * cell_size) - camera.y * camera.zoom
+            start_y = (y * utils_config.CELL_SIZE) - camera.y * camera.zoom
             pygame.draw.line(screen, (255, 255, 255), (0, start_y), (SCREEN_WIDTH, start_y), 1)  # Horizontal lines
         """

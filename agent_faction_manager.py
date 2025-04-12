@@ -1,24 +1,10 @@
 
 # Manages factions and their agents.
-from utils_config import (
-     FACTON_COUNT, 
-    INITAL_GATHERER_COUNT, 
-    INITAL_PEACEKEEPER_COUNT, 
-    CELL_SIZE, 
-    TaskState, 
-    AgentIDStruc, 
-    create_task, 
-    DEF_AGENT_STATE_SIZE,
-    Agent_Interact_Range,
-    STATE_FEATURES_MAP,
-    NETWORK_TYPE_MAPPING,
-    WORLD_HEIGHT,
-    WORLD_WIDTH,
-    ENABLE_LOGGING,
-    HQ_STRATEGY_OPTIONS)
+import utils_config
 
 from agent_factions import Faction
 from utils_helpers import generate_random_colour
+import traceback
 
 
 import logging
@@ -48,7 +34,7 @@ class FactionManager:
     def __init__(self):
         self.factions = []
         self.faction_counter = 1  # Initialise a counter for unique IDs
-        if ENABLE_LOGGING: logger.log_msg("FactionManager initialised.", level=logging.INFO)
+        if utils_config.ENABLE_LOGGING: logger.log_msg("FactionManager initialised.", level=logging.INFO)
 
     def update(self, resource_manager, agents):
         for faction in self.factions:
@@ -67,20 +53,20 @@ class FactionManager:
 
 
     def reset_factions(self, faction_count, resource_manager, agents, game_manager,
-                   state_size=DEF_AGENT_STATE_SIZE, action_size=10, 
+                   state_size=utils_config.DEF_AGENT_STATE_SIZE, action_size=10, 
                    role_size=5, local_state_size=10, global_state_size=15, 
                    network_type="HQNetwork"):
         """
         Fully reset the list of factions and assign agents.
         """
         self.factions.clear()  #  Ensure previous factions are removed
-        if ENABLE_LOGGING: logger.log_msg("[INFO] Resetting factions...", level=logging.INFO)
+        if utils_config.ENABLE_LOGGING: logger.log_msg("[INFO] Resetting factions...", level=logging.INFO)
 
         for i in range(faction_count):
             name = f"Faction {i + 1}"
             colour = generate_random_colour()
 
-            if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Creating {name} with network type: {network_type}", level=logging.DEBUG)
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"[DEBUG] Creating {name} with network type: {network_type}", level=logging.DEBUG)
 
             try:
                 new_faction = Faction(
@@ -100,16 +86,16 @@ class FactionManager:
                 )
 
                 if new_faction.network is None:
-                    if ENABLE_LOGGING: logger.log_msg(f"[ERROR] Faction {new_faction.id} failed to Initialise network.", level=logging.ERROR)
+                    if utils_config.ENABLE_LOGGING: logger.log_msg(f"[ERROR] Faction {new_faction.id} failed to Initialise network.", level=logging.ERROR)
                     raise RuntimeError(f"[ERROR] Faction {new_faction.id} failed to Initialise network.")
 
                 self.factions.append(new_faction)
-                if ENABLE_LOGGING: logger.log_msg(f"[INFO] Successfully created {name} (ID: {new_faction.id})", level=logging.INFO)
+                if utils_config.ENABLE_LOGGING: logger.log_msg(f"[INFO] Successfully created {name} (ID: {new_faction.id})", level=logging.INFO)
 
             except Exception as e:
-                if ENABLE_LOGGING: logger.log_msg(f"[ERROR] Failed to create {name}: {e}", level=logging.ERROR)
+                if utils_config.ENABLE_LOGGING: logger.log_msg(f"[ERROR] Failed to create {name}: {e}", level=logging.ERROR)
                 import traceback
-                if ENABLE_LOGGING: logger.log_msg(traceback.format_exc(), level=logging.ERROR)
+                if utils_config.ENABLE_LOGGING: logger.log_msg(traceback.format_exc(), level=logging.ERROR)
 
         #  Assign agents to their factions after all factions are created
         for agent in agents:
@@ -119,6 +105,6 @@ class FactionManager:
 
         #  Debug log to verify agents are assigned correctly
         for faction in self.factions:
-            if ENABLE_LOGGING: logger.log_msg(f"[DEBUG] {faction.name} Initialised with {len(faction.agents)} agents.", level=logging.INFO)
+            if utils_config.ENABLE_LOGGING: logger.log_msg(f"[DEBUG] {faction.name} Initialised with {len(faction.agents)} agents.", level=logging.INFO)
 
 

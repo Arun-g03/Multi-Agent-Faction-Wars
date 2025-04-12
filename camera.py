@@ -2,14 +2,14 @@ import pygame
 
 class Camera:
     """ Game camera class for controlling the viewport. """
-    def __init__(self, world_width, world_height, screen_width, screen_height, restrict_bounds=False):
+    def __init__(self, WORLD_WIDTH, WORLD_HEIGHT, screen_width, SCREEN_HEIGHT, restrict_bounds=False):
         self.x = 0
         self.y = 0
         self.zoom = 1.0
-        self.world_width = world_width
-        self.world_height = world_height
+        self.WORLD_WIDTH = WORLD_WIDTH
+        self.WORLD_HEIGHT = WORLD_HEIGHT
         self.screen_width = screen_width
-        self.screen_height = screen_height
+        self.SCREEN_HEIGHT = SCREEN_HEIGHT
         self.speed = 30
         self.restrict_bounds = restrict_bounds  # Flag to toggle bounds restriction
 
@@ -20,8 +20,8 @@ class Camera:
         self.y += dy
 
         if self.restrict_bounds:  # Apply bounds if restriction is enabled
-            self.x = max(0, min(self.world_width - self.screen_width / self.zoom, self.x))
-            self.y = max(0, min(self.world_height - self.screen_height / self.zoom, self.y))
+            self.x = max(0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
+            self.y = max(0, min(self.WORLD_HEIGHT - self.SCREEN_HEIGHT / self.zoom, self.y))
 
     def apply(self, position):
         """
@@ -79,5 +79,5 @@ class Camera:
         self.y = world_mouse_y - mouse_y / self.zoom
 
         # Ensure the camera stays within the bounds of the world
-        self.x = max(0, min(self.world_width - self.screen_width / self.zoom, self.x))
-        self.y = max(0, min(self.world_height - self.screen_height / self.zoom, self.y))
+        self.x = max(0, min(self.utils_config.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
+        self.y = max(0, min(self.utils_config.WORLD_HEIGHT - self.utils_config.SCREEN_HEIGHT / self.zoom, self.y))

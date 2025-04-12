@@ -22,27 +22,7 @@ from agent_base import Peacekeeper, Gatherer
 from agent_communication import CommunicationSystem
 
 """Importing necessary constants"""
-from utils_config import (
-    WORLD_WIDTH, 
-    WORLD_HEIGHT, 
-    SCREEN_WIDTH, 
-    SCREEN_HEIGHT,
-    Peacekeeper_PNG, 
-    Gatherer_PNG, 
-    FACTON_COUNT, 
-    INITAL_GATHERER_COUNT, 
-    INITAL_PEACEKEEPER_COUNT, 
-    CELL_SIZE,
-    EPISODES_LIMIT, 
-    STEPS_PER_EPISODE, 
-    HQ_SPAWN_RADIUS,
-    HQ_Agent_Spawn_Radius,
-    TaskState,
-    ROLE_ACTIONS_MAP,
-    AgentIDStruc,
-    DEF_AGENT_STATE_SIZE,
-    ENABLE_LOGGING,
-    ENABLE_TENSORBOARD)
+import utils_config
 
 """Logging  and profiling for performance and execution analysis"""
 import logging
@@ -59,12 +39,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class GameManager:
-    def __init__(self, mode, save_dir="saved_models", max_steps_per_episode=STEPS_PER_EPISODE, screen=None):
+    def __init__(self, mode, save_dir="saved_models", max_steps_per_episode=utils_config.STEPS_PER_EPISODE, screen=None):
         # Initialise a logger specific to GameManager
         self.logger = Logger(log_file="game_manager_log.txt", log_level=logging.DEBUG)
         self.mode = None  # Default mode is None
         # Log initialisation
-        if ENABLE_LOGGING: self.logger.log_msg("GameManager initialised. Logs cleared for a new game.", level=logging.INFO)
+        if utils_config.ENABLE_LOGGING: self.logger.log_msg("GameManager initialised. Logs cleared for a new game.", level=logging.INFO)
 
         # Initialise the terrain
         self.terrain = Terrain()
@@ -78,7 +58,7 @@ class GameManager:
 
         # Initialise the resource manager with the terrain
         self.resource_manager = ResourceManager(self.terrain)
-        self.camera = Camera(WORLD_WIDTH, WORLD_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.camera = Camera(utils_config.WORLD_WIDTH, utils_config.WORLD_HEIGHT, utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT)
         try:
             # Initialise GameRenderer
             self.renderer = GameRenderer(
@@ -230,7 +210,7 @@ class GameManager:
 
             # Reset factions and agents
             self.agents_initialised = False  # Reset flag for agents initialisation
-            self.faction_manager.reset_factions(FACTON_COUNT, self.resource_manager, self.agents, self)
+            self.faction_manager.reset_factions(utils_config.FACTON_COUNT, self.resource_manager, self.agents, self)
             self.agents.clear()
             self.Initialise_agents(mode=self.mode)
             
@@ -289,8 +269,8 @@ class GameManager:
 
             # Step 3: Initialise Factions
             print("Initialising factions...")
-            self.faction_manager.reset_factions(FACTON_COUNT, self.resource_manager, self.agents, self)
-            print(f"{FACTON_COUNT} factions initialised.")
+            self.faction_manager.reset_factions(utils_config.FACTON_COUNT, self.resource_manager, self.agents, self)
+            print(f"{utils_config.FACTON_COUNT} factions initialised.")
 
             # Step 4: Initialise Agents and Place HQs
             self.agents.clear()  # Clear any existing agents
@@ -338,7 +318,7 @@ class GameManager:
         
 
         """Creates agents and assigns them to factions using stratified grid coverage for HQ placement."""
-        minimum_distance = HQ_SPAWN_RADIUS  # Minimum distance between HQs
+        minimum_distance = utils_config.HQ_SPAWN_RADIUS  # Minimum distance between HQs
         print("Calculating valid positions...")
         num_factions = len(self.faction_manager.factions)
 
@@ -368,7 +348,7 @@ class GameManager:
         # Step 3: Assign positions to factions
         for faction, position in zip(self.faction_manager.factions, selected_positions):
             # Convert grid position to pixel coordinates
-            base_pixel_x, base_pixel_y = position[0] * CELL_SIZE, position[1] * CELL_SIZE
+            base_pixel_x, base_pixel_y = position[0] * utils_config.CELL_SIZE, position[1] * utils_config.CELL_SIZE
             faction.home_base["position"] = (base_pixel_x, base_pixel_y)
 
             # Mark the HQ position in the terrain grid
@@ -387,14 +367,14 @@ class GameManager:
 
             print("Peacekeeper")
             # Pass the required arguments to spawn_agent
-            for _ in range(INITAL_PEACEKEEPER_COUNT):
+            for _ in range(utils_config.INITAL_PEACEKEEPER_COUNT):
                 agent = self.spawn_agent(
                     base_x=base_pixel_x,
                     base_y=base_pixel_y,
                     faction=faction,
                     agent_class=Peacekeeper,  # Pass the agent class
-                    state_size=DEF_AGENT_STATE_SIZE,  # Pass the state size
-                    role_actions=ROLE_ACTIONS_MAP,  # Pass role-specific actions
+                    state_size=utils_config.DEF_AGENT_STATE_SIZE,  # Pass the state size
+                    role_actions=utils_config.ROLE_ACTIONS_MAP,  # Pass role-specific actions
                     communication_system=self.communication_system,  # Pass the communication system
                     event_manager=self.event_manager,  # Pass EventManager
                     network_type=network_type,  # Pass network type for the agent (e.g., PPOModel, DQNModel)
@@ -404,14 +384,14 @@ class GameManager:
 
             print("Gatherer")
             # Pass the required arguments to spawn_agent
-            for _ in range(INITAL_GATHERER_COUNT):
+            for _ in range(utils_config.INITAL_GATHERER_COUNT):
                 agent = self.spawn_agent(
                     base_x=base_pixel_x,
                     base_y=base_pixel_y,
                     faction=faction,
                     agent_class=Gatherer,
-                    state_size=DEF_AGENT_STATE_SIZE,  # Pass the state size
-                    role_actions=ROLE_ACTIONS_MAP,  # Pass role-specific actions
+                    state_size=utils_config.DEF_AGENT_STATE_SIZE,  # Pass the state size
+                    role_actions=utils_config.ROLE_ACTIONS_MAP,  # Pass role-specific actions
                     communication_system=self.communication_system,  # Pass the communication system
                     event_manager=self.event_manager,  # Pass EventManager
                     network_type=network_type  # Pass network type for the agent (e.g., PPOModel, DQNModel)
@@ -448,7 +428,7 @@ class GameManager:
         :param action_size: The action size for the specific role (peacekeeper, gatherer, etc.)
         :return: The spawned agent.
         """
-        spawn_radius = HQ_Agent_Spawn_Radius
+        spawn_radius = utils_config.HQ_Agent_Spawn_Radius
         attempts = 0
         max_attempts = 1000  # Prevent infinite loops
         max_radius = 100  # Maximum radius to prevent infinite growth
@@ -469,8 +449,8 @@ class GameManager:
             spawn_y = base_y + offset_y
 
             # Convert pixel coordinates to grid coordinates
-            grid_x = spawn_x // CELL_SIZE
-            grid_y = spawn_y // CELL_SIZE
+            grid_x = spawn_x // utils_config.CELL_SIZE
+            grid_y = spawn_y // utils_config.CELL_SIZE
 
             # Check if the spawn position is valid
             if (0 <= grid_x < self.terrain.grid.shape[0] and
@@ -486,7 +466,7 @@ class GameManager:
                         x=spawn_x,
                         y=spawn_y,
                         faction=faction,
-                        base_sprite_path=Peacekeeper_PNG if agent_class == Peacekeeper else Gatherer_PNG,
+                        base_sprite_path=utils_config.Peacekeeper_PNG if agent_class == Peacekeeper else utils_config.Gatherer_PNG,
                         terrain=self.terrain,
                         agents=self.agents,
                         agent_id=faction.next_agent_id,
@@ -535,10 +515,10 @@ class GameManager:
             print(f"Running game in {self.mode} mode...")
             running = True
 
-            while running and (self.episode <= EPISODES_LIMIT):
+            while running and (self.episode <= utils_config.EPISODES_LIMIT):
                 self.reset()
                 print("\033[92m" + f"Starting {self.mode} Episode {self.episode}" + "\033[0m")
-                if ENABLE_LOGGING: self.logger.log_msg(f"Starting {self.mode} Episode", level=logging.INFO)
+                if utils_config.ENABLE_LOGGING: self.logger.log_msg(f"Starting {self.mode} Episode", level=logging.INFO)
 
                 self.current_step = 0
                 episode_reward = 0
@@ -547,7 +527,7 @@ class GameManager:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             print("[INFO] Window closed. Exiting game...")
-                            if ENABLE_LOGGING:self. logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
+                            if utils_config.ENABLE_LOGGING:self. logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
                             pygame.quit()
                             sys.exit()
 
@@ -590,11 +570,11 @@ class GameManager:
                     winner_id = winner.id if winner else None
                     if winner:
                         print(f"Faction {winner.id} wins! Moving to next episode...")
-                        if ENABLE_LOGGING: self.logger.log_msg(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
+                        if utils_config.ENABLE_LOGGING: self.logger.log_msg(f"Faction {winner.id} wins! Ending episode early.", level=logging.INFO)
                         break
 
                 # TensorBoard: Episode summary
-                if ENABLE_TENSORBOARD:
+                if utils_config.ENABLE_TENSORBOARD:
                     TensorBoardLogger().log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
 
                 for faction in self.faction_manager.factions:
@@ -612,7 +592,7 @@ class GameManager:
                             role_rewards[role] = role_rewards.get(role, 0) + last_reward
 
                     # Log overall faction reward
-                    if ENABLE_TENSORBOARD:
+                    if utils_config.ENABLE_TENSORBOARD:
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
                         TensorBoardLogger().log_scalar(f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
@@ -632,10 +612,10 @@ class GameManager:
                         
                 # 🔁 Train agents at the end of the episode
                 if self.mode == "train":
-                    if ENABLE_LOGGING: self.logger.log_msg("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
+                    if utils_config.ENABLE_LOGGING: self.logger.log_msg("[TRAINING] Starting PPO training at end of episode.", level=logging.INFO)
                     for agent in self.agents:
                         if agent.mode == "train" and len(agent.ai.memory["rewards"]) > 0:
-                            if ENABLE_LOGGING: self.logger.log_msg(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
+                            if utils_config.ENABLE_LOGGING: self.logger.log_msg(f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
                             try:
                                 agent.ai.train(mode="train")
                             except Exception as e:
@@ -660,7 +640,7 @@ class GameManager:
                             self.best_scores_per_role[role] = (best_agent, best_reward)
                             model_path = f"saved_models/Best_{role}_episode_{self.episode}.pth"
                             torch.save(best_agent.ai.state_dict(), model_path)
-                            if ENABLE_LOGGING: self.logger.log_msg(
+                            if utils_config.ENABLE_LOGGING: self.logger.log_msg(
                                 f"[SAVE] New best {role} model saved at {model_path} with reward {best_reward:.2f}",
                                 level=logging.INFO
                             )
@@ -674,10 +654,10 @@ class GameManager:
 
                         if hasattr(faction.network, "train") and faction.network.hq_memory:
                             try:
-                                if ENABLE_LOGGING:
-                                    self.logger.log_msg(f"[HQ TRAIN] Training strategy network for Faction {faction.id} with {len(faction.hq_memory)} samples.", level=logging.INFO)
-                                faction.network.train(faction.hq_memory, faction.optimizer)
-                                faction.hq_memory.clear()
+                                if utils_config.ENABLE_LOGGING:
+                                    self.logger.log_msg(f"[HQ TRAIN] Training strategy network for Faction {faction.id} with {len(faction.network.hq_memory)} samples.", level=logging.INFO)
+                                faction.network.train(faction.network.hq_memory, faction.optimizer)
+                                faction.network.hq_memory.clear_memory()
                             except Exception as e:
                                 print(f"[HQ TRAIN ERROR] Failed to train HQ network for Faction {faction.id}: {e}")
                                 traceback.print_exc()
@@ -686,11 +666,11 @@ class GameManager:
 
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")
-                if ENABLE_LOGGING: self.logger.log_msg(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
+                if utils_config.ENABLE_LOGGING: self.logger.log_msg(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
                 self.episode += 1
 
-            if self.mode == "train" and self.episode > EPISODES_LIMIT:
-                print(f"Training completed after {EPISODES_LIMIT} episodes")
+            if self.mode == "train" and self.episode > utils.EPISODES_LIMIT:
+                print(f"Training completed after {utils.EPISODES_LIMIT} episodes")
                 pygame.quit()
                 sys.exit()
 

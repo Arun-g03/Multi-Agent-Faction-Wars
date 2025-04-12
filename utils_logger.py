@@ -1,6 +1,6 @@
 import logging
 
-from utils_config import ENABLE_LOGGING, ENABLE_TENSORBOARD
+import utils_config
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -69,7 +69,7 @@ class Logger:
             """
             Log a message at a specified logging level.
             """
-            if not ENABLE_LOGGING:
+            if not utils_config.ENABLE_LOGGING:
                 return
                 
             if level == logging.DEBUG:
@@ -106,7 +106,7 @@ class TensorBoardLogger:
       # Global flag to enable/disable TensorBoard logging
 
     def __new__(cls, log_dir="log"):
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return None
         if cls._instance is None:
             try:
@@ -137,7 +137,7 @@ class TensorBoardLogger:
         :param value: The value of the metric.
         :param step: The step at which to log the metric.
         """
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return
         try:
             self.writer.add_scalar(name, value, step)
@@ -152,7 +152,7 @@ class TensorBoardLogger:
         :param value: The value to log (usually a tensor or array).
         :param step: The step at which to log the metric.
         """
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return
         try:
             self.writer.add_histogram(name, value, step)
@@ -167,7 +167,7 @@ class TensorBoardLogger:
         :param image_tensor: The image tensor to log (typically in CHW format).
         :param step: The step at which to log the image.
         """
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return
         try:
             self.writer.add_image(name, image_tensor, step)
@@ -182,7 +182,7 @@ class TensorBoardLogger:
         :param text: The text to log.
         :param step: The step at which to log the text.
         """
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return
         try:
             self.writer.add_text(name, text, step)
@@ -196,7 +196,7 @@ class TensorBoardLogger:
         :param metrics_dict: A dictionary where the keys are metric names, and the values are the metric values.
         :param step: The step at which to log the metrics.
         """
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return
         try:
             for name, value in metrics_dict.items():
@@ -206,7 +206,7 @@ class TensorBoardLogger:
 
     def close(self):
         """Close the TensorBoard writer when you're done logging."""
-        if not ENABLE_TENSORBOARD:
+        if not utils_config.ENABLE_TENSORBOARD:
             return
         try:
             self.writer.close()

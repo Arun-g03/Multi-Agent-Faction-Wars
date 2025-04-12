@@ -1,6 +1,6 @@
 import subprocess
 import sys
-
+import utils_config
 # Run the Start_up script to check/install dependencies before anything else
 startup_script = "Startup_installer.py"
 
@@ -16,7 +16,7 @@ import datetime
 import os
 from render_display import MenuRenderer, GameRenderer
 from game_manager import GameManager
-from utils_config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, ENABLE_PROFILE_BOOL
+
 from utils_helpers import profile_function  # Import profiler
 
 # Constants for the menu screen
@@ -32,7 +32,7 @@ def main():
     try:
         # Initialise pygame
         pygame.init()
-        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        screen = pygame.display.set_mode((utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT))
         pygame.display.set_caption(TITLE)
 
         # Create instances of MenuRenderer
@@ -46,7 +46,7 @@ def main():
 
         # Track menu options
         mode = None
-        ENABLE_TENSORBOARD = False
+        utils_config.ENABLE_TENSORBOARD = False
         auto_ENABLE_TENSORBOARD = False
         clock = pygame.time.Clock()
 
@@ -62,7 +62,7 @@ def main():
 
             if is_menu:
                 is_menu = menu_renderer.render_menu(
-                    ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode,
+                    utils_config.ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode,
                     start_game_callback=lambda m, d, t: start_game(screen, m, d, t)
                 )
 
@@ -71,7 +71,7 @@ def main():
                     game_manager = start_game(
                         screen=screen,
                         mode=menu_renderer.selected_mode,
-                        ENABLE_TENSORBOARD=ENABLE_TENSORBOARD,
+                        ENABLE_TENSORBOARD=utils_config.ENABLE_TENSORBOARD,
                         auto_ENABLE_TENSORBOARD=auto_ENABLE_TENSORBOARD
                     )
 
@@ -157,7 +157,7 @@ def start_game(screen, mode, ENABLE_TENSORBOARD=True, auto_ENABLE_TENSORBOARD=Tr
 
 # Run the main function with profiling if enabled
 if __name__ == "__main__":
-    if ENABLE_PROFILE_BOOL:
+    if utils_config.ENABLE_PROFILE_BOOL:
         profile_function(main)
     else:
         main()
