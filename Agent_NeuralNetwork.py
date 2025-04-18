@@ -16,8 +16,8 @@ Training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.is_available():
     print(f"Using GPU: {torch.cuda.get_device_name(0)}")
     if utils_config.ENABLE_LOGGING: logger.log_msg(f"\033[93mUsing GPU: {torch.cuda.get_device_name(0)}\033[0m")
-    else:
-        print("\033[93m**Agent Networks**\nNo GPU detected.\nUsing CPU.\nNote training will be slower.\n\033[0m")
+else:
+    print("\033[93m**Agent Networks**\nNo GPU detected.\nUsing CPU.\nNote training will be slower.\n\033[0m")
 
 
 
@@ -90,6 +90,11 @@ class HQ_Network(nn.Module):
         self.fc2 = nn.Linear(128, 128)
         self.actor = nn.Linear(128, action_size)
         self.critic = nn.Linear(128, 1)
+
+        self.role_size = role_size
+        self.local_state_size = local_state_size
+        self.global_state_size = global_state_size
+
 
 
         self.hq_memory = []
@@ -271,8 +276,8 @@ class HQ_Network(nn.Module):
             return
 
         # Prepare batches
-        states = torch.tensor([m['state'] for m in memory], dtype=torch.float32).to(self.device)
-        actions = torch.tensor([m['action'] for m in memory], dtype=torch.long).to(self.device)
+        states = torch.tensor([m['state'] for m in memory], dtype=torch.float32, device=self.device)
+        actions = torch.tensor([m['action'] for m in memory], dtype=torch.long, device=self.device)
         rewards = [m['reward'] for m in memory]
 
         # Compute discounted returns
@@ -281,13 +286,19 @@ class HQ_Network(nn.Module):
         for r in reversed(rewards):
             G = r + gamma * G
             returns.insert(0, G)
-        returns = torch.tensor(returns, dtype=torch.float32).to(self.device)
+        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
 
-        # Normalize returns (helps with stability)
+        # Normalize returns
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
+        # Create properly-shaped dummy inputs for role/local/global state
+        batch_size = states.size(0)
+        role = torch.zeros(batch_size, self.role_size, dtype=torch.float32, device=self.device)
+        local_state = torch.zeros(batch_size, self.local_state_size, dtype=torch.float32, device=self.device)
+        global_state = torch.zeros(batch_size, self.global_state_size, dtype=torch.float32, device=self.device)
+
         # Forward pass
-        logits, values = self.forward(states, torch.zeros_like(states), torch.zeros_like(states), torch.zeros_like(states))
+        logits, values = self.forward(states, role, local_state, global_state)
         probs = torch.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         log_probs = dist.log_prob(actions)
@@ -303,8 +314,10 @@ class HQ_Network(nn.Module):
         optimizer.step()
 
         # Logging
-        logger.log_msg(f"[HQ TRAIN] Loss: {loss.item():.4f}, Policy: {policy_loss.item():.4f}, Value: {value_loss.item():.4f}", level=logging.INFO)
-
+        logger.log_msg(
+            f"[HQ TRAIN] Loss: {loss.item():.4f}, Policy: {policy_loss.item():.4f}, Value: {value_loss.item():.4f}",
+            level=logging.INFO
+        )
 
 
 
@@ -478,39 +491,81 @@ class PPOModel(nn.Module):
 
 
 
-    def choose_action(self, state):
+    def choose_action(self, state, valid_indices=None):
         if state is None:
             raise ValueError(f"[CRITICAL] Agent {self.AgentID} received a None state.")
-
         if any(v is None for v in state):
             raise ValueError(f"[CRITICAL] Agent {self.AgentID} state contains None values: {state}")
 
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-        if utils_config.ENABLE_LOGGING: logger.log_msg(f" AgentID: {self.AgentID}__State: {state}", level=logging.DEBUG)
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(f" AgentID: {self.AgentID}__State: {state}", level=logging.DEBUG)
+
         logits, value = self.forward(state_tensor)
-        
-        if torch.isnan(logits).any().item() or torch.isinf(logits).any().item():
-        
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"[LOGITS ERROR] Detected NaNs/Infs in logits!", level=logging.ERROR)
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"State: {state}", level=logging.ERROR)
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Logits: {logits}", level=logging.ERROR)
-            raise ValueError("Logits contain NaN or Inf before softmax.")
+
+        # Apply context-aware filtering
+        if valid_indices is not None:
+            mask = torch.full_like(logits, float('-inf'))
+            mask[0, valid_indices] = logits[0, valid_indices]
+            logits = mask
+
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[CTX FILTER] Valid indices: {valid_indices}, Masked logits: {logits.tolist()}", level=logging.DEBUG)
 
         probs = torch.softmax(logits, dim=-1)
 
         if torch.isnan(probs).any().item() or torch.isinf(probs).any().item():
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"[PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Logits: {logits}", level=logging.ERROR)
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"Softmaxed probs: {probs}", level=logging.ERROR)
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"State: {state}", level=logging.ERROR)
+            logger.log_msg(f"[PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
             raise ValueError("Action probabilities contain NaN or Inf.")
 
-        dist = Categorical(probs)
+        dist = torch.distributions.Categorical(probs)
         action = dist.sample()
 
-        if utils_config.ENABLE_LOGGING: logger.log_msg(f"Action probabilities: {probs.tolist()}, Selected action: {action.item()}, State value: {value.item()}.", level=logging.DEBUG)
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"Action probabilities: {probs.tolist()}, Selected action: {action.item()}, State value: {value.item()}.",
+                level=logging.DEBUG
+            )
 
         return action.item(), dist.log_prob(action), value.item()
+
+
+    def get_valid_action_indices(self, resource_manager, agents):
+        role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
+        valid_indices = set()
+
+        # Always include movement and exploration
+        for i, action in enumerate(role_actions):
+            if action.startswith("move") or action == "explore":
+                valid_indices.add(i)
+
+        # Light context filtering
+        for i, action in enumerate(role_actions):
+            if action == "mine_gold":
+                resources = self.agent.detect_resources(resource_manager, threshold=5)
+                if any(r.__class__.__name__ == "GoldLump" for r in resources):
+                    valid_indices.add(i)
+
+            elif action == "forage_apple":
+                resources = self.agent.detect_resources(resource_manager, threshold=5)
+                if any(r.__class__.__name__ == "AppleTree" for r in resources):
+                    valid_indices.add(i)
+
+            elif action == "heal_with_apple":
+                if self.agent.Health < 90 and self.agent.faction.food_balance > 0:
+                    valid_indices.add(i)
+
+            elif action in ["eliminate_threat", "patrol"]:
+                threats = self.agent.detect_threats(agents, enemy_hq={"faction_id": -1})
+                if threats:
+                    valid_indices.add(i)
+
+        # Mild fallback boost: if only a few are valid, allow full list
+        if len(valid_indices) < max(2, len(role_actions) // 2):
+            return list(range(len(role_actions)))  # give more room to try stuff
+        else:
+            return list(valid_indices)
+
 
 
     def store_transition(self, state, action, log_prob, reward, local_value, global_value, done):

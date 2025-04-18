@@ -449,8 +449,8 @@ class GameManager:
             spawn_y = base_y + offset_y
 
             # Convert pixel coordinates to grid coordinates
-            grid_x = spawn_x // utils_config.CELL_SIZE
-            grid_y = spawn_y // utils_config.CELL_SIZE
+            grid_x = int(spawn_x // utils_config.CELL_SIZE)
+            grid_y = int(spawn_y // utils_config.CELL_SIZE)
 
             # Check if the spawn position is valid
             if (0 <= grid_x < self.terrain.grid.shape[0] and
@@ -669,8 +669,8 @@ class GameManager:
                 if utils_config.ENABLE_LOGGING: self.logger.log_msg(f"End of {self.mode} Episode {self.episode}", level=logging.INFO)
                 self.episode += 1
 
-            if self.mode == "train" and self.episode > utils.EPISODES_LIMIT:
-                print(f"Training completed after {utils.EPISODES_LIMIT} episodes")
+            if self.mode == "train" and self.episode > utils_config.EPISODES_LIMIT:
+                print(f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
                 pygame.quit()
                 sys.exit()
 

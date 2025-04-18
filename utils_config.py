@@ -24,10 +24,10 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = True 
+ENABLE_LOGGING = False 
 """Enable logging for debugging"""
 
-ENABLE_TENSORBOARD = False
+ENABLE_TENSORBOARD = True
 """Enable tensorboard for visualisation"""
 
 
@@ -47,7 +47,7 @@ ENABLE_TENSORBOARD = False
 #More training equals better results... probably.
 
 EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 1000 #How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 7500 #How many steps to take per episode/ How long should a game last
 
 #Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
 
@@ -102,8 +102,8 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
 # World Dimensions
 #Size of the in-game world
-WORLD_WIDTH = 400 # Customise as needed!
-WORLD_HEIGHT = 400 # Customise as needed!
+WORLD_WIDTH = 500 # Customise as needed!
+WORLD_HEIGHT = 500 # Customise as needed!
 
 
 # Perlin Noise Settings
@@ -149,10 +149,10 @@ NOISE_LACUNARITY = 1.5  # Higher values increase the frequency of octaves, lower
 WATER_COVERAGE = 0.3  # Percentage of the terrain that should be water # Customise as needed!
 
 # Resource Parameters
-TREE_DENSITY = 0.04 # Density of apple trees on land # Customise as needed!
+TREE_DENSITY = 0.09 # Density of apple trees on land # Customise as needed!
 APPLE_REGEN_TIME = 10 # Time in seconds for an apple tree to regrow an apple # Customise as needed!
 GOLD_ZONE_PROBABILITY = 0.1 # Probability of spawning a gold zone # Customise as needed!
-GOLD_SPAWN_DENSITY = 0.02 # Density of gold in gold zones # Customise as needed!
+GOLD_SPAWN_DENSITY = 0.05 # Density of gold in gold zones # Customise as needed!
 
 # File paths for resource images
 #Okay as is
@@ -335,7 +335,7 @@ State features mapping structure for the agent.
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
 Agent_field_of_view = 10 # Agent field of view # Customise as needed!
-Agent_Interact_Range = 3 # Agent interact range, Anything inside will be interactable
+Agent_Interact_Range = 2 # Agent interact range, Anything inside will be interactable
 
 
 ## File paths for agent images

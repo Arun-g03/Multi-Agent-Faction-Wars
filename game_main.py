@@ -110,7 +110,7 @@ def main():
                             game_manager.agents
                         )
 
-                        clock.tick(FPS)
+                        clock.tick(utils_config.FPS)
                     except SystemExit:
                         print("[INFO] Game closed successfully.")
                         pygame.quit()

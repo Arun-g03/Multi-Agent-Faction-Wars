@@ -1,5 +1,5 @@
 import pygame
-import noise
+import noise  #Noise is a package for perlin noise. It helps to generate the landscape.
 import numpy as np
 from scipy.ndimage import gaussian_filter
 import utils_config
@@ -15,7 +15,12 @@ class Terrain:
         
         Generate the terrain using Perlin noise and create a structured array for each cell.
         """
-        self.grid = self.generate_noise_map(utils_config.WORLD_WIDTH // utils_config.CELL_SIZE, utils_config.WORLD_HEIGHT // utils_config.CELL_SIZE, utils_config.NOISE_SCALE, utils_config.NOISE_OCTAVES, utils_config.NOISE_PERSISTENCE, utils_config.NOISE_LACUNARITY)
+        self.grid = self.generate_noise_map(width = int(utils_config.WORLD_WIDTH // utils_config.CELL_SIZE),
+                                            height = int(utils_config.WORLD_HEIGHT // utils_config.CELL_SIZE),
+                                            scale=utils_config.NOISE_SCALE, 
+                                            octaves=utils_config.NOISE_OCTAVES, 
+                                            persistence=utils_config.NOISE_PERSISTENCE, 
+                                            lacunarity=utils_config.NOISE_LACUNARITY)
         self.grid = self.smooth_noise_map(self.grid)
         
 

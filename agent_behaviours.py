@@ -115,7 +115,9 @@ class AgentBehaviour:
 
         #  Agent has no task — act independently
         if not self.agent.current_task:
-            action_index, log_prob, value = self.ai.choose_action(state)
+            valid_indices = self.get_valid_action_indices(resource_manager, agents)
+            action_index, log_prob, value = self.ai.choose_action(state, valid_indices=valid_indices)
+
             self.agent.current_action = action_index
             self.agent.log_prob = log_prob
             self.agent.value = value
@@ -186,6 +188,42 @@ class AgentBehaviour:
             self.agent.update_task_state(utils_config.TaskState.NONE)
 
         return reward, task_state
+
+    def get_valid_action_indices(self, resource_manager, agents):
+        role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
+        valid_indices = set()
+
+        # Always include movement and exploration
+        for i, action in enumerate(role_actions):
+            if action.startswith("move") or action == "explore":
+                valid_indices.add(i)
+
+        # Light context filtering
+        for i, action in enumerate(role_actions):
+            if action == "mine_gold":
+                resources = self.agent.detect_resources(resource_manager, threshold=utils_config.Agent_Interact_Range)
+                if any(r.__class__.__name__ == "GoldLump" for r in resources):
+                    valid_indices.add(i)
+
+            elif action == "forage_apple":
+                resources = self.agent.detect_resources(resource_manager, threshold=utils_config.Agent_Interact_Range)
+                if any(r.__class__.__name__ == "AppleTree" for r in resources):
+                    valid_indices.add(i)
+
+            elif action == "heal_with_apple":
+                if self.agent.Health < 90 and self.agent.faction.food_balance > 0:
+                    valid_indices.add(i)
+
+            elif action in ["eliminate_threat", "patrol"]:
+                threats = self.agent.detect_threats(agents, enemy_hq={"faction_id": -1})
+                if threats:
+                    valid_indices.add(i)
+
+        # Mild fallback boost: if only a few are valid, allow full list
+        if len(valid_indices) < max(2, len(role_actions) // 2):
+            return list(range(len(role_actions)))  # give more room to try stuff
+        else:
+            return list(valid_indices)
 
     
 

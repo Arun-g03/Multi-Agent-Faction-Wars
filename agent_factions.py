@@ -73,7 +73,7 @@ class Faction():
                 "threat_count": 0,  # Total threats count
             })
             try:
-                #  Fix: Only pass required arguments
+                self.network_type = network_type
                 self.network = self.initialise_network(network_type, state_size, action_size, role_size, local_state_size, global_state_size)
 
 
@@ -190,6 +190,7 @@ class Faction():
             else:
                 print("\033[93m" + f"Faction {self.id} maintained HQ strategy: {self.current_strategy}" + "\033[0m")            
                 self.current_strategy = new_strategy
+                self.perform_HQ_Strategy(self.current_strategy)
             self.needs_strategy_retest = False
             
             
@@ -904,6 +905,7 @@ class Faction():
         HQ executes the chosen strategic action if valid.
         If invalid, it re-evaluates strategy using the HQ network.
         """
+        print (f"[HQ_STRATEGY] Faction {self.id} perform_HQ_Strategy - Trying to  {action}")
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(f"[HQ EXECUTE] Faction {self.id} attempting strategy: {action}", level=logging.INFO)
 
@@ -916,8 +918,13 @@ class Faction():
 
         # ========== STRATEGY: Recruit Peacekeeper ==========
         if action == "RECRUIT_PEACEKEEPER":
-            if self.gold_balance > Gold_Cost_for_Agent:
+            Agent_cost = utils_config.Gold_Cost_for_Agent
+            if self.gold_balance >= Agent_cost:
+                current_balance = self.gold_balance
+                new_balance = current_balance - Agent_cost
+                self.gold_balance = new_balance   
                 self.recruit_agent("peacekeeper")
+                print (f"{self.id} bought a Peacekeeper")
             else:
                 logger.log_msg(f"[HQ EXECUTE] Not enough gold to recruit peacekeeper.", level=logging.WARNING)
                 self.current_strategy = None
@@ -925,8 +932,13 @@ class Faction():
 
         # ========== STRATEGY: Recruit Gatherer ==========
         elif action == "RECRUIT_GATHERER":
-            if self.gold_balance > Gold_Cost_for_Agent:
+            Agent_cost = utils_config.Gold_Cost_for_Agent
+            if self.gold_balance >= Agent_cost:
+                current_balance = self.gold_balance
+                new_balance = current_balance - Agent_cost
+                self.gold_balance = new_balance                
                 self.recruit_agent("gatherer")
+                print (f"{self.id} bought a Gatherer")
             else:
                 logger.log_msg(f"[HQ EXECUTE] Not enough gold to recruit gatherer.", level=logging.WARNING)
                 self.current_strategy = None
@@ -1088,7 +1100,7 @@ class Faction():
         Recruits an agent of the given role if resources allow.
         """
         try:
-            cost = Gold_Cost_for_Agent  # Example recruitment cost per agent
+            cost = utils_config.Gold_Cost_for_Agent  # Example recruitment cost per agent
 
             if self.gold_balance < cost:
                 if utils_config.ENABLE_LOGGING: logger.log_msg(f"[HQ RECRUIT] Faction {self.id} lacks gold to recruit {role}.", level=logging.WARNING)
@@ -1111,29 +1123,38 @@ class Faction():
 
     def create_agent(self, role: str):
         """
-        Spawns a new agent instance of the given role at the faction's HQ.
+        Spawns a new agent instance of the given role using GameManager's spawn_agent method.
         """
         try:
-            from agent_base import Agent  # or wherever your base class is defined
+            from agent_base import Peacekeeper, Gatherer
 
             spawn_x, spawn_y = self.home_base["position"]
+            agent_class = Peacekeeper if role == "peacekeeper" else Gatherer
 
-            agent_id = utils_config.AgentIDStruc(faction_id=self.id, agent_id=len(self.agents) + 1)
-
-            new_agent = Agent(
-                agent_id=agent_id,
-                x=spawn_x,
-                y=spawn_y,
+            agent = self.game_manager.spawn_agent(
+                base_x=spawn_x,
+                base_y=spawn_y,
                 faction=self,
-                role=role,
-                network_type=self.network_type  # PPOModel, etc.
+                agent_class=agent_class,
+                state_size=utils_config.DEF_AGENT_STATE_SIZE,
+                role_actions=utils_config.ROLE_ACTIONS_MAP,
+                communication_system=self.communication_system,
+                event_manager=self.game_manager.event_manager,
+                network_type=self.network_type  # "PPOModel", "DQNModel", etc.
             )
 
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"[SPAWN] Created {role} at ({spawn_x}, {spawn_y}) for Faction {self.id}.", level=logging.DEBUG)
-            return new_agent
+            if agent:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(f"[SPAWN] Created {role} for Faction {self.id} at ({agent.x}, {agent.y}).", level=logging.INFO)
+                return agent
+            else:
+                raise RuntimeError("spawn_agent returned None (no valid location found).")
+
         except Exception as e:
-            if utils_config.ENABLE_LOGGING: logger.log_msg(f"[SPAWN] Error creating {role} agent: {str(e)}\nTraceback: {traceback.format_exc()}", level=logging.ERROR)
-            raise ValueError (f"Failed to create {role} agent: {str(e)}")
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[SPAWN ERROR] Failed to create agent: {str(e)}\n{traceback.format_exc()}", level=logging.ERROR)
+            raise ValueError(f"Failed to create {role} agent for Faction {self.id}: {e}")
+
     def is_under_attack(self) -> bool:
         """
         Returns True if enemy agents are within field of view range of the faction HQ.
