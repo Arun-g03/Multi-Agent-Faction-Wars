@@ -1,14 +1,8 @@
-import pygame
-# Noise is a package for perlin noise. It helps to generate the landscape.
-import noise
-import numpy as np
-from scipy.ndimage import gaussian_filter
-import utils_config
-
-from camera import Camera
+from SHARED.core_imports import *
+from RENDER.render_display import get_font
 
 # colours
-
+GREEN = (0, 255, 0)
 
 class Terrain:
     def __init__(self):
@@ -142,7 +136,7 @@ class Terrain:
         faction_colours = {
             str(faction.id): faction.colour for faction in factions}
 
-        from render_display import get_font
+        
 
         # Initialise Pygame font for rendering text
         # Adjust font size to cell size

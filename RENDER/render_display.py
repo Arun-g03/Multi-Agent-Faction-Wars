@@ -1,12 +1,12 @@
-import pygame
-import utils_config
-from env_resources import AppleTree, GoldLump
-import sys
-import traceback
-import logging
-from utils_logger import Logger
-logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
 
+
+from SHARED.core_imports import *
+
+
+from ENVIRONMENT.env_resources import AppleTree, GoldLump
+
+
+logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
 
 # Constants for the menu screen
 FONT_NAME = "Arial"
@@ -60,13 +60,13 @@ class GameRenderer:
         # Use cached font for displaying faction IDs on bases
         self.font = get_font(24)
         self.attack_sprite_sheet = pygame.image.load(
-            "images/Attack_Animation.png").convert_alpha()
+            "RENDER\IMAGES\Attack_Animation.png").convert_alpha()
         self.attack_frames = self.load_frames(
             self.attack_sprite_sheet, frame_width=64, frame_height=64)
         self.camera = camera  # Set camera if passed, or use None by default
         self.active_animations = []
         self.faction_base_image = pygame.image.load(
-            "images/castle-7440761_1280.png").convert_alpha()
+            "RENDER\IMAGES\castle-7440761_1280.png").convert_alpha()
 
     def render(
             self,

@@ -1,14 +1,4 @@
-from torch.utils.tensorboard import SummaryWriter
-import torch
-import logging
-
-import utils_config
-import os
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-# Enables/disables debug logging and visuals
+from SHARED.core_imports import *
 
 
 class Logger:
@@ -25,7 +15,7 @@ class Logger:
         self.logger = logging.getLogger(log_file)
 
         # Ensure the LOG directory exists
-        log_directory = "LOG"
+        log_directory = "RUNTIME_LOGS/LOGS"
         if not os.path.exists(log_directory):
             os.makedirs(log_directory)
             print(f"Created directory: {log_directory}")

@@ -3,30 +3,19 @@ This file contains the GameManager class, which is responsible for managing the 
 
 """
 """basic imports"""
-import torch
-from utils_logger import TensorBoardLogger
-import traceback
-import io
-import pstats
-import cProfile
-from utils_logger import Logger
-import logging
-import utils_config
-from agent_communication import CommunicationSystem
-from agent_base import Peacekeeper, Gatherer
-from agent_faction_manager import FactionManager
-from agent_factions import Faction
-from game_rules import check_victory
-from camera import Camera
-from render_display import GameRenderer
-from env_resources import ResourceManager, AppleTree, GoldLump
-from env_terrain import Terrain
-from utils_helpers import profile_function
-import math
-import random
-import pygame
-import os
-import sys
+
+
+from SHARED.core_imports import *
+from AGENT.agent_base import Peacekeeper, Gatherer
+from AGENT.agent_factions import Faction
+from AGENT.agent_faction_manager import FactionManager
+from AGENT.agent_communication import CommunicationSystem
+from GAME.game_rules import check_victory
+from ENVIRONMENT.env_terrain import Terrain
+from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
+from GAME.camera import Camera
+from RENDER.render_display import GameRenderer, GameRenderer
+
 
 
 """Importing codebase things to bring the componenets together and form the game"""

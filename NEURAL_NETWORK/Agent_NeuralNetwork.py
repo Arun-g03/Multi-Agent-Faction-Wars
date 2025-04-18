@@ -1,14 +1,5 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import numpy as np
-from torch.distributions import Categorical
-import logging
-import utils_config
-from utils_logger import Logger
-from utils_logger import TensorBoardLogger
 
+from SHARED.core_imports import *
 
 logger = Logger(log_file="neural_network_log.txt", log_level=logging.DEBUG)
 

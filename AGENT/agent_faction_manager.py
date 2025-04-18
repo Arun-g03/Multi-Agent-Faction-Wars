@@ -1,14 +1,14 @@
+from SHARED.core_imports import *
 
-# Manages factions and their agents.
-import utils_config
+# shared_full.py
 
-from agent_factions import Faction
-from utils_helpers import generate_random_colour
-import traceback
+from SHARED.core_imports import *
+# === Game-Specific AI & Mechanics ===
+
+from AGENT.agent_factions import Faction
 
 
-import logging
-from utils_logger import Logger
+
 
 
 logger = Logger(log_file="agent_faction_manager.txt", log_level=logging.DEBUG)

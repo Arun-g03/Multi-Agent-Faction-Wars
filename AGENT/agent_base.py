@@ -2,28 +2,15 @@
 Base class for agents.
     Contains the basic attributes and methods for all agents and agent specific attributes.
 """
+from SHARED.core_imports import *
+# shared_full.py
+
+from SHARED.core_imports import *
+# === Game-Specific AI & Mechanics ===
+from NEURAL_NETWORK.Agent_NeuralNetwork import PPOModel, DQNModel
+from AGENT.agent_behaviours import AgentBehaviour
 
 
-import traceback
-
-import pygame
-import utils_config
-from Agent_NeuralNetwork import PPOModel, DQNModel  # Import the network models
-from agent_behaviours import AgentBehaviour  # Import behavior classes
-from agent_factions import Faction
-import utils_config
-
-from utils_helpers import (
-    find_closest_actor
-)
-from env_terrain import Terrain
-from env_resources import AppleTree, GoldLump
-import torch
-from torch.distributions import Categorical
-
-
-import logging
-from utils_logger import Logger
 
 
 #       _                    _                             _ _     _                   _   _
@@ -776,7 +763,7 @@ class Peacekeeper(BaseAgent):
                 self.base_sprite, faction.colour) if faction and hasattr(
                 faction, 'colour') else self.base_sprite
 
-            from render_display import get_font
+            from RENDER.render_display import get_font
             self.font = get_font(24)
 
             self.known_threats = []
@@ -834,8 +821,8 @@ class Gatherer(BaseAgent):
             self.sprite = tint_sprite(
                 self.base_sprite, faction.colour) if faction and hasattr(
                 faction, 'colour') else self.base_sprite
+            from RENDER.render_display import get_font
 
-            from render_display import get_font
             self.font = get_font(24)
 
             self.known_resources = []

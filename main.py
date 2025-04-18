@@ -1,16 +1,14 @@
-from utils_logger import TensorBoardLogger
-from utils_helpers import profile_function  # Import profiler
-from game_manager import GameManager
-from render_display import MenuRenderer, GameRenderer
-import os
-import datetime
-import pygame
-import traceback
-import subprocess
-import sys
-import utils_config
+
+
+from SHARED.core_imports import *
+from GAME.game_manager import GameManager
+
+
+from RENDER.render_display import GameRenderer, MenuRenderer
+
+
 # Run the Start_up script to check/install dependencies before anything else
-startup_script = "Startup_installer.py"
+startup_script = "UTILITIES\Startup_installer.py"
 
 try:
     result = subprocess.run([sys.executable, startup_script], check=True)
@@ -25,7 +23,7 @@ FONT_NAME = "Arial"
 TITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
 
 # Initialise tensorboard logger
-tensorboard_logger = TensorBoardLogger(log_dir="Tensorboard_logs")
+tensorboard_logger = TensorBoardLogger(log_dir="RUNTIME_LOGS\Tensorboard_logs")
 
 
 def main():

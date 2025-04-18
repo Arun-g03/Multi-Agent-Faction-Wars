@@ -115,8 +115,8 @@ GOLD_colour = (255, 215, 0)  # Gold colour
 # The size of each cell in the grid
 CELL_SIZE = 20
 
-Grass_Texture_Path = "images/Grass Tiles/Grass 001.png"  # Grass texture path
-Water_Texture_Path = "images/Water+.png"  # Water texture path
+Grass_Texture_Path = "RENDER\IMAGES\Grass Tiles/Grass 001.png"  # Grass texture path
+Water_Texture_Path = "RENDER\IMAGES\Water+.png"  # Water texture path
 
 
 WaterAnimationToggle = False  # Toggle water animation #Turn off for performance
@@ -157,8 +157,8 @@ GOLD_SPAWN_DENSITY = 0.05  # Density of gold in gold zones # Customise as needed
 # File paths for resource images
 # Okay as is
 # Tree image path
-TREE_IMAGE_PATH = "images\\PixelFlush - Pixel Tree Mega Pack\\pngs\\Apple Tree.png"
-GOLD_IMAGE_PATH = "images\\Gold.png"  # Gold image path
+TREE_IMAGE_PATH = "RENDER\IMAGES\\PixelFlush - Pixel Tree Mega Pack\\pngs\\Apple Tree.png"
+GOLD_IMAGE_PATH = "RENDER\IMAGES\\Gold.png"  # Gold image path
 # Scale of the gold lump image, needed to match the image size with the
 # interactable area
 GoldLump_Scale_Img = 2
@@ -329,8 +329,8 @@ Agent_Interact_Range = 2  # Agent interact range, Anything inside will be intera
 
 
 # File paths for agent images
-Peacekeeper_PNG = 'images\\peacekeeper.png'  # Path to peacekeeper image
-Gatherer_PNG = 'images\\gatherer.png'  # Path to gatherer image
+Peacekeeper_PNG = 'RENDER\IMAGES\peacekeeper.png'  # Path to peacekeeper image
+Gatherer_PNG = 'RENDER\IMAGES\gatherer.png'  # Path to gatherer image
 
 Gold_Cost_for_Agent = 10  # Gold cost for an agent
 
@@ -353,7 +353,7 @@ Changing this values WILL break functionality unless updated across system :( ""
 # HQ
 HQ_SPAWN_RADIUS = 10  # Radius around HQ to spawn other HQs
 HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
-Faction_PNG = "images\\castle-7440761_1280.png"
+Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 
 # Team Composition
 FACTON_COUNT = 2  # Number of factons # Customise as needed!

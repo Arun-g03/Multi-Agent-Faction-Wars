@@ -5,8 +5,9 @@ THis file should control the episodic win rules and conditions
 
 """
 
+from SHARED.core_imports import *
 
-import random
+
 RESOURCE_GATHER_RATE = {
     'apple_tree': 5,
     'gold_lump': 2

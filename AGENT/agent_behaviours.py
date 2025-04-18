@@ -1,17 +1,12 @@
-import utils_config
-from env_resources import AppleTree, GoldLump
+from SHARED.core_imports import *
+# shared_full.py
 
-import random
-import logging
-from utils_logger import Logger
-from utils_logger import TensorBoardLogger
+from SHARED.core_imports import *
+# === Game-Specific AI & Mechanics ===
+from NEURAL_NETWORK.Agent_NeuralNetwork import PPOModel, DQNModel, HQ_Network
 
-import inspect
-from utils_helpers import (
-    find_closest_actor
-)
+from ENVIRONMENT.env_resources import AppleTree, GoldLump
 
-import pygame
 
 
 logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)

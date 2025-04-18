@@ -1,29 +1,11 @@
-import traceback
-import random
-from typing import Optional
+from SHARED.core_imports import *
+# shared_full.py
 
-# Manages factions and their agents.
-import utils_config
+from SHARED.core_imports import *
+# === Game-Specific AI & Mechanics ===
+from NEURAL_NETWORK.Agent_NeuralNetwork import PPOModel, DQNModel, HQ_Network
 
-
-from utils_helpers import (
-    generate_random_colour,
-    find_closest_actor
-)
-import time
-import torch
-
-import torch.nn as nn
-import torch.optim as optim
-
-from Agent_NeuralNetwork import PPOModel, DQNModel, HQ_Network
-from env_terrain import Terrain
-from env_resources import AppleTree, GoldLump
-from agent_communication import CommunicationSystem
-# Adjust this to match the correct file name
-
-import logging
-from utils_logger import Logger
+from AGENT.agent_communication import CommunicationSystem
 
 
 logger = Logger(log_file="agent_factions.txt", log_level=logging.DEBUG)

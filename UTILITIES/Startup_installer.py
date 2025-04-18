@@ -1,10 +1,14 @@
 import sys
-import subprocess
-import importlib.util
-import traceback
-import re
+import os
+from SHARED.core_imports import *
 
-REQUIREMENTS_FILE = "requirements.txt"
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+
+REQUIREMENTS_FILE = os.path.join(os.path.dirname(__file__), "requirements.txt")
+
 
 
 def extract_package_name(requirement_line):
@@ -20,17 +24,23 @@ def check_and_install_dependencies():
     try:
         print("[INFO] Checking for missing dependencies...")
 
-        with open(REQUIREMENTS_FILE, "r") as f:
-            all_lines = [line.strip() for line in f if line.strip()
-                         and not line.startswith("#")]
-
+        try:
+            with open(REQUIREMENTS_FILE, "r") as f:
+                all_lines = [line.strip() for line in f if line.strip()
+                                and not line.startswith("#")]
+        except FileNotFoundError:
+            print(f"[ERROR] Could not find requirements file: {REQUIREMENTS_FILE}")
+            return False
+        except Exception as e:
+            print(f"[ERROR] Failed to read requirements file: {e}")
+            return False
         pip_lines = all_lines
         module_names = [extract_package_name(
             line) for line in all_lines if not line.startswith("--")]
 
         missing_packages = []
         for i, pkg_name in enumerate(module_names):
-            if pkg_name and not importlib.util.find_spec(pkg_name):
+            if pkg_name and not importlib_util.find_spec(pkg_name):
                 missing_packages.append(pip_lines[i])
 
         """Check if the the pytorch machine learning components are missing: torch, torchvision, torchaudio
@@ -41,7 +51,7 @@ def check_and_install_dependencies():
             pkg for pkg in [
                 "torch",
                 "torchvision",
-                "torchaudio"] if importlib.util.find_spec(pkg) is None]
+                "torchaudio"] if importlib_util.find_spec(pkg) is None]
 
         if special_missing:
             print(
