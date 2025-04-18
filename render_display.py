@@ -7,6 +7,28 @@ import logging
 from utils_logger import Logger
 logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
 
+
+
+
+
+# Constants for the menu screen
+FONT_NAME = "Arial"
+
+
+# Define some reusable colours
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+BLUE = (50, 100, 255)
+GREEN = (50, 255, 50)
+RED = (255, 50, 50)
+GREY = (100, 100, 100)
+DARK_GREY = (50, 50, 50)
+
+
+
+
+
+
 #    ____                _                    
 #   |  _ \ ___ _ __   __| | ___ _ __ ___ _ __ 
 #   | |_) / _ \ '_ \ / _` |/ _ \ '__/ _ \ '__|
@@ -269,7 +291,7 @@ class GameRenderer:
         lines = []
 
         # Episode and Step
-        lines.append(font.render(f"Episode: {episode} | Step: {step}", True, (255, 255, 255)))
+        lines.append(font.render(f"Episode: {episode}/{utils_config.EPISODES_LIMIT} | Step: {step} /{utils_config.STEPS_PER_EPISODE}", True, (255, 255, 255)))
 
         # Time
         elapsed_time = pygame.time.get_ticks() // 1000
@@ -550,29 +572,6 @@ class GameRenderer:
 
 
 
-# Constants for the menu screen
-FONT_NAME = "Arial"
-TITLE = "Simulation Game"
-WELCOME_TEXT = "Welcome to the Multi-Agent Faction Wars Simulation Game!"
-HYPERPARAMS_TEXT = "Please set your hyperparameters and preferences below."
-TRAIN_EVALUATE_TEXT = "Choose Mode (Training or Evaluation):"
-TENSORBOARD_TEXT = "Run TensorBoard after Simulation?"
-AUTOMATIC_TB_TEXT = "Automatically open TensorBoard after simulation?"
-
-# Define some colours
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-BLUE = (50, 100, 255)
-GREEN = (50, 255, 50)
-RED = (255, 50, 50)
-GREY = (100, 100, 100)
-DARK_GREY = (50, 50, 50)
-# Define icons
-
-
-
-
-
 
 
 
@@ -626,13 +625,14 @@ class MenuRenderer:
         SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
 
         button_width = 250
-        button_height = 60
+        button_height = 40
         button_font_size = 22
         button_spacing = 20
 
         center_x = SCREEN_WIDTH // 2 - button_width // 2
         base_y = 250
-
+        self.draw_text(self.screen, "Welcome to the Multi-agent competitive and cooperative strategy (MACCS) Simulation", FONT_NAME, 28, WHITE, SCREEN_WIDTH // 2, base_y - 100)
+        self.draw_text(self.screen, "Created as part of my BSC Computer Science final year project", FONT_NAME, 20, WHITE, SCREEN_WIDTH // 2, base_y - 70)
         self.draw_text(self.screen, "Choose Mode", FONT_NAME, 28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
 
         check_icon = pygame.font.SysFont(FONT_NAME, 40).render('✔', True, GREEN)
@@ -648,28 +648,61 @@ class MenuRenderer:
             self.screen, "Evaluation", FONT_NAME, button_font_size, BLUE, (0, 0, 255), (0, 0, 200),
             SCREEN_WIDTH // 2 + 50, base_y, button_width, button_height
         )
+        if self.selected_mode == 'train':
+            start_text = "Start Training Simulation"
+            base_color = GREEN
+            hover_color = (0, 200, 0)
+            click_color = (0, 100, 0)
+        elif self.selected_mode == 'evaluate':
+            start_text = "Start Evaluation Simulation"
+            base_color = BLUE
+            hover_color = (0, 0, 255)
+            click_color = (0, 0, 200)
+        else:
+            start_text = "Mode Required"
+            base_color = GREY
+            hover_color = (100, 100, 100)
+            click_color = (70, 70, 70)
+
         start_button_rect = self.create_button(
-            self.screen, "Start Simulation", FONT_NAME, button_font_size, BLUE if self.selected_mode else GREY,
-            (50, 100, 255) if self.selected_mode else (100, 100, 100),
-            (30, 70, 200) if self.selected_mode else (70, 70, 70),
-            center_x, base_y + (button_height + button_spacing) * 2, button_width, button_height
+            self.screen,
+            start_text,
+            FONT_NAME,
+            button_font_size,
+            base_color,
+            hover_color,
+            click_color,
+            center_x,
+            base_y + (button_height + button_spacing) * 2,
+            button_width,
+            button_height
         )
+
+
+
         settings_button_rect = self.create_button(
             self.screen, "Settings", FONT_NAME, button_font_size, GREY, (180, 180, 180), (100, 100, 100),
             center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
         )
+        
 
-        exit_button_rect = self.create_button(
-            self.screen, "Exit", FONT_NAME, button_font_size, RED, (255, 0, 0), (200, 0, 0),
+        credits_button_rect = self.create_button(
+            self.screen, "Credits", FONT_NAME, button_font_size, DARK_GREY, (160, 160, 160), (90, 90, 90),
             center_x, base_y + (button_height + button_spacing) * 4, button_width, button_height
         )
+
+        exit_button_rect = self.create_button(
+            self.screen, "Exit", FONT_NAME, button_font_size, RED, (150, 0, 0), (200, 0, 0),
+            center_x, base_y + (button_height + button_spacing) * 5, button_width, button_height
+        )
+
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if train_button_rect.collidepoint(event.pos):
                     self.selected_mode = 'train'
                     print("[INFO] Training mode selected.")
@@ -684,7 +717,7 @@ class MenuRenderer:
                     return False
 
                 elif settings_button_rect.collidepoint(event.pos):
-                    settings_menu = SettingsMenu(self.screen)
+                    settings_menu = SettingsMenuRenderer(self.screen)
                     while settings_menu.render():
                         pass
 
@@ -694,6 +727,12 @@ class MenuRenderer:
                             if hasattr(utils_config, key):
                                 setattr(utils_config, key, value)
                         print("[INFO] Updated settings:", updated)
+                
+                elif credits_button_rect.collidepoint(event.pos):
+                      # Make sure this import exists at the top
+                    credits = CreditsRenderer(self.screen)
+                    credits.run()
+
 
                 elif exit_button_rect.collidepoint(event.pos):
                     print("[INFO] Exiting game...")
@@ -704,12 +743,26 @@ class MenuRenderer:
         return True
 
 
-class SettingsMenu:
+
+#    ____       _   _   _                   __  __                  
+#   / ___|  ___| |_| |_(_)_ __   __ _ ___  |  \/  | ___ _ __  _   _ 
+#   \___ \ / _ \ __| __| | '_ \ / _` / __| | |\/| |/ _ \ '_ \| | | |
+#    ___) |  __/ |_| |_| | | | | (_| \__ \ | |  | |  __/ | | | |_| |
+#   |____/ \___|\__|\__|_|_| |_|\__, |___/ |_|  |_|\___|_| |_|\__,_|
+#                               |___/                               
+
+
+class SettingsMenuRenderer:
     def __init__(self, screen):
         self.screen = screen
         self.font = pygame.font.SysFont(FONT_NAME, 24)
         self.selected_category = "debugging"
         self.saved = False
+        self.input_mode = False
+        self.input_field = None
+        self.input_text = ""
+        self.cursor_visible = True
+        self.cursor_timer = 0
 
         # Define category labels
         self.sidebar_items = [
@@ -812,6 +865,10 @@ class SettingsMenu:
 
     def render(self):
         self.screen.fill(BLACK)
+        self.cursor_timer += 1
+        if self.cursor_timer >= 30:
+            self.cursor_visible = not self.cursor_visible
+            self.cursor_timer = 0
 
         for idx, label in enumerate(self.sidebar_items):
             y = 80 + idx * 60
@@ -828,13 +885,24 @@ class SettingsMenu:
             label = setting["label"]
             val = setting["value"]
             self.draw_text(f"{label}:", 20, WHITE, 250, y)
-            self.draw_text(str(val), 20, GREEN if val else RED, 600, y)
+            if self.input_mode and self.input_field == setting:
+                display_text = self.input_text + ("|" if self.cursor_visible else "")
+                self.draw_text(display_text, 20, WHITE, 600, y)
+            else:
+                self.draw_text(str(val), 20, GREEN if val else RED, 600, y)
+
 
             if "options" in setting:
                 toggle_btn = pygame.Rect(700, y, 40, 30)
                 pygame.draw.rect(self.screen, DARK_GREY, toggle_btn)
-                icon = self.check_icon if setting["value"] else self.cross_icon
-                self.screen.blit(icon, (toggle_btn.x + 4, toggle_btn.y + 2))
+                if setting["value"]:
+                    pygame.draw.rect(self.screen, GREEN, toggle_btn)
+                    self.draw_text("ON", 18, BLACK, toggle_btn.x + 5, toggle_btn.y + 5)
+                else:
+                    pygame.draw.rect(self.screen, RED, toggle_btn)
+                    self.draw_text("OFF", 18, BLACK, toggle_btn.x + 2, toggle_btn.y + 5)
+
+            
                 step_buttons.append(("toggle", toggle_btn, setting))
 
             elif "step" in setting:
@@ -855,13 +923,31 @@ class SettingsMenu:
         save_return_btn = self.create_button("Save and Return", FONT_NAME, 20, BLUE, (80, 80, 255), (50, 50, 200), 450, 500, 250, 50)
         reset_all_btn = self.create_button("Reset All", FONT_NAME, 20, GREY, (180, 180, 180), (120, 120, 120), 20, 500, 200, 50)
 
+        note_text = "Tip: You can click on a value to input in a custom number. Type and press Enter to confirm"
+        screen_width = self.screen.get_width()
+        self.draw_text(note_text, 24, GREY, 50, 560)
+
+
+
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                for i, setting in enumerate(settings):
+                    y = 80 + i * 60
+                    value_rect = pygame.Rect(600, y, 80, 30)  # matches where you draw the values
+                    if value_rect.collidepoint(mouse_x, mouse_y) and "step" in setting:
+                        self.input_mode = True
+                        self.input_field = setting
+                        self.input_text = str(setting["value"])
+                        clicked_input = True
+
+
+
                 if back_btn.collidepoint(event.pos):
                     return False
                 if save_return_btn.collidepoint(event.pos):
@@ -884,6 +970,39 @@ class SettingsMenu:
                         elif action == "reset":
                             default_val = self.defaults.get(setting["key"], setting["value"])
                             setting["value"] = default_val
+                clicked_input = False
+                for i, setting in enumerate(settings):
+                    y = 80 + i * 60
+                    value_rect = pygame.Rect(600, y, 80, 30)
+                    if value_rect.collidepoint(mouse_x, mouse_y) and "step" in setting:
+                        self.input_mode = True
+                        self.input_field = setting
+                        self.input_text = str(setting["value"])
+                        clicked_input = True
+
+
+                if not clicked_input:
+                    self.input_mode = False
+                    self.input_field = None
+
+            if event.type == pygame.KEYDOWN and self.input_mode:
+                if event.key == pygame.K_RETURN:
+                    try:
+                        value = float(self.input_text) if '.' in self.input_text else int(self.input_text)
+                        self.input_field["value"] = value
+                    except ValueError:
+                        pass  # optionally show a warning or revert to old value
+                    self.input_mode = False
+                    self.input_field = None
+                    self.input_text = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    self.input_text = self.input_text[:-1]
+                else:
+                    if event.unicode.isdigit() or event.unicode in ['.', '-']:
+                        self.input_text += event.unicode
+
+
+
 
         return True
 
@@ -893,3 +1012,51 @@ class SettingsMenu:
             for setting in cat:
                 settings[setting["key"]] = setting["value"]
         return settings
+
+
+class CreditsRenderer:
+    def __init__(self, screen):
+        self.screen = screen
+        self.font = pygame.font.SysFont("arial", 28)
+        self.title_font = pygame.font.SysFont("arial", 36, bold=True)
+        self.text_colour = (255, 255, 255)
+        self.bg_colour = (0, 0, 0)
+
+        self.lines = [
+            "Multi-Agent Competitive and Cooperative Strategy (MACCS)",
+            "Developed by Arunpreet Garcha",
+            "For my",
+            "Final Year Project",
+            "At",
+            "University College Birmingham",
+            "April 2025",
+            "",
+            "Press ESC to return to the menu"
+        ]
+
+    def draw(self):
+        self.screen.fill(self.bg_colour)
+
+        # Title
+        title = self.title_font.render("CREDITS", True, self.text_colour)
+        title_rect = title.get_rect(center=(self.screen.get_width() // 2, 80))
+        self.screen.blit(title, title_rect)
+
+        # Credit lines
+        for i, line in enumerate(self.lines):
+            rendered = self.font.render(line, True, self.text_colour)
+            rect = rendered.get_rect(center=(self.screen.get_width() // 2, 150 + i * 40))
+            self.screen.blit(rendered, rect)
+
+        pygame.display.flip()
+
+    def run(self):
+        running = True
+        while running:
+            self.draw()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    running = False

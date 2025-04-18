@@ -56,6 +56,11 @@ def main():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     print("\033[91m[INFO] Window closed. Exiting game..\033[0m")  
+                    if utils_config.ENABLE_TENSORBOARD:
+                        try:
+                            TensorBoardLogger().close()
+                        except:
+                            raise
                     
                     running = False  # Stop the loop
                     break  # Exit event processing

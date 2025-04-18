@@ -24,7 +24,7 @@ To run TensorBoard:
 Use a second terminal/command prompt/PowerShell window and run:
 
 ```
-tensorboard --logdir="logs\game" --port=6006
+tensorboard --logdir="Tensorboard_logs" --port=6006
 ```
 
 Once started, access TensorBoard at:

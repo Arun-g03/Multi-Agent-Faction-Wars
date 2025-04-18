@@ -9,6 +9,7 @@ import utils_config
 from utils_logger import Logger
 from utils_logger import TensorBoardLogger
 
+
 logger = Logger(log_file="neural_network_log.txt", log_level=logging.DEBUG)
 
 # Check for GPU

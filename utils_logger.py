@@ -356,6 +356,6 @@ class MatplotlibPlotter:
         :param tensorboard_logger: TensorBoardLogger instance.
         """
         image = plt.imread(image_name)
-        tensorboard_logger.log_image(image_name, image, step=0)
+        TensorBoardLogger().log_image(image_name, image, step=0)
         print(f"Sent {image_name} to TensorBoard.")
 

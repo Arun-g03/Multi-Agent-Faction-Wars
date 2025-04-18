@@ -10,6 +10,7 @@ import random
 import math
 
 from utils_helpers import profile_function
+
 """Importing codebase things to bring the componenets together and form the game"""
 from env_terrain import Terrain
 from env_resources import ResourceManager, AppleTree, GoldLump
@@ -527,9 +528,18 @@ class GameManager:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             print("[INFO] Window closed. Exiting game...")
-                            if utils_config.ENABLE_LOGGING:self. logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
+                            if utils_config.ENABLE_LOGGING:
+                                self.logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
+                            
+                            # ✅ Flush and close the logger before quitting
+                            if utils_config.ENABLE_TENSORBOARD:
+                                try:
+                                    TensorBoardLogger.close()
+                                except Exception as e:
+                                    raise e
                             pygame.quit()
                             sys.exit()
+
 
                     self.step()
                     self.current_step += 1
