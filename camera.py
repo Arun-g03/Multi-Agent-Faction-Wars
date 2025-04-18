@@ -1,8 +1,16 @@
 import pygame
 
+
 class Camera:
     """ Game camera class for controlling the viewport. """
-    def __init__(self, WORLD_WIDTH, WORLD_HEIGHT, screen_width, SCREEN_HEIGHT, restrict_bounds=False):
+
+    def __init__(
+            self,
+            WORLD_WIDTH,
+            WORLD_HEIGHT,
+            screen_width,
+            SCREEN_HEIGHT,
+            restrict_bounds=False):
         self.x = 0
         self.y = 0
         self.zoom = 1.0
@@ -20,8 +28,10 @@ class Camera:
         self.y += dy
 
         if self.restrict_bounds:  # Apply bounds if restriction is enabled
-            self.x = max(0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
-            self.y = max(0, min(self.WORLD_HEIGHT - self.SCREEN_HEIGHT / self.zoom, self.y))
+            self.x = max(0, min(self.WORLD_WIDTH -
+                         self.screen_width / self.zoom, self.x))
+            self.y = max(0, min(self.WORLD_HEIGHT -
+                         self.SCREEN_HEIGHT / self.zoom, self.y))
 
     def apply(self, position):
         """
@@ -30,10 +40,8 @@ class Camera:
         x, y = position
         screen_x = (x - self.x) * self.zoom
         screen_y = (y - self.y) * self.zoom
-        
+
         return screen_x, screen_y
-
-
 
     def apply_rect(self, rect):
         """
@@ -57,6 +65,7 @@ class Camera:
         Zoom out by decreasing the zoom factor.
         """
         self.zoom = max(self.zoom / 1.1, 0.5)  # Min zoom of 50%
+
     def zoom_around_mouse(self, zoom_in, mouse_x, mouse_y):
         """
         Zoom in or out, keeping the world coordinates under the mouse pointer stationary.
@@ -74,10 +83,13 @@ class Camera:
         else:
             self.zoom = max(self.zoom / 1.1, 0.5)  # Zoom out (min 50%)
 
-        # Calculate new camera position so the mouse points to the same world coordinate
+        # Calculate new camera position so the mouse points to the same world
+        # coordinate
         self.x = world_mouse_x - mouse_x / self.zoom
         self.y = world_mouse_y - mouse_y / self.zoom
 
         # Ensure the camera stays within the bounds of the world
-        self.x = max(0, min(self.utils_config.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
-        self.y = max(0, min(self.utils_config.WORLD_HEIGHT - self.utils_config.SCREEN_HEIGHT / self.zoom, self.y))
+        self.x = max(0, min(self.utils_config.WORLD_WIDTH -
+                     self.screen_width / self.zoom, self.x))
+        self.y = max(0, min(self.utils_config.WORLD_HEIGHT -
+                     self.utils_config.SCREEN_HEIGHT / self.zoom, self.y))

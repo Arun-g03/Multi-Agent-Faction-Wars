@@ -1,3 +1,11 @@
+from utils_logger import TensorBoardLogger
+from utils_helpers import profile_function  # Import profiler
+from game_manager import GameManager
+from render_display import MenuRenderer, GameRenderer
+import os
+import datetime
+import pygame
+import traceback
 import subprocess
 import sys
 import utils_config
@@ -8,31 +16,25 @@ try:
     result = subprocess.run([sys.executable, startup_script], check=True)
 except subprocess.CalledProcessError:
     sys.exit("[ERROR] Failed to verify dependencies. Exiting.")
-import traceback
 
-#Continue with main program after startup script dependency check
-import pygame
-import datetime
-import os
-from render_display import MenuRenderer, GameRenderer
-from game_manager import GameManager
+# Continue with main program after startup script dependency check
 
-from utils_helpers import profile_function  # Import profiler
 
 # Constants for the menu screen
 FONT_NAME = "Arial"
 TITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
 
-from utils_logger import TensorBoardLogger
 # Initialise tensorboard logger
 tensorboard_logger = TensorBoardLogger(log_dir="Tensorboard_logs")
+
 
 def main():
     """Main function to run the game."""
     try:
         # Initialise pygame
         pygame.init()
-        screen = pygame.display.set_mode((utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT))
+        screen = pygame.display.set_mode(
+            (utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT))
         pygame.display.set_caption(TITLE)
 
         # Create instances of MenuRenderer
@@ -55,22 +57,28 @@ def main():
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    print("\033[91m[INFO] Window closed. Exiting game..\033[0m")  
+                    print("\033[91m[INFO] Window closed. Exiting game..\033[0m")
                     if utils_config.ENABLE_TENSORBOARD:
                         try:
                             TensorBoardLogger().close()
-                        except:
+                        except BaseException:
                             raise
-                    
+
                     running = False  # Stop the loop
                     break  # Exit event processing
 
             if is_menu:
                 is_menu = menu_renderer.render_menu(
-                    utils_config.ENABLE_TENSORBOARD, auto_ENABLE_TENSORBOARD, mode,
-                    start_game_callback=lambda m, d, t: start_game(screen, m, d, t)
-                )
-
+                    utils_config.ENABLE_TENSORBOARD,
+                    auto_ENABLE_TENSORBOARD,
+                    mode,
+                    start_game_callback=lambda m,
+                    d,
+                    t: start_game(
+                        screen,
+                        m,
+                        d,
+                        t))
 
                 if not is_menu and menu_renderer.selected_mode:
                     game_manager = start_game(
@@ -103,7 +111,8 @@ def main():
                         running = game_manager.run()  # Run the game loop and check if it should continue
 
                         if not running:  # If `False`, stop execution
-                            print("\033[91m[INFO] Exiting game after run() stopped.\033[0m")
+                            print(
+                                "\033[91m[INFO] Exiting game after run() stopped.\033[0m")
                             pygame.quit()
                             sys.exit()
 
@@ -126,9 +135,10 @@ def main():
                         break
                 else:
                     is_menu = True
-                    print("[ERROR] Game manager or Game Renderer is None. Returning to menu.")
+                    print(
+                        "[ERROR] Game manager or Game Renderer is None. Returning to menu.")
 
-        print("\033[91m[INFO] Exiting game...\033[0m")        
+        print("\033[91m[INFO] Exiting game...\033[0m")
         pygame.quit()  # Ensure Pygame fully shuts down
         sys.exit()  # Ensure Python exits completely
 
@@ -138,7 +148,12 @@ def main():
         pygame.quit()
         sys.exit()
 
-def start_game(screen, mode, ENABLE_TENSORBOARD=True, auto_ENABLE_TENSORBOARD=True):
+
+def start_game(
+        screen,
+        mode,
+        ENABLE_TENSORBOARD=True,
+        auto_ENABLE_TENSORBOARD=True):
     """
     Initialises and starts the game.
     """
@@ -159,6 +174,7 @@ def start_game(screen, mode, ENABLE_TENSORBOARD=True, auto_ENABLE_TENSORBOARD=Tr
         print(f"Error starting the game: {e}")
         traceback.print_exc()
         return None  # Return None to indicate failure
+
 
 # Run the main function with profiling if enabled
 if __name__ == "__main__":

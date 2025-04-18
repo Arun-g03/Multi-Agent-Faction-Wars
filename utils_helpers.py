@@ -1,24 +1,28 @@
+import datetime
+import io
+import pstats
+import cProfile
 import random
 import math
 import logging
 from utils_logger import Logger
 logger = Logger(log_file="utils_helpers.txt", log_level=logging.DEBUG)
 
-import cProfile
-import pstats
-import io
-import datetime
 
-
-#    ____  ____   ___  _____ ___ _     ___ _   _  ____ 
+#    ____  ____   ___  _____ ___ _     ___ _   _  ____
 #   |  _ \|  _ \ / _ \|  ___|_ _| |   |_ _| \ | |/ ___|
-#   | |_) | |_) | | | | |_   | || |    | ||  \| | |  _ 
+#   | |_) | |_) | | | | |_   | || |    | ||  \| | |  _
 #   |  __/|  _ <| |_| |  _|  | || |___ | || |\  | |_| |
 #   |_|   |_| \_\\___/|_|   |___|_____|___|_| \_|\____|
-#                                                      
+#
 
 
-def profile_function(func, output_file=f"Profiling_Stats/profile_output_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.prof", *args, **kwargs):
+def profile_function(
+        func,
+        output_file=f"Profiling_Stats/profile_output_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.prof",
+        *
+        args,
+        **kwargs):
     """
     Profiles a function and saves both execution time and function call reports.
     - The nested function `_save_profile_results` handles sorting & saving.
@@ -34,7 +38,7 @@ def profile_function(func, output_file=f"Profiling_Stats/profile_output_{datetim
     profiler.enable()
 
     try:
-        result = func(*args, **kwargs)  #  Run the function
+        result = func(*args, **kwargs)  # Run the function
     except Exception as e:
         print(f"[ERROR] Profiling interrupted due to an exception: {e}")
         result = None
@@ -61,16 +65,16 @@ def profile_function(func, output_file=f"Profiling_Stats/profile_output_{datetim
             f.write(call_report)
 
         print(f"[INFO] Combined profiling results saved to {output_file}")
-        
+
         return result
 
 
-#    _____ ___ _   _ ____     ____ _     ___  ____  _____ ____ _____    ___  ____      _ _____ ____ _____ 
+#    _____ ___ _   _ ____     ____ _     ___  ____  _____ ____ _____    __
 #   |  ___|_ _| \ | |  _ \   / ___| |   / _ \/ ___|| ____/ ___|_   _|  / _ \| __ )    | | ____/ ___|_   _|
-#   | |_   | ||  \| | | | | | |   | |  | | | \___ \|  _| \___ \ | |   | | | |  _ \ _  | |  _|| |     | |  
-#   |  _|  | || |\  | |_| | | |___| |__| |_| |___) | |___ ___) || |   | |_| | |_) | |_| | |__| |___  | |  
-#   |_|   |___|_| \_|____/   \____|_____\___/|____/|_____|____/ |_|    \___/|____/ \___/|_____\____| |_|  
-#                                                                                                         
+#   | |_   | ||  \| | | | | | |   | |  | | | \___ \|  _| \___ \ | |   | | | |  _ \ _  | |  _|| |     | |
+#   |  _|  | || |\  | |_| | | |___| |__| |_| |___) | |___ ___) || |   | |_| | |_) | |_| | |__| |___  | |
+#   |_|   |___|_| \_|____/   \____|_____\___/|____/|_____|____/ |_|    \___/|____/ \___/|_____\____| |_|
+#
 
 
 def find_closest_actor(entities, entity_type=None, requester=None):
@@ -80,7 +84,9 @@ def find_closest_actor(entities, entity_type=None, requester=None):
     """
     if not entities:
         requester_name = getattr(requester, "role", "HQ")
-        logger.log_msg(f"{requester_name} found no valid {entity_type or 'actor'}.", level=logging.WARNING)
+        logger.log_msg(
+            f"{requester_name} found no valid {entity_type or 'actor'}.",
+            level=logging.WARNING)
         return None
 
     closest_entity = None
@@ -100,35 +106,32 @@ def find_closest_actor(entities, entity_type=None, requester=None):
             else:
                 continue  # Skip invalid entries
         except Exception as e:
-            logger.log_msg(f"Skipping invalid entity: {entity}. Error: {e}", level=logging.WARNING)
+            logger.log_msg(
+                f"Skipping invalid entity: {entity}. Error: {e}",
+                level=logging.WARNING)
             continue
 
-        dist = ((requester_x - entity_x) ** 2 + (requester_y - entity_y) ** 2) ** 0.5
+        dist = ((requester_x - entity_x) ** 2 +
+                (requester_y - entity_y) ** 2) ** 0.5
         if dist < min_distance:
             min_distance = dist
             closest_entity = entity
 
     if closest_entity:
         requester_name = getattr(requester, "role", "HQ")
-        logger.log_msg(f"{requester_name} found closest {entity_type}: {closest_entity}", level=logging.INFO)
+        logger.log_msg(
+            f"{requester_name} found closest {entity_type}: {closest_entity}",
+            level=logging.INFO)
 
     return closest_entity
 
 
-
-
-
-
-
-#     ____                           _                   _                     __               __            _   _             
-#    / ___| ___ _ __   ___ _ __ __ _| |_ ___    ___ ___ | | ___  _   _ _ __   / _| ___  _ __   / _| __ _  ___| |_(_) ___  _ __  
-#   | |  _ / _ \ '_ \ / _ \ '__/ _` | __/ _ \  / __/ _ \| |/ _ \| | | | '__| | |_ / _ \| '__| | |_ / _` |/ __| __| |/ _ \| '_ \ 
+#     ____                           _                   _                     __               __            _   _
+#    / ___| ___ _ __   ___ _ __ __ _| |_ ___    ___ ___ | | ___  _   _ _ __   / _| ___  _ __   / _| __ _  ___| |_(_) ___  _ __
+#   | |  _ / _ \ '_ \ / _ \ '__/ _` | __/ _ \  / __/ _ \| |/ _ \| | | | '__| | |_ / _ \| '__| | |_ / _` |/ __| __| |/ _ \| '_ \
 #   | |_| |  __/ | | |  __/ | | (_| | ||  __/ | (_| (_) | | (_) | |_| | |    |  _| (_) | |    |  _| (_| | (__| |_| | (_) | | | |
 #    \____|\___|_| |_|\___|_|  \__,_|\__\___|  \___\___/|_|\___/ \__,_|_|    |_|  \___/|_|    |_|  \__,_|\___|\__|_|\___/|_| |_|
-#                                                                                                                               
-
-
-
+#
 
 
 def generate_random_colour(used_colours=None, min_distance=100):
@@ -148,7 +151,8 @@ def generate_random_colour(used_colours=None, min_distance=100):
 
     def euclidean_distance(colour1, colour2):
         """Calculate the Euclidean distance between two RGB colours."""
-        return math.sqrt(sum((c1 - c2) ** 2 for c1, c2 in zip(colour1, colour2)))
+        return math.sqrt(
+            sum((c1 - c2) ** 2 for c1, c2 in zip(colour1, colour2)))
 
     def is_valid_colour(colour):
         """Ensure the colour is not too dark, too bright, or grassy green."""
@@ -167,15 +171,11 @@ def generate_random_colour(used_colours=None, min_distance=100):
 
     while True:
         # Generate a random colour
-        colour = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        colour = (random.randint(0, 255), random.randint(
+            0, 255), random.randint(0, 255))
 
         # Ensure the colour is valid and distinct
-        if (is_valid_colour(colour) and
-            all(euclidean_distance(colour, used) >= min_distance for used in used_colours)):
+        if (is_valid_colour(colour) and all(euclidean_distance(
+                colour, used) >= min_distance for used in used_colours)):
             used_colours.append(colour)  # Add to the list of used colours
             return colour
-
-
-
-
-

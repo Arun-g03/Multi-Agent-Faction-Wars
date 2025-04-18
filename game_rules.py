@@ -1,13 +1,9 @@
 
 
-
 """
 THis file should control the episodic win rules and conditions
 
 """
-
-
-
 
 
 import random
@@ -21,7 +17,9 @@ FACTION_GOAL = {
     'food_collection': 500
 }
 
-MAX_STALE_STEPS = 400  # Number of steps without meaningful activity to trigger a dynamic event
+# Number of steps without meaningful activity to trigger a dynamic event
+MAX_STALE_STEPS = 400
+
 
 def check_victory(factions):
     """
@@ -36,22 +34,20 @@ def check_victory(factions):
     for faction in factions:
         if faction.gold_balance >= FACTION_GOAL['gold_collection'] or \
            faction.food_balance >= FACTION_GOAL['food_collection']:
-            print ("Resource victory!")
+            print("Resource victory!")
             return faction  # Return the winning faction
 
     # Check last faction standing
     if len(active_factions) == 1:
-        print ("Last faction standing!")
+        print("Last faction standing!")
         return active_factions[0]
 
     # Check draw (no active factions)
     if len(active_factions) == 0:
-        print ("Draw!")
+        print("Draw!")
         return None  # Draw/stalemate
 
     return None  # No winner yet
-
-
 
 
 def resolve_conflict(agent1, agent2):

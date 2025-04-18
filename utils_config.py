@@ -10,112 +10,103 @@ So i dont have to change the internal code every time I want to change something
 """
 
 
-
-
-#    ____  _____ ____  _   _  ____    ___  ____ _____ ___ ___  _   _ ____  
-#   |  _ \| ____| __ )| | | |/ ___|  / _ \|  _ \_   _|_ _/ _ \| \ | / ___| 
-#   | | | |  _| |  _ \| | | | |  _  | | | | |_) || |  | | | | |  \| \___ \ 
+#    ____  _____ ____  _   _  ____    ___  ____ _____ ___ ___  _   _ ____
+#   |  _ \| ____| __ )| | | |/ ___|  / _ \|  _ \_   _|_ _/ _ \| \ | / ___|
+#   | | | |  _| |  _ \| | | | |  _  | | | | |_) || |  | | | | |  \| \___ \
 #   | |_| | |___| |_) | |_| | |_| | | |_| |  __/ | |  | | |_| | |\  |___) |
-#   |____/|_____|____/ \___/ \____|  \___/|_|    |_| |___\___/|_| \_|____/ 
-#                                                                          
+#   |____/|_____|____/ \___/ \____|  \___/|_|    |_| |___\___/|_| \_|____/
+#
 
 
-#Customisable
+# Customisable
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = False 
+ENABLE_LOGGING = False
 """Enable logging for debugging"""
 
 ENABLE_TENSORBOARD = True
 """Enable tensorboard for visualisation"""
 
 
-
-
-
-#    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ _____ ___ _   _  ____ ____  
-#   | ____|  _ \_ _/ ___| / _ \|  _ \| ____| / ___|| ____|_   _|_   _|_ _| \ | |/ ___/ ___| 
-#   |  _| | |_) | |\___ \| | | | | | |  _|   \___ \|  _|   | |   | |  | ||  \| | |  _\___ \ 
+#    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ _____ ___ _   _  ____ ____
+#   | ____|  _ \_ _/ ___| / _ \|  _ \| ____| / ___|| ____|_   _|_   _|_ _| \ | |/ ___/ ___|
+#   |  _| | |_) | |\___ \| | | | | | |  _|   \___ \|  _|   | |   | |  | ||  \| | |  _\___ \
 #   | |___|  __/| | ___) | |_| | |_| | |___   ___) | |___  | |   | |  | || |\  | |_| |___) |
-#   |_____|_|  |___|____/ \___/|____/|_____| |____/|_____| |_|   |_| |___|_| \_|\____|____/ 
-#                                                                                           
-
+#   |_____|_|  |___|____/ \___/|____/|_____| |____/|_____| |_|   |_| |___|_| \_|\____|____/
+#
 
 
 # Customise as needed!
-#More training equals better results... probably.
+# More training equals better results... probably.
 
-EPISODES_LIMIT = 50 #How many episodes or games to train for
-STEPS_PER_EPISODE = 7500 #How many steps to take per episode/ How long should a game last
+EPISODES_LIMIT = 50  # How many episodes or games to train for
+# How many steps to take per episode/ How long should a game last
+STEPS_PER_EPISODE = 7500
 
-#Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on hardware)
+# Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
+# hardware)
 
 
-
-
-#    __  __      _        _          
-#   |  \/  | ___| |_ _ __(_) ___ ___ 
+#    __  __      _        _
+#   |  \/  | ___| |_ _ __(_) ___ ___
 #   | |\/| |/ _ \ __| '__| |/ __/ __|
 #   | |  | |  __/ |_| |  | | (__\__ \
 #   |_|  |_|\___|\__|_|  |_|\___|___/
-#                                    
+#
 
 
-#Metric path for tensorboard
+# Metric path for tensorboard
 ModelMetrics_Path = "logs/"
-#I suggest leaving this as default
+# I suggest leaving this as default
 
 
-
-
-#    ____                           
-#   / ___|  ___ _ __ ___  ___ _ __  
-#   \___ \ / __| '__/ _ \/ _ \ '_ \ 
+#    ____
+#   / ___|  ___ _ __ ___  ___ _ __
+#   \___ \ / __| '__/ _ \/ _ \ '_ \
 #    ___) | (__| | |  __/  __/ | | |
 #   |____/ \___|_|  \___|\___|_| |_|
-#                                   
+#
 
 # Pygame Settings
 FPS = 240  # Frames per second # Customise as needed!
 
 # Screen Dimensions
 
-ASPECT_RATIO = 0.6 # Customise as needed!
+ASPECT_RATIO = 0.6  # Customise as needed!
 "Allows to change the size of the game window without changing x,y resolution"
 
 SCREEN_WIDTH = 1920 * ASPECT_RATIO
 SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
-#FPS cap and screen dimenions
-#Change these to change the game window size
+# FPS cap and screen dimenions
+# Change these to change the game window size
 
 
-
-#   __        __         _     _ 
+#   __        __         _     _
 #   \ \      / /__  _ __| | __| |
 #    \ \ /\ / / _ \| '__| |/ _` |
 #     \ V  V / (_) | |  | | (_| |
 #      \_/\_/ \___/|_|  |_|\__,_|
-#                                
+#
 
 
 # World Dimensions
-#Size of the in-game world
-WORLD_WIDTH = 500 # Customise as needed!
-WORLD_HEIGHT = 500 # Customise as needed!
+# Size of the in-game world
+WORLD_WIDTH = 500  # Customise as needed!
+WORLD_HEIGHT = 500  # Customise as needed!
 
 
 # Perlin Noise Settings
-#If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
-RandomiseTerrainBool = False # Customise as needed!
+# If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
+RandomiseTerrainBool = False  # Customise as needed!
 Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
-                    #combination with the current perlin noise settings
+# combination with the current perlin noise settings
 
 
 # colours
-#General colours used in the game
-GREEN = (34,139,34)  # Land
+# General colours used in the game
+GREEN = (34, 139, 34)  # Land
 BLUE = (30, 144, 255)     # Water
 RED = (255, 0, 0)  # Red
 APPLE_TREE_colour = (0, 255, 0)  # A brighter green for apple trees
@@ -124,76 +115,75 @@ GOLD_colour = (255, 215, 0)  # Gold colour
 # The size of each cell in the grid
 CELL_SIZE = 20
 
-Grass_Texture_Path = "images/Grass Tiles/Grass 001.png" #Grass texture path
-Water_Texture_Path = "images/Water+.png" #Water texture path
+Grass_Texture_Path = "images/Grass Tiles/Grass 001.png"  # Grass texture path
+Water_Texture_Path = "images/Water+.png"  # Water texture path
 
 
-WaterAnimationToggle = False #Toggle water animation #Turn off for performance
+WaterAnimationToggle = False  # Toggle water animation #Turn off for performance
 
 
-#    ____                                    
-#   |  _ \ ___  ___  ___  _   _ _ __ ___ ___ 
+#    ____
+#   |  _ \ ___  ___  ___  _   _ _ __ ___ ___
 #   | |_) / _ \/ __|/ _ \| | | | '__/ __/ _ \
 #   |  _ <  __/\__ \ (_) | |_| | | | (_|  __/
 #   |_| \_\___||___/\___/ \__,_|_|  \___\___|
-#                                            
+#
 
 
 # Perlin Noise Parameters
 # Together, these parameters control the terrain's appearance.
 # Good as default
 NOISE_SCALE = 100  # Higher values create larger features, lower values create smaller features # Customise as needed!
-NOISE_OCTAVES = 4  # Higher values add more detail, lower values create smoother terrain # Customise as needed!
-NOISE_PERSISTENCE = 0.7  # Higher values make details more pronounced, lower values make them subtler # Customise as needed!
-NOISE_LACUNARITY = 1.5  # Higher values increase the frequency of octaves, lower values decrease it # Customise as needed!
-WATER_COVERAGE = 0.3  # Percentage of the terrain that should be water # Customise as needed!
+# Higher values add more detail, lower values create smoother terrain #
+# Customise as needed!
+NOISE_OCTAVES = 4
+# Higher values make details more pronounced, lower values make them
+# subtler # Customise as needed!
+NOISE_PERSISTENCE = 0.7
+# Higher values increase the frequency of octaves, lower values decrease
+# it # Customise as needed!
+NOISE_LACUNARITY = 1.5
+# Percentage of the terrain that should be water # Customise as needed!
+WATER_COVERAGE = 0.3
 
 # Resource Parameters
-TREE_DENSITY = 0.09 # Density of apple trees on land # Customise as needed!
-APPLE_REGEN_TIME = 10 # Time in seconds for an apple tree to regrow an apple # Customise as needed!
-GOLD_ZONE_PROBABILITY = 0.1 # Probability of spawning a gold zone # Customise as needed!
-GOLD_SPAWN_DENSITY = 0.05 # Density of gold in gold zones # Customise as needed!
+TREE_DENSITY = 0.09  # Density of apple trees on land # Customise as needed!
+# Time in seconds for an apple tree to regrow an apple # Customise as needed!
+APPLE_REGEN_TIME = 10
+# Probability of spawning a gold zone # Customise as needed!
+GOLD_ZONE_PROBABILITY = 0.1
+GOLD_SPAWN_DENSITY = 0.05  # Density of gold in gold zones # Customise as needed!
 
 # File paths for resource images
-#Okay as is
-TREE_IMAGE_PATH = "images\PixelFlush - Pixel Tree Mega Pack\pngs\Apple Tree.png" #Tree image path
-GOLD_IMAGE_PATH = "images\Gold.png" #Gold image path
-GoldLump_Scale_Img = 2 #Scale of the gold lump image, needed to match the image size with the interactable area
-Tree_Scale_Img = 3 #Scale of the tree image, needed to match the image size with the interactable area
+# Okay as is
+# Tree image path
+TREE_IMAGE_PATH = "images\\PixelFlush - Pixel Tree Mega Pack\\pngs\\Apple Tree.png"
+GOLD_IMAGE_PATH = "images\\Gold.png"  # Gold image path
+# Scale of the gold lump image, needed to match the image size with the
+# interactable area
+GoldLump_Scale_Img = 2
+# Scale of the tree image, needed to match the image size with the
+# interactable area
+Tree_Scale_Img = 3
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#    _____         _      ____  _        _       
-#   |_   _|_ _ ___| | __ / ___|| |_ __ _| |_ ___ 
+#    _____         _      ____  _        _
+#   |_   _|_ _ ___| | __ / ___|| |_ __ _| |_ ___
 #     | |/ _` / __| |/ / \___ \| __/ _` | __/ _ \
 #     | | (_| \__ \   <   ___) | || (_| | ||  __/
 #     |_|\__,_|___/_|\_\ |____/ \__\__,_|\__\___|
-#                                                
+#
 
 
 class TaskState(Enum):
-    """ 
+    """
     State of a task in the task manager.
 
-    Allows for tracking the progress of a task or action. 
+    Allows for tracking the progress of a task or action.
 
     TaskState Enum is used to track the state of a task and uses several keywords to track the progress of a task.
 
-    WARNING: DO NOT MODIFY! Changing these values may break functionality.  
+    WARNING: DO NOT MODIFY! Changing these values may break functionality.
        """
     NONE = "none"            # No task assigned
     ONGOING = "ongoing"      # Task is actively being executed
@@ -203,15 +193,18 @@ class TaskState(Enum):
     INTERRUPTED = "interrupted"  # Task was interrupted
     BLOCKED = "blocked"      # Task cannot proceed
     ABANDONED = "abandoned"  # Task was abandoned
-    INVALID = "invalid"      # Task is not valid or cannot be executed (e.g. invalid parameters, unsupported action type for task)
-    UNASSIGNED = "unassigned" # A Task is ready to be picked up
+    # Task is not valid or cannot be executed (e.g. invalid parameters,
+    # unsupported action type for task)
+    INVALID = "invalid"
+    UNASSIGNED = "unassigned"  # A Task is ready to be picked up
+
 
 TASK_TYPE_MAPPING = {
     "none": 0,
     "gather": 1,
     "eliminate": 2,
     "explore": 3,
-    "move_to": 4  
+    "move_to": 4
 }
 """
 Define task type mappings to an integer value.
@@ -224,8 +217,8 @@ NETWORK_TYPE_MAPPING: dict = {
     "PPOModel": 1,
     "DQNModel": 2,
     "HQ_Network": 3,
-    
-    }
+
+}
 """
 Mapping of network types to their corresponding interger IDs.
 
@@ -235,14 +228,13 @@ TASK_METHODS_MAPPING = {
     "eliminate": "handle_eliminate_task",
     "gather": "handle_gather_task",
     "explore": "handle_explore_task",
-    "move_to": "handle_move_to_task", 
+    "move_to": "handle_move_to_task",
     #
-} 
+}
 """
 Connectes a mapping of task type to its handler methods.
 
  """
-
 
 
 HQ_STRATEGY_OPTIONS = [
@@ -254,7 +246,7 @@ HQ_STRATEGY_OPTIONS = [
     "RECRUIT_PEACEKEEPER",
     "NO_PRIORITY",
 ]
-""" 
+"""
 HQ Strategy options for the HQ.
 
 Defines the broad categories of strategies that the HQ can employ.
@@ -283,14 +275,14 @@ ROLE_ACTIONS_MAP = {
         "eliminate_threat",
         "explore"
     ],
-    
+
 }
 """
 Core actions that can be performed by each role.
 Makes it easier to define actions for each role.
 
 """
-   
+
 
 STATE_FEATURES_MAP = {
     "global_state": [
@@ -317,100 +309,88 @@ STATE_FEATURES_MAP = {
 """
 State features mapping structure for the agent.
 
- 
+
 """
 
 
-
-
-#       _                    _   
-#      / \   __ _  ___ _ __ | |_ 
+#       _                    _
+#      / \   __ _  ___ _ __ | |_
 #     / _ \ / _` |/ _ \ '_ \| __|
-#    / ___ \ (_| |  __/ | | | |_ 
+#    / ___ \ (_| |  __/ | | | |_
 #   /_/   \_\__, |\___|_| |_|\__|
-#           |___/                
+#           |___/
 
 # AGENT
-## Agent Render Scale Factor
+# Agent Render Scale Factor
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
-Agent_field_of_view = 10 # Agent field of view # Customise as needed!
-Agent_Interact_Range = 2 # Agent interact range, Anything inside will be interactable
+Agent_field_of_view = 10  # Agent field of view # Customise as needed!
+Agent_Interact_Range = 2  # Agent interact range, Anything inside will be interactable
 
 
-## File paths for agent images
-Peacekeeper_PNG = 'images\peacekeeper.png' #Path to peacekeeper image
-Gatherer_PNG = 'images\gatherer.png' #Path to gatherer image
+# File paths for agent images
+Peacekeeper_PNG = 'images\\peacekeeper.png'  # Path to peacekeeper image
+Gatherer_PNG = 'images\\gatherer.png'  # Path to gatherer image
 
-Gold_Cost_for_Agent = 10 # Gold cost for an agent
+Gold_Cost_for_Agent = 10  # Gold cost for an agent
 
 
 DEF_AGENT_STATE_SIZE = 10 + len(TASK_TYPE_MAPPING)
 
 """
-WARNING: DO NOT MODIFY THE STATE SIZE! 
+WARNING: DO NOT MODIFY THE STATE SIZE!
 Controls the information that is sent to/used by the agent model.
 Changing this values WILL break functionality unless updated across system :( """
 
 
-
-
-#    _____          _   _             
-#   |  ___|_ _  ___| |_(_) ___  _ __  
-#   | |_ / _` |/ __| __| |/ _ \| '_ \ 
+#    _____          _   _
+#   |  ___|_ _  ___| |_(_) ___  _ __
+#   | |_ / _` |/ __| __| |/ _ \| '_ \
 #   |  _| (_| | (__| |_| | (_) | | | |
 #   |_|  \__,_|\___|\__|_|\___/|_| |_|
-#                                     
+#
 
-#HQ
-HQ_SPAWN_RADIUS = 10 # Radius around HQ to spawn other HQs
-HQ_Agent_Spawn_Radius = 5 # Radius around HQ to spawn agents
-Faction_PNG = "images\castle-7440761_1280.png"
+# HQ
+HQ_SPAWN_RADIUS = 10  # Radius around HQ to spawn other HQs
+HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
+Faction_PNG = "images\\castle-7440761_1280.png"
 
-#Team Composition
-FACTON_COUNT = 2 # Number of factons # Customise as needed!
-INITAL_GATHERER_COUNT = 3 # Initial number of gatherers for a single faction # Customise as needed!
-INITAL_PEACEKEEPER_COUNT = 3 # Initial number of peacekeepers for a single faction # Customise as needed!
+# Team Composition
+FACTON_COUNT = 2  # Number of factons # Customise as needed!
+# Initial number of gatherers for a single faction # Customise as needed!
+INITAL_GATHERER_COUNT = 3
+# Initial number of peacekeepers for a single faction # Customise as needed!
+INITAL_PEACEKEEPER_COUNT = 3
 
 
-#     ____                               
-#    / ___|__ _ _ __ ___   ___ _ __ __ _ 
+#     ____
+#    / ___|__ _ _ __ ___   ___ _ __ __ _
 #   | |   / _` | '_ ` _ \ / _ \ '__/ _` |
 #   | |__| (_| | | | | | |  __/ | | (_| |
 #    \____\__,_|_| |_| |_|\___|_|  \__,_|
-#                                        
+#
 # Customise as needed!
 # Camera
-START_CAMERA_X = SCREEN_HEIGHT/2
-START_CAMERA_Y = SCREEN_WIDTH/2
+START_CAMERA_X = SCREEN_HEIGHT / 2
+START_CAMERA_Y = SCREEN_WIDTH / 2
 START_CELL_SIZE = 20
 # Customise as needed!
 
 # Zoom and Scaling Parameters
-SCALING_FACTOR = 1 # Factor to scale images when zooming in/out
+SCALING_FACTOR = 1  # Factor to scale images when zooming in/out
 MIN_CELL_SIZE = 2  # Minimum zoom level (cell size)
 MAX_ZOOM_OUT_LIMIT = 20  # Maximum zoom-out level (depends on screen size)
 
 
-
-
-
-
-
-#     ___        _                 _                _     ___ ___  
-#    / __|  _ __| |_ ___ _ __     /_\  __ _ ___ _ _| |_  |_ _|   \ 
+#     ___        _                 _                _     ___ ___
+#    / __|  _ __| |_ ___ _ __     /_\  __ _ ___ _ _| |_  |_ _|   \
 #   | (_| || (_-<  _/ _ \ '  \   / _ \/ _` / -_) ' \  _|  | || |) |
-#    \___\_,_/__/\__\___/_|_|_| /_/ \_\__, \___|_||_\__| |___|___/ 
-#                                     |___/                        
-
-
+#    \___\_,_/__/\__\___/_|_|_| /_/ \_\__, \___|_||_\__| |___|___/
+#                                     |___/
 
 
 AgentIDStruc = namedtuple("AgentID", ["faction_id", "agent_id"])
 """Identification tag for agents, combining faction ID and agent ID."""
-
-
-
 
 
 def create_task(self, task_type, target, task_id=None):
@@ -434,8 +414,5 @@ def create_task(self, task_type, target, task_id=None):
     }
     if task_id:
         task["id"] = task_id
-    
+
     return task
-
-
-
