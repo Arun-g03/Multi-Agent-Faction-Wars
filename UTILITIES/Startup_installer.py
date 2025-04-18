@@ -1,6 +1,12 @@
 import sys
 import os
-from SHARED.core_imports import *
+import re
+import os
+import sys
+import subprocess
+import traceback
+import importlib.util
+
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -40,7 +46,7 @@ def check_and_install_dependencies():
 
         missing_packages = []
         for i, pkg_name in enumerate(module_names):
-            if pkg_name and not importlib_util.find_spec(pkg_name):
+            if pkg_name and not importlib.util.find_spec(pkg_name):
                 missing_packages.append(pip_lines[i])
 
         """Check if the the pytorch machine learning components are missing: torch, torchvision, torchaudio
@@ -51,7 +57,7 @@ def check_and_install_dependencies():
             pkg for pkg in [
                 "torch",
                 "torchvision",
-                "torchaudio"] if importlib_util.find_spec(pkg) is None]
+                "torchaudio"] if importlib.util.find_spec(pkg) is None]
 
         if special_missing:
             print(

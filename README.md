@@ -20,6 +20,9 @@ TensorBoard is used to track various metrics and help identify trends over time.
 It can be launched while the main app is running or afterwards.
 Metric data is logged either in real-time or at the end of each episode, depending on the specific metric.
 
+
+
+!!!tensorboard Command is incorrect-  path is wrong!!!
 To run TensorBoard:
 Use a second terminal/command prompt/PowerShell window and run:
 

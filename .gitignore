@@ -1,9 +1,3 @@
 __pycache__/
-saved_models/
-Tensorboard_logs
-LOG/
-plan/
-Profiling_Stats/
-.vs/
-readmePersonal.txt
-lib
+RUNTIME_LOGS/
+RUNTIME_LOGS/LOGS/
