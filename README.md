@@ -4,7 +4,7 @@
 
 Before running the project:
 
-1. Ensure **Python 3.9.7** is installed. (64bit python 3.9.7 link https://www.python.org/ftp/python/3.9.7/python-3.9.7-amd64.exe)
+1. Ensure **Python 3.9.7** is installed. (https://www.python.org/ftp/python/3.9.7/)
 2. Make sure you're in the correct project directory:`/MultiAgent Faction Wars`
 3. Run the project using:
 
