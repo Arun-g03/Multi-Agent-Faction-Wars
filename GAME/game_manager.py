@@ -31,7 +31,7 @@ class GameManager:
     def __init__(
             self,
             mode,
-            save_dir="saved_models",
+            save_dir="NEURAL_NETWORK/saved_models",
             max_steps_per_episode=utils_config.STEPS_PER_EPISODE,
             screen=None):
         # Initialise a logger specific to GameManager
@@ -689,7 +689,7 @@ class GameManager:
                         if best_reward > _:
                             self.best_scores_per_role[role] = (
                                 best_agent, best_reward)
-                            model_path = f"saved_models/Best_{role}_episode_{self.episode}.pth"
+                            model_path = f"NEURAL_NETWORK/saved_models/Best_{role}_episode_{self.episode}.pth"
                             torch.save(best_agent.ai.state_dict(), model_path)
                             if utils_config.ENABLE_LOGGING:
                                 self.logger.log_msg(

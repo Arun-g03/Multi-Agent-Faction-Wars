@@ -17,3 +17,6 @@ def check_training_device():
     
     return Training_device# I was gonna break the file up but instead, i like that all the neural
 # network parts are together
+
+
+Training_device = check_training_device()

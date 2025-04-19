@@ -2,14 +2,16 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from NEURAL_NETWORK.Common import check_training_device
-Training_device = check_training_device()
+from NEURAL_NETWORK.Common import Training_device
+
 logger = Logger(log_file="DQN_Network.txt", log_level=logging.DEBUG)
 
 
 
-# I was gonna break the file up but instead, i like that all the neural
-# network parts are together
+"""
+Future works would see the DQN model being used for the Agents.
+This would allow variety in active models used by the agents.
+"""
 
 
 
