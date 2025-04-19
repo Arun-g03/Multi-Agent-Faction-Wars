@@ -763,7 +763,7 @@ class Peacekeeper(BaseAgent):
                 self.base_sprite, faction.colour) if faction and hasattr(
                 faction, 'colour') else self.base_sprite
 
-            from RENDER.render_display import get_font
+            from RENDER.Game_Renderer import get_font
             self.font = get_font(24)
 
             self.known_threats = []
@@ -821,7 +821,7 @@ class Gatherer(BaseAgent):
             self.sprite = tint_sprite(
                 self.base_sprite, faction.colour) if faction and hasattr(
                 faction, 'colour') else self.base_sprite
-            from RENDER.render_display import get_font
+            from RENDER.Game_Renderer import get_font
 
             self.font = get_font(24)
 
