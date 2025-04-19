@@ -1,4 +1,6 @@
+"""Common Imports"""
 from SHARED.core_imports import *
+
 
 
 class ResourceManager:

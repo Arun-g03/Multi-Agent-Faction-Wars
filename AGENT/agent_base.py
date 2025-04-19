@@ -2,12 +2,12 @@
 Base class for agents.
     Contains the basic attributes and methods for all agents and agent specific attributes.
 """
+"""Common Imports"""
 from SHARED.core_imports import *
-# shared_full.py
 
-from SHARED.core_imports import *
-# === Game-Specific AI & Mechanics ===
-from NEURAL_NETWORK.Agent_NeuralNetwork import PPOModel, DQNModel
+"""File Specific Imports"""
+from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
+from NEURAL_NETWORK.DQN_Model import DQNModel
 from AGENT.agent_behaviours import AgentBehaviour
 
 

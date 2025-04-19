@@ -4,7 +4,9 @@ from SHARED.core_imports import *
 from GAME.game_manager import GameManager
 
 
-from RENDER.render_display import GameRenderer, MenuRenderer
+from RENDER.Game_Renderer import GameRenderer
+from RENDER.MainMenu_Renderer import MenuRenderer
+from RENDER.Common import FONT_NAME, WHITE, BLACK, GREEN, GREY, DARK_GREY, RED
 
 
 # Run the Start_up script to check/install dependencies before anything else
@@ -19,7 +21,7 @@ except subprocess.CalledProcessError:
 
 
 # Constants for the menu screen
-FONT_NAME = "Arial"
+
 TITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
 
 # Initialise tensorboard logger

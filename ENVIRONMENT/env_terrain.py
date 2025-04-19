@@ -1,8 +1,10 @@
+"""Common Imports"""
 from SHARED.core_imports import *
-from RENDER.render_display import get_font
 
-# colours
-GREEN = (0, 255, 0)
+"""File Specific Imports"""
+from SHARED.core_imports import *
+from RENDER.Game_Renderer import get_font
+from RENDER.Common import GREEN
 
 class Terrain:
     def __init__(self):

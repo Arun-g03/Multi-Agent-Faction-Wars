@@ -6,8 +6,9 @@ Purpose: To facilitate communication between agents and the HQ, allowing for the
 
         Agents only have a local view of the game, While the HQ has a global view of the game through aggregated data from all agents.
 """
-
+"""Common Imports"""
 from SHARED.core_imports import *
+
 
 logger = Logger(log_file="CommunicationSystem_log.txt",
                 log_level=logging.DEBUG)

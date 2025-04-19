@@ -1,4 +1,6 @@
+"""Common Imports"""
 from SHARED.core_imports import *
+
 class Camera:
     """ Game camera class for controlling the viewport. """
 

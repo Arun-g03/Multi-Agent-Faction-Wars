@@ -2,10 +2,10 @@
 This file contains the GameManager class, which is responsible for managing the game state, including the game loop, game rules, and rendering.
 
 """
-"""basic imports"""
-
-
+"""Common Imports"""
 from SHARED.core_imports import *
+
+"""File Specific Imports"""
 from AGENT.agent_base import Peacekeeper, Gatherer
 from AGENT.agent_factions import Faction
 from AGENT.agent_faction_manager import FactionManager
@@ -14,7 +14,7 @@ from GAME.game_rules import check_victory
 from ENVIRONMENT.env_terrain import Terrain
 from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
 from GAME.camera import Camera
-from RENDER.render_display import GameRenderer, GameRenderer
+from RENDER.Game_Renderer import GameRenderer
 
 
 
