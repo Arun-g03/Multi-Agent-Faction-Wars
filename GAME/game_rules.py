@@ -6,6 +6,9 @@ THis file should control the episodic win rules and conditions
 """
 """Common Imports"""
 from SHARED.core_imports import *
+"""File Specific Imports"""
+import UTILITIES.utils_config as utils_config
+
 
 
 RESOURCE_GATHER_RATE = {

@@ -5,6 +5,7 @@ from SHARED.core_imports import *
 from SHARED.core_imports import *
 from RENDER.Game_Renderer import get_font
 from RENDER.Common import GREEN
+import UTILITIES.utils_config as utils_config
 
 class Terrain:
     def __init__(self):

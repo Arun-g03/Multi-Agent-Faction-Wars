@@ -8,6 +8,12 @@ Purpose: To facilitate communication between agents and the HQ, allowing for the
 """
 """Common Imports"""
 from SHARED.core_imports import *
+import UTILITIES.utils_config as utils_config
+from UTILITIES.utils_helpers import (
+    profile_function,
+    find_closest_actor,
+    generate_random_colour
+)
 
 
 logger = Logger(log_file="CommunicationSystem_log.txt",

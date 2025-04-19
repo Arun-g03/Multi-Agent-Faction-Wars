@@ -15,6 +15,8 @@ from ENVIRONMENT.env_terrain import Terrain
 from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
 from GAME.camera import Camera
 from RENDER.Game_Renderer import GameRenderer
+import UTILITIES.utils_config as utils_config
+
 
 
 
@@ -32,7 +34,6 @@ class GameManager:
             self,
             mode,
             save_dir="NEURAL_NETWORK/saved_models",
-            max_steps_per_episode=utils_config.STEPS_PER_EPISODE,
             screen=None):
         # Initialise a logger specific to GameManager
         self.logger = Logger(
@@ -79,7 +80,7 @@ class GameManager:
 
         """Current step in episode (tick counter)"""
         self.save_dir = save_dir  # Ensure save_dir is a string (directory path)
-        self.max_steps_per_episode = max_steps_per_episode
+        
         self.last_activity_step = 0
         self.communication_system = None  # Communication system
 
@@ -537,7 +538,7 @@ class GameManager:
                 self.current_step = 0
                 episode_reward = 0
 
-                while self.current_step < self.max_steps_per_episode:
+                while self.current_step < utils_config.STEPS_PER_EPISODE:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             print("[INFO] Window closed. Exiting game...")

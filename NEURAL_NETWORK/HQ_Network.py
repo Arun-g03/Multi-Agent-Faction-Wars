@@ -2,7 +2,9 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from NEURAL_NETWORK.Common import Training_device
+from NEURAL_NETWORK.Common import check_training_device
+import UTILITIES.utils_config as utils_config
+
 
 logger = Logger(log_file="HQ_Network.txt", log_level=logging.DEBUG)
 
@@ -20,7 +22,7 @@ class HQ_Network(nn.Module):
             role_size=5,
             local_state_size=5,
             global_state_size=5,
-            device=Training_device):
+            device=None):
         super().__init__()
         # Initialise the device to use (CPU or GPU)
         self.device = torch.device(
@@ -49,6 +51,7 @@ class HQ_Network(nn.Module):
         self.global_state_size = global_state_size
 
         self.hq_memory = []
+        
 
     def update_network(self, new_input_size):
         """
@@ -64,12 +67,14 @@ class HQ_Network(nn.Module):
         """
         Forward pass through the HQ network.
         """
-        state = state.view(-1)
-        role = role.view(-1)
-        local_state = local_state.view(-1)
-        global_state = global_state.view(-1)
+        device = self.device
 
-        #  Automatically update input layer if sizes change
+        # Ensure all inputs are on the correct device
+        state = state.to(device).view(-1)
+        role = role.to(device).view(-1)
+        local_state = local_state.to(device).view(-1)
+        global_state = global_state.to(device).view(-1)
+
         input_size_check = state.shape[0] + role.shape[0] + \
             local_state.shape[0] + global_state.shape[0]
 
@@ -86,6 +91,7 @@ class HQ_Network(nn.Module):
         task_assignment = self.actor(x)
 
         return task_assignment, self.critic(x)
+        
 
     def add_memory(self, state: list, action: int, reward: float = 0.0):
         self.hq_memory.append({
@@ -185,9 +191,11 @@ class HQ_Network(nn.Module):
             # 2. Convert to tensor and run forward pass
             with torch.no_grad():
                 input_tensor = torch.tensor(
-                    state_vector, dtype=torch.float32).unsqueeze(0)  # Add batch dim
-                logits, _ = self.forward(input_tensor, torch.zeros(
-                    0), torch.zeros(0), torch.zeros(0))
+                    state_vector, dtype=torch.float32).unsqueeze(0).to(self.device)  # ✅ Send to device
+
+                zeros = torch.zeros(0).to(self.device)
+                logits, _ = self.forward(input_tensor, zeros, zeros, zeros)
+
 
             # 🔍 Log raw logits
             logits_list = logits.squeeze(0).tolist()
@@ -313,10 +321,11 @@ class HQ_Critic(nn.Module):
             role_size=5,
             local_state_size=5,
             global_state_size=5,
-            device=Training_device):
+            device=None):
         super().__init__()
         # Initialise the device to use (CPU or GPU)
-        self.device = device
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu")
         self.role_size = role_size
         self.local_state_size = local_state_size
         self.global_state_size = global_state_size

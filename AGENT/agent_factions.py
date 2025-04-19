@@ -6,6 +6,8 @@ from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
 from AGENT.agent_communication import CommunicationSystem
+import UTILITIES.utils_config as utils_config
+
 
 
 logger = Logger(log_file="agent_factions.txt", log_level=logging.DEBUG)
@@ -1190,7 +1192,7 @@ class Faction():
         Spawns a new agent instance of the given role using GameManager's spawn_agent method.
         """
         try:
-            from agent_base import Peacekeeper, Gatherer
+            from AGENT.agent_base import Peacekeeper, Gatherer
 
             spawn_x, spawn_y = self.home_base["position"]
             agent_class = Peacekeeper if role == "peacekeeper" else Gatherer

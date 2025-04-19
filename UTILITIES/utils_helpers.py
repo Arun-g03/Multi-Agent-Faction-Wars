@@ -3,6 +3,8 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 from UTILITIES.utils_logger import Logger
+import UTILITIES.utils_config as utils_config
+
 logger = Logger(log_file="utils_helpers.txt", log_level=logging.DEBUG)
 
 

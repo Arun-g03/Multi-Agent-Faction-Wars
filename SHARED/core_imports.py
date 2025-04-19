@@ -36,10 +36,7 @@ import pandas as pd
 import re
 
 # === Utilities ===
-import UTILITIES.utils_config as utils_config
-from UTILITIES.utils_helpers import (
-    profile_function,
-    find_closest_actor,
-    generate_random_colour
-)
+
 from UTILITIES.utils_logger import Logger as Logger, TensorBoardLogger as TensorBoardLogger
+
+from UTILITIES.utils_helpers import profile_function, find_closest_actor, generate_random_colour

@@ -3,6 +3,8 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
+import UTILITIES.utils_config as utils_config
+
 
 
 logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
