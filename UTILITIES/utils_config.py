@@ -22,10 +22,10 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = False
+ENABLE_LOGGING = True
 """Enable logging for debugging"""
 
-ENABLE_TENSORBOARD = True
+ENABLE_TENSORBOARD = False
 """Enable tensorboard for visualisation"""
 
 
@@ -42,7 +42,7 @@ ENABLE_TENSORBOARD = True
 
 EPISODES_LIMIT = 50  # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 1000
+STEPS_PER_EPISODE = 100
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -358,9 +358,9 @@ Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 # Team Composition
 FACTON_COUNT = 2  # Number of factons # Customise as needed!
 # Initial number of gatherers for a single faction # Customise as needed!
-INITAL_GATHERER_COUNT = 3
+INITAL_GATHERER_COUNT = 2
 # Initial number of peacekeepers for a single faction # Customise as needed!
-INITAL_PEACEKEEPER_COUNT = 3
+INITAL_PEACEKEEPER_COUNT = 2
 
 
 #     ____

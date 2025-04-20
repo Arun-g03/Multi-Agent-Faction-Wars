@@ -2,10 +2,10 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from NEURAL_NETWORK.Common import check_training_device
+from NEURAL_NETWORK.Common import Training_device
 import UTILITIES.utils_config as utils_config
 
-Training_device = check_training_device()
+
 
 
 logger = Logger(log_file="DQN_Network.txt", log_level=logging.DEBUG)

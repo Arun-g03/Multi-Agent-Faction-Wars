@@ -2,10 +2,10 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from NEURAL_NETWORK.Common import check_training_device
-from NEURAL_NETWORK.HQ_Network import HQ_Critic
+from NEURAL_NETWORK.Common import  Training_device, save_checkpoint, load_checkpoint
+
 import UTILITIES.utils_config as utils_config
-Training_device = check_training_device()
+
 
 logger = Logger(log_file="PPO_Agent_Network.txt", log_level=logging.DEBUG)
 
@@ -21,14 +21,16 @@ class PPOModel(nn.Module):
     def __init__(
             self,
             AgentID,
+            training_mode,
             state_size=utils_config.DEF_AGENT_STATE_SIZE,
             action_size=10,
-            hq_critic=None,
             learning_rate=1e-4,
             gamma=0.70,
             clip_epsilon=0.2,
             entropy_coeff=0.01,
-            device=Training_device):
+            lambda_=0.95,
+            device=Training_device
+            ):
         # Call the parent class constructor first
         super(PPOModel, self).__init__()
         # Initialise the device to use(CPU or GPU)
@@ -38,19 +40,16 @@ class PPOModel(nn.Module):
         if state_size is None:
             self.input_size = utils_config.DEF_AGENT_STATE_SIZE
         self.AgentID = AgentID
+        self.training_mode = training_mode
 
-        # Initialise the critic if not provided
-        if hq_critic is None:
-            hq_critic = HQ_Critic(input_size=state_size)  # Default critic
-
-        # Store critic
-        self.hq_critic = hq_critic
+        
 
         # Initialise other components of the agent
         self.ai = Agent_Critic(state_size, action_size)
         self.optimizer = optim.Adam(self.ai.parameters(), lr=learning_rate)
         self.total_updates = 0  # Track training updates across episodes
 
+        self.lambda_ = lambda_
         self.gamma = gamma
         self.clip_epsilon = clip_epsilon
         self.entropy_coeff = entropy_coeff
@@ -64,71 +63,57 @@ class PPOModel(nn.Module):
             "global_values": [],
             "dones": []
         }
-        self.fc1 = nn.Linear(state_size, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.actor = nn.Linear(128, action_size)
-        self.critic = nn.Linear(128, 1)
+        
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"Agent_Network initialised successfully using PPO model (state_size={state_size}, "
                 f"action_size={action_size}, gamma={gamma}, clip_epsilon={clip_epsilon}, "
                 f"entropy_coeff={entropy_coeff}).", level=logging.INFO)
+        self.to(self.device)
 
-    def forward(self, state):
-        x = torch.relu(self.fc1(state))
-        x = torch.relu(self.fc2(x))
-        task_assignment = self.actor(x)  # logits for action probabilities
-        task_value = self.critic(x)      # value estimate
-
-        # Check for NaNs/Infs in output logits
-        if torch.isnan(task_assignment).any(
-        ) or torch.isinf(task_assignment).any():
-            print("[ERROR] NaNs or Infs detected in network output (task_assignment).")
-            print(f"Input state: {state}")
-            print(f"Hidden activation: {x}")
-            print(f"Logits: {task_assignment}")
-            raise ValueError("Network logits contain NaN or Inf.")
-
-        return task_assignment, task_value
+    
 
     def choose_action(self, state, valid_indices=None):
         if state is None:
-            raise ValueError(
-                f"[CRITICAL] Agent {self.AgentID} received a None state.")
+            raise ValueError(f"[CRITICAL] Agent {self.AgentID} received a None state.")
         if any(v is None for v in state):
-            raise ValueError(
-                f"[CRITICAL] Agent {self.AgentID} state contains None values: {state}")
+            raise ValueError(f"[CRITICAL] Agent {self.AgentID} state contains None values: {state}")
 
-        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.device)
+
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f" AgentID: {self.AgentID}__State: {state}",
                 level=logging.DEBUG)
 
-        logits, value = self.forward(state_tensor)
+        logits, value = self.ai.forward(state_tensor)
 
-        # Apply context-aware filtering
         if valid_indices is not None:
             mask = torch.full_like(logits, float('-inf'))
             mask[0, valid_indices] = logits[0, valid_indices]
             logits = mask
-
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[CTX FILTER] Valid indices: {valid_indices}, Masked logits: {logits.tolist()}",
                     level=logging.DEBUG)
 
         probs = torch.softmax(logits, dim=-1)
-
         if torch.isnan(probs).any().item() or torch.isinf(probs).any().item():
-            logger.log_msg(
-                f"[PROBS ERROR] Detected NaNs/Infs in probs!",
-                level=logging.ERROR)
+            logger.log_msg("[PROBS ERROR] Detected NaNs/Infs in probs!", level=logging.ERROR)
             raise ValueError("Action probabilities contain NaN or Inf.")
 
         dist = torch.distributions.Categorical(probs)
-        action = dist.sample()
+        if self.training_mode not in ['train', 'evaluate']:
+            raise ValueError(
+                f"Invalid mode: {self.training_mode}. Choose either 'train' or 'evaluate'.")
+
+        if self.training_mode == "train":
+            # Sample from distribution during training
+            action = dist.sample()
+        else:
+            # Use deterministic action during evaluation
+            action = torch.argmax(probs, dim=-1)
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
@@ -137,6 +122,7 @@ class PPOModel(nn.Module):
 
         return action.item(), dist.log_prob(action), value.item()
 
+    
     def get_valid_action_indices(self, resource_manager, agents):
         role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
         valid_indices = set()
@@ -247,17 +233,21 @@ class PPOModel(nn.Module):
                 return
 
             # Convert stored memory to tensors
-            states = torch.tensor(self.memory["states"], dtype=torch.float32)
-            actions = torch.tensor(self.memory["actions"], dtype=torch.long)
+            states = torch.tensor(self.memory["states"], dtype=torch.float32, device=self.device)
+            actions = torch.tensor(self.memory["actions"], dtype=torch.long, device=self.device)
             log_probs_old = torch.stack(self.memory["log_probs"]).detach()
             rewards = self.memory["rewards"]
-            values = torch.tensor(self.memory["values"], dtype=torch.float32)
-            dones = torch.tensor(self.memory["dones"], dtype=torch.float32)
-
+            local_values  = torch.tensor(self.memory["values"],       dtype=torch.float32, device=self.device)
+            global_values = torch.tensor(self.memory["global_values"],dtype=torch.float32, device=self.device)
+            dones = torch.tensor(self.memory["dones"], dtype=torch.float32, device=self.device)
             # Compute returns and advantages using GAE
             try:
                 returns, advantages = self.compute_gae(
-                    rewards, values, values, dones)
+                    rewards, 
+                    local_values, 
+                    global_values, 
+                    dones
+                )
             except ValueError as e:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
@@ -285,7 +275,15 @@ class PPOModel(nn.Module):
                     advantages_batch = advantages[batch_idx]
                     returns_batch = returns[batch_idx]
 
+                    #Move all batches to model's device
+                    states_batch = states_batch.to(self.device)
+                    actions_batch = actions_batch.to(self.device)
+                    log_probs_old_batch = log_probs_old_batch.to(self.device)
+                    advantages_batch = advantages_batch.to(self.device)
+                    returns_batch = returns_batch.to(self.device)
+
                     logits, new_values = self.ai(states_batch)
+
 
                     if torch.isnan(logits).any().item(
                     ) or torch.isinf(logits).any().item():
@@ -331,7 +329,10 @@ class PPOModel(nn.Module):
                             f"Agent_{self.AgentID}/TotalLoss", loss.item(), self.total_updates)
                         TensorBoardLogger().log_scalar(
                             f"Agent_{self.AgentID}/Entropy", entropy.item(), self.total_updates)
-
+                    
+                    
+                    torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
+                    self.total_updates += 1
                     self.optimizer.step()
 
                     if utils_config.ENABLE_LOGGING:
@@ -349,7 +350,7 @@ class PPOModel(nn.Module):
                     "[EVALUATE MODE] No training applied.",
                     level=logging.DEBUG)
 
-        self.clear_memory()
+        
 
     def compute_gae(self, rewards, local_values, global_values, dones):
         """
@@ -383,12 +384,12 @@ class PPOModel(nn.Module):
                 next_global = global_values[step + 1]
             else:
                 # or use global_values[step] if continuing value
-                next_global = torch.tensor(0.0)
+                next_global = torch.tensor(0.0, device=self.device)
 
             delta = rewards[step] + self.gamma * \
                 next_global * mask - local_values[step]
 
-            gae = delta + self.gamma * self.clip_epsilon * mask * gae
+            gae = delta + self.gamma * self.lambda_ * mask * gae
 
             advantages.insert(0, gae)
             last_return = rewards[step] + self.gamma * last_return * mask
@@ -398,8 +399,8 @@ class PPOModel(nn.Module):
             logger.log_msg(
                 f"GAE computed. Returns: {returns}, Advantages: {advantages}.",
                 level=logging.DEBUG)
-        returns = torch.tensor(returns, dtype=torch.float32)
-        advantages = torch.tensor(advantages, dtype=torch.float32)
+        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
+        advantages = torch.tensor(advantages, dtype=torch.float32, device=self.device)
         return returns, (advantages - advantages.mean()) / \
             (advantages.std() + 1e-8)
 
@@ -407,77 +408,13 @@ class PPOModel(nn.Module):
         for key in self.memory.keys():
             self.memory[key] = []
 
-    def calculate_loss(self):
-        """
-        Calculate the loss for PPO using collected experiences.
-        """
-        # Retrieve experiences from agents (or memory buffer)
-        all_experiences = []
-        for agent in self.agents:
-            # Collect experiences for all agents
-            all_experiences.extend(agent.experience_buffer)
+    def save_model(self, path):
+        save_checkpoint(self, path)
 
-        # Extract states, actions, rewards, and next states from experiences
-        states = torch.tensor([exp["state"]
-                              for exp in all_experiences], dtype=torch.float32)
-        actions = torch.tensor([exp["action"]
-                               for exp in all_experiences], dtype=torch.long)
-        rewards = torch.tensor([exp["reward"]
-                               for exp in all_experiences], dtype=torch.float32)
-        next_states = torch.tensor(
-            [exp["next_state"] for exp in all_experiences], dtype=torch.float32)
-        dones = torch.tensor([exp["done"]
-                             for exp in all_experiences], dtype=torch.float32)
+    def load_model(self, path):
+        load_checkpoint(self, path)
 
-        # Compute policy logits and values
-        logits, values = self.ai(states)
-        values = values.squeeze(-1)  # Remove extra dimensions
-
-        # Compute advantages (reward-to-go or GAE)
-        with torch.no_grad():
-            _, next_values = self.ai(next_states)
-            next_values = next_values.squeeze(-1)
-            advantages = rewards + self.gamma * \
-                next_values * (1 - dones) - values
-
-        # Compute policy loss
-        log_probs = torch.log_softmax(logits, dim=-1)
-        selected_log_probs = log_probs.gather(
-            1, actions.unsqueeze(-1)).squeeze(-1)
-        policy_loss = -(advantages.detach() * selected_log_probs).mean()
-
-        # Compute value loss
-        value_loss = (advantages ** 2).mean()
-
-        # Compute entropy loss for exploration regularisation
-        entropy_loss = - \
-            torch.mean(torch.sum(torch.softmax(
-                logits, dim=-1) * log_probs, dim=-1))
-
-        # Combine losses with coefficients
-        loss = policy_loss + self.value_loss_coeff * \
-            value_loss - self.entropy_coeff * entropy_loss
-
-        # Log individual losses for debugging
-        print(
-            f"Policy Loss: {policy_loss.item()}, Value Loss: {value_loss.item()}, Entropy Loss: {entropy_loss.item()}")
-
-        return loss
-
-    def update(self, experiences):
-        """
-        Perform a training update using the experiences.
-        :param experiences: A list of experience dictionaries with keys: state, action, reward, next_state, done.
-        """
-        # Calculate the loss
-        loss = self.calculate_loss(experiences)
-
-        # Backpropagate and optimize
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss
+    
 
 #       _    ____ _____ _   _ _____    ____ ____  ___ _____ ___ ____
 #      / \  / ___| ____| \ | |_   _|  / ___|  _ \|_ _|_   _|_ _/ ___|

@@ -162,7 +162,8 @@ class BaseAgent:
             return PPOModel(
                 AgentID=AgentID,
                 state_size=state_size,
-                action_size=action_size
+                action_size=action_size,
+                training_mode=self.mode
             )
 
         elif network_type_int == utils_config.NETWORK_TYPE_MAPPING["DQNModel"]:

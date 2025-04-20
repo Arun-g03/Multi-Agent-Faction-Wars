@@ -3,8 +3,9 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-from RENDER.Common import FONT_NAME, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY
+from RENDER.Common import MENU_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY
 from RENDER.Settings_Renderer import SettingsMenuRenderer
+from RENDER.Credits_Renderer import CreditsRenderer
 
 
 #    __  __    _    ___ _   _   __  __ _____ _   _ _   _
@@ -20,7 +21,7 @@ from RENDER.Settings_Renderer import SettingsMenuRenderer
 class MenuRenderer:
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont(FONT_NAME, 24)
+        self.font = pygame.font.SysFont(MENU_FONT, 24)
         self.selected_mode = None
         print("MenuRenderer initialised")
 
@@ -85,7 +86,7 @@ class MenuRenderer:
         self.draw_text(
             self.screen,
             "Welcome to the Multi-agent competitive and cooperative strategy (MACCS) Simulation",
-            FONT_NAME,
+            MENU_FONT,
             28,
             WHITE,
             SCREEN_WIDTH //
@@ -95,24 +96,24 @@ class MenuRenderer:
         self.draw_text(
             self.screen,
             "Created as part of my BSC Computer Science final year project",
-            FONT_NAME,
+            MENU_FONT,
             20,
             WHITE,
             SCREEN_WIDTH // 2,
             base_y - 70)
-        self.draw_text(self.screen, "Choose Mode", FONT_NAME,
+        self.draw_text(self.screen, "Choose Mode", MENU_FONT,
                        28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
 
         check_icon = pygame.font.SysFont(
-            FONT_NAME, 40).render('✔', True, GREEN)
-        cross_icon = pygame.font.SysFont(FONT_NAME, 40).render('❌', True, RED)
+            MENU_FONT, 40).render('✔', True, GREEN)
+        cross_icon = pygame.font.SysFont(MENU_FONT, 40).render('❌', True, RED)
 
         half_width = button_width // 2 + 10
 
         train_button_rect = self.create_button(
             self.screen,
             "Training",
-            FONT_NAME,
+            MENU_FONT,
             button_font_size,
             GREEN,
             (0, 200, 0),
@@ -123,7 +124,7 @@ class MenuRenderer:
             button_height)        
             
         evaluate_button_rect = self.create_button(
-            self.screen, "Evaluation", FONT_NAME, button_font_size, BLUE, (
+            self.screen, "Evaluation", MENU_FONT, button_font_size, BLUE, (
                 0, 0, 255), (0, 0, 200),
             SCREEN_WIDTH // 2 + 50, base_y, button_width, button_height
         )
@@ -146,7 +147,7 @@ class MenuRenderer:
         start_button_rect = self.create_button(
             self.screen,
             start_text,
-            FONT_NAME,
+            MENU_FONT,
             button_font_size,
             base_color,
             hover_color,
@@ -158,21 +159,21 @@ class MenuRenderer:
         )
 
         settings_button_rect = self.create_button(
-            self.screen, "Settings", FONT_NAME, button_font_size, GREY, (
+            self.screen, "Settings", MENU_FONT, button_font_size, GREY, (
                 180, 180, 180), (100, 100, 100),
             center_x, base_y + (button_height + button_spacing) *
             3, button_width, button_height
         )
 
         credits_button_rect = self.create_button(
-            self.screen, "Credits", FONT_NAME, button_font_size, DARK_GREY, (
+            self.screen, "Credits", MENU_FONT, button_font_size, DARK_GREY, (
                 160, 160, 160), (90, 90, 90),
             center_x, base_y + (button_height + button_spacing) *
             4, button_width, button_height
         )
 
         exit_button_rect = self.create_button(
-            self.screen, "Exit", FONT_NAME, button_font_size, RED, (
+            self.screen, "Exit", MENU_FONT, button_font_size, RED, (
                 150, 0, 0), (200, 0, 0),
             center_x, base_y + (button_height + button_spacing) *
             5, button_width, button_height

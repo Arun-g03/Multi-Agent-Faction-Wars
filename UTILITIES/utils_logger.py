@@ -4,6 +4,26 @@ import UTILITIES.utils_config as utils_config
 
 
 class Logger:
+    """
+    Custom logging class to handle logging to a file and optionally to the console throughout the system.
+    
+    Usage:
+        # Create a logger instance
+        logger = Logger("my_log.log", log_to_console=True)
+        
+        # Log messages at different levels
+        logger.log_msg("Info message")  # Default INFO level
+        logger.log_msg("Debug message", level=logging.DEBUG)
+        logger.log_msg("Warning message", level=logging.WARNING)
+        logger.log_msg("Error message", level=logging.ERROR)
+        logger.log_msg("Critical message", level=logging.CRITICAL)
+        
+    Args:
+        log_file (str): Name of the log file
+        log_level (int): Logging level (default: logging.INFO)
+        log_to_console (bool): Whether to also log to console (default: False)
+        clear_logs (bool): Whether to clear existing logs on initialization (default: True)
+    """
     def __init__(
             self,
             log_file,
@@ -80,7 +100,6 @@ class Logger:
             self.logger.error(message)
         elif level == logging.CRITICAL:
             self.logger.critical(message)
-
 
 class TensorBoardLogger:
     """

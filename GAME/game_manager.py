@@ -10,6 +10,7 @@ from AGENT.agent_base import Peacekeeper, Gatherer
 from AGENT.agent_factions import Faction
 from AGENT.agent_faction_manager import FactionManager
 from AGENT.agent_communication import CommunicationSystem
+from NEURAL_NETWORK.Common import Training_device, save_checkpoint, load_checkpoint
 from GAME.game_rules import check_victory
 from ENVIRONMENT.env_terrain import Terrain
 from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
@@ -26,14 +27,14 @@ import UTILITIES.utils_config as utils_config
 
 """Logging  and profiling for performance and execution analysis"""
 """Neural Network libraries and GPU enabling"""
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = Training_device
 
 
 class GameManager:
     def __init__(
             self,
             mode,
-            save_dir="NEURAL_NETWORK/saved_models",
+            save_dir="NEURAL_NETWORK/saved_models/Agents",
             screen=None):
         # Initialise a logger specific to GameManager
         self.logger = Logger(
@@ -669,57 +670,162 @@ class GameManager:
                                 print(
                                     f"Training failed for agent {agent.agent_id}: {e}")
                                 traceback.print_exc()
-                    # Save best-performing model per role
+                    
+                    # Collect rewards per role dynamically
                     role_rewards = {}
-
-                    # Collect rewards per role
                     for agent in self.agents:
-                        if agent.ai.memory["rewards"]:
+                        rewards = agent.ai.memory.get("rewards", [])
+                        if rewards:
                             role = agent.role
-                            total_reward = sum(agent.ai.memory["rewards"])
-                            role_rewards.setdefault(role, []).append(
-                                (agent, total_reward))
+                            total_reward = sum(rewards)
+                            role_rewards.setdefault(role, []).append((agent.ai, total_reward))
+                        else:
+                            print(f"[DEBUG] Agent {agent.agent_id} has empty rewards")
 
-                    # Evaluate best agent for each role
+                    # Ensure agent save dir exists
+                    agent_model_dir = "NEURAL_NETWORK/saved_models/Agents/"
+                    os.makedirs(agent_model_dir, exist_ok=True)
+
+                    # Log collected roles and counts
+                    print(f"[DEBUG] Collected roles: { {r: len(v) for r, v in role_rewards.items()} }")
+
+                    # For each role, handle top-5 saving
                     for role, reward_list in role_rewards.items():
-                        best_agent, best_reward = max(
-                            reward_list, key=lambda x: x[1])
-                        prev_best, _ = self.best_scores_per_role.get(
-                            role, (None, float("-inf")))
+                        best_model, best_reward = max(reward_list, key=lambda x: x[1])
 
-                        if best_reward > _:
-                            self.best_scores_per_role[role] = (
-                                best_agent, best_reward)
-                            model_path = f"NEURAL_NETWORK/saved_models/Best_{role}_episode_{self.episode}.pth"
-                            torch.save(best_agent.ai.state_dict(), model_path)
+                        if role not in self.best_scores_per_role:
+                            self.best_scores_per_role[role] = []
+
+                        # Load current on-disk models for this role
+                        model_files = [
+                            (os.path.join(agent_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
+                            for f in os.listdir(agent_model_dir)
+                            if f.startswith(f"Best_{role}_") and "_reward_" in f
+                        ]
+
+                        # Combine disk + memory + current model
+                        all_scores = list({(p, r) for p, r in model_files + self.best_scores_per_role[role] + [(None, best_reward)]})
+                        all_scores.sort(key=lambda x: x[1], reverse=True)
+                        top5 = all_scores[:5]
+
+                        # Save only if needed
+                        if (None, best_reward) in top5:
+                            save_name = f"Best_{role}_episode_{self.episode}_reward_{best_reward:.2f}.pth"
+                            save_path = os.path.join(agent_model_dir, save_name)
+                            try:
+                                best_model.save_model(save_path)
+                                print(f"[SAVE] Agent model for {role} saved at {save_path}")
+                            except Exception as e:
+                                print(f"[ERROR] Failed to save model for role {role}: {e}")
+                                traceback.print_exc()
+
+                            # Update paths in top5
+                            top5 = [(save_path if p is None else p, r) for p, r in top5]
+
                             if utils_config.ENABLE_LOGGING:
                                 self.logger.log_msg(
-                                    f"[SAVE] New best {role} model saved at {model_path} with reward {best_reward:.2f}",
-                                    level=logging.INFO)
+                                    f"[SAVE] Top-5 agent model saved for {role} at {save_path} (reward={best_reward:.2f})",
+                                    level=logging.INFO
+                                )
+
+                        # Prune older files if >5 exist
+                        if len(model_files) > 5:
+                            keep_paths = set(p for p, _ in top5)
+                            for f in os.listdir(agent_model_dir):
+                                f_path = os.path.join(agent_model_dir, f)
+                                if f_path not in keep_paths and f.startswith(f"Best_{role}_") and "_reward_" in f:
+                                    os.remove(f_path)
+                                    if utils_config.ENABLE_LOGGING:
+                                        self.logger.log_msg(f"[PRUNE] Removed outdated model: {f_path}", level=logging.INFO)
+
+                        self.best_scores_per_role[role] = top5
+
+                    # ✅ Finally: clear memory for all agents
+                    for agent in self.agents:
+                        agent.ai.clear_memory()
+
+
+
+
 
                     for faction in self.faction_manager.factions:
                         is_winner = (faction.id == winner_id)
-                        hq_reward = faction.compute_hq_reward(
-                            victory=is_winner)
+                        hq_reward = faction.compute_hq_reward(victory=is_winner)
 
                         if hasattr(faction.network, "update_memory_rewards"):
                             faction.network.update_memory_rewards(hq_reward)
 
-                        if hasattr(
-                                faction.network,
-                                "train") and faction.network.hq_memory:
+                        if hasattr(faction.network, "train") and faction.network.hq_memory:
                             try:
                                 if utils_config.ENABLE_LOGGING:
                                     self.logger.log_msg(
                                         f"[HQ TRAIN] Training strategy network for Faction {faction.id} with {len(faction.network.hq_memory)} samples.",
                                         level=logging.INFO)
-                                faction.network.train(
-                                    faction.network.hq_memory, faction.optimizer)
-                                faction.network.hq_memory.clear_memory()
+
+                                faction.network.train(faction.network.hq_memory, faction.optimizer)
+                                
+
+                                # -- Top-5 Tracking --
+                                faction_key = f"Faction_{faction.id}"
+                                if not hasattr(self, "best_hq_scores"):
+                                    self.best_hq_scores = {}
+                                if faction_key not in self.best_hq_scores:
+                                    self.best_hq_scores[faction_key] = []
+
+                                hq_model_dir = "NEURAL_NETWORK/saved_models/HQ/"
+                                os.makedirs(hq_model_dir, exist_ok=True)
+
+                                # Load existing models from disk
+                                model_files = [
+                                    (os.path.join(hq_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
+                                    for f in os.listdir(hq_model_dir)
+                                    if f.startswith(f"HQ_Faction_{faction.id}_") and "_reward_" in f
+                                ]
+
+                                # Combine with in-memory and current reward
+                                all_scores = model_files + self.best_hq_scores[faction_key] + [(None, hq_reward)]
+                                all_scores = list({(p, r) for p, r in all_scores})  # deduplicate
+                                all_scores.sort(key=lambda x: x[1], reverse=True)
+
+                                # Save only if this reward is one of the top 5 and not already saved
+                                top5 = all_scores[:5]
+                                if (None, hq_reward) in top5:
+                                    save_name = f"HQ_Faction_{faction.id}_episode_{self.episode}_reward_{hq_reward:.2f}.pth"
+                                    save_path = os.path.join(hq_model_dir, save_name)
+                                    if hasattr(faction.network, "save_model"):
+                                        faction.network.save_model(save_path)
+                                        print(f"[SAVE] HQ model for Faction {faction.id} saved at {save_path}")
+                                    top5 = [(save_path if p is None else p, r) for p, r in top5]
+
+                                    if utils_config.ENABLE_LOGGING:
+                                        self.logger.log_msg(
+                                            f"[SAVE] Top-5 HQ model saved for {faction_key} at {save_path} (reward={hq_reward:.2f})",
+                                            level=logging.INFO)
+
+                                # ✅ Only prune if too many on disk
+                                if len(model_files) > 5:
+                                    keep_paths = set(p for p, _ in top5)
+                                    for f in os.listdir(hq_model_dir):
+                                        f_path = os.path.join(hq_model_dir, f)
+                                        if f_path not in keep_paths and f.startswith(f"HQ_Faction_{faction.id}_") and "_reward_" in f:
+                                            os.remove(f_path)
+                                            if utils_config.ENABLE_LOGGING:
+                                                self.logger.log_msg(
+                                                    f"[PRUNE] Removed outdated HQ model: {f_path}",
+                                                    level=logging.INFO)
+
+                                # Save updated top-5 list
+                                self.best_hq_scores[faction_key] = top5
+
+                                faction.network.clear_memory()
+
                             except Exception as e:
-                                print(
-                                    f"[HQ TRAIN ERROR] Failed to train HQ network for Faction {faction.id}: {e}")
+                                print(f"[HQ TRAIN ERROR] Failed to train HQ network for Faction {faction.id}: {e}")
                                 traceback.print_exc()
+
+
+
+
 
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")

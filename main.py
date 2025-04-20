@@ -6,7 +6,6 @@ from GAME.game_manager import GameManager
 
 from RENDER.Game_Renderer import GameRenderer
 from RENDER.MainMenu_Renderer import MenuRenderer
-from RENDER.Common import FONT_NAME, WHITE, BLACK, GREEN, GREY, DARK_GREY, RED
 import UTILITIES.utils_config as utils_config
 
 

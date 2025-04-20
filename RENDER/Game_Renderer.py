@@ -4,7 +4,7 @@ from SHARED.core_imports import *
 """File Specific Imports"""
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
 import UTILITIES.utils_config as utils_config
-
+from RENDER.Common import GAME_FONT
 
 
 logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
@@ -29,7 +29,7 @@ def get_font(size):
     Retrieves a font from cache or creates a new one if not cached.
     """
     if size not in FONT_CACHE:
-        FONT_CACHE[size] = pygame.font.SysFont("Arial", size)
+        FONT_CACHE[size] = pygame.font.SysFont(GAME_FONT, size)
     return FONT_CACHE[size]
 
 

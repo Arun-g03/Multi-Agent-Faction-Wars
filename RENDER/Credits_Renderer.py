@@ -2,14 +2,16 @@
 from SHARED.core_imports import *
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
+from RENDER.Common import CREDITS_FONT
 
 
 
 class CreditsRenderer:
+    """ Class for rendering the credits screen. """
     def __init__(self, screen):
         self.screen = screen
         self.font = pygame.font.SysFont("arial", 28)
-        self.title_font = pygame.font.SysFont("arial", 36, bold=True)
+        self.title_font = pygame.font.SysFont(CREDITS_FONT, 36, bold=True)
         self.text_colour = (255, 255, 255)
         self.bg_colour = (0, 0, 0)
 

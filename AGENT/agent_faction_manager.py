@@ -53,7 +53,7 @@ class FactionManager:
             agents,
             game_manager,
             state_size=utils_config.DEF_AGENT_STATE_SIZE,
-            action_size=10,
+            action_size= len(utils_config.HQ_STRATEGY_OPTIONS),
             role_size=5,
             local_state_size=10,
             global_state_size=15,

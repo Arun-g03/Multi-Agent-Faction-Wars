@@ -5,6 +5,7 @@ from SHARED.core_imports import *
 from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
+from NEURAL_NETWORK.Common import Training_device
 from AGENT.agent_communication import CommunicationSystem
 import UTILITIES.utils_config as utils_config
 
@@ -75,7 +76,8 @@ class Faction():
                     action_size,
                     role_size,
                     local_state_size,
-                    global_state_size)
+                    global_state_size,
+                    global_state=self.global_state)
 
                 if self.network is None:
                     if utils_config.ENABLE_LOGGING:
@@ -153,7 +155,8 @@ class Faction():
             action_size,
             role_size,
             local_state_size,
-            global_state_size):
+            global_state_size,
+            global_state):
         import traceback
         try:
             if utils_config.ENABLE_LOGGING:
@@ -178,15 +181,20 @@ class Faction():
                 return DQNModel(state_size, action_size)
 
             elif network_type == "HQNetwork":
-                logger.log_msg(
-                    f"[DEBUG] Initialising HQNetwork...", level=logging.DEBUG)
-                return HQ_Network(
-                    state_size,
-                    role_size,
-                    local_state_size,
-                    global_state_size,
-                    action_size)
-
+                try:
+                    logger.log_msg(f"[DEBUG] Initialising HQNetwork...", level=logging.DEBUG)
+                    return HQ_Network(
+                        state_size=state_size,
+                        action_size=action_size,
+                        role_size=role_size,
+                        local_state_size=local_state_size,
+                        global_state_size=global_state_size,
+                        device=Training_device,
+                        global_state=self.global_state
+                    )
+                except Exception as e:
+                    logger.log_msg(f"[ERROR] Failed to initialise HQNetwork: {e}", level=logging.ERROR)
+                    raise
             else:
                 logger.log_msg(
                     f"[ERROR] Unsupported network type: {network_type}",

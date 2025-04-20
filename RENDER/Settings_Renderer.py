@@ -2,7 +2,7 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from RENDER.Common import FONT_NAME, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY
+from RENDER.Common import SETTINGS_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY
 import UTILITIES.utils_config as utils_config
 
 #    ____       _   _   _                   __  __
@@ -14,9 +14,10 @@ import UTILITIES.utils_config as utils_config
 
 
 class SettingsMenuRenderer:
+    """ Class for rendering the settings menu. """
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont(FONT_NAME, 24)
+        self.font = pygame.font.SysFont(SETTINGS_FONT, 24)
         self.selected_category = "debugging"
         self.saved = False
         self.input_mode = False
@@ -96,12 +97,12 @@ class SettingsMenuRenderer:
                 self.settings_by_category[category].append(setting)
 
         self.check_icon = pygame.font.SysFont(
-            FONT_NAME, 40).render('✔', True, GREEN)
+            SETTINGS_FONT, 40).render('✔', True, GREEN)
         self.cross_icon = pygame.font.SysFont(
-            FONT_NAME, 40).render('❌', True, RED)
+            SETTINGS_FONT, 40).render('❌', True, RED)
 
     def draw_text(self, text, size, colour, x, y):
-        font_obj = pygame.font.SysFont(FONT_NAME, size)
+        font_obj = pygame.font.SysFont(SETTINGS_FONT, size)
         text_surface = font_obj.render(text, True, colour)
         text_rect = text_surface.get_rect(topleft=(x, y))
         self.screen.blit(text_surface, text_rect)
@@ -153,7 +154,7 @@ class SettingsMenuRenderer:
             selected = (label == self.selected_category)
             color = GREY if selected else DARK_GREY
             btn = self.create_button(
-                label.upper(), FONT_NAME, 20, color, (120, 120, 120), (180, 180, 180), 20, y, 200, 40)
+                label.upper(), SETTINGS_FONT, 20, color, (120, 120, 120), (180, 180, 180), 20, y, 200, 40)
             if pygame.mouse.get_pressed()[0] and btn.collidepoint(
                     pygame.mouse.get_pos()):
                 self.selected_category = label
@@ -203,12 +204,12 @@ class SettingsMenuRenderer:
                 step_buttons.append(("reset", default_btn, setting))
 
         back_btn = self.create_button(
-            "Back", FONT_NAME, 20, GREY, (180, 180, 180), (120, 120, 120), 250, 500, 150, 50)
+            "Back", SETTINGS_FONT, 20, GREY, (180, 180, 180), (120, 120, 120), 250, 500, 150, 50)
         save_return_btn = self.create_button(
-            "Save and Return", FONT_NAME, 20, BLUE, (80, 80, 255), (50, 50, 200),
+            "Save and Return", SETTINGS_FONT, 20, BLUE, (80, 80, 255), (50, 50, 200),
             450, 500, 250, 50)
         reset_all_btn = self.create_button(
-            "Reset All", FONT_NAME, 20, GREY, (180, 180, 180), (120, 120, 120),
+            "Reset All", SETTINGS_FONT, 20, GREY, (180, 180, 180), (120, 120, 120),
             20, 500, 200, 50)
         note_text = "Tip: You can click on a value to input in a custom number. Type and press Enter to confirm"
         screen_width = self.screen.get_width()

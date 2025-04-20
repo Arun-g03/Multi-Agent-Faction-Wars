@@ -2,7 +2,7 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from NEURAL_NETWORK.Common import check_training_device
+from NEURAL_NETWORK.Common import Training_device, save_checkpoint, load_checkpoint
 import UTILITIES.utils_config as utils_config
 
 
@@ -18,15 +18,17 @@ class HQ_Network(nn.Module):
     def __init__(
             self,
             state_size=29,
-            action_size=10,
+            action_size = len(utils_config.HQ_STRATEGY_OPTIONS),
             role_size=5,
             local_state_size=5,
             global_state_size=5,
-            device=None):
+            device=None,
+            global_state=None):
         super().__init__()
-        # Initialise the device to use (CPU or GPU)
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
+        # Initialise the device to use (CPU or GPU) default to Training_device if none
+        if device is None:
+           device = Training_device
+        self.device = device
         #  Compute total input size dynamically
         total_input_size = state_size + role_size + local_state_size + global_state_size
         if utils_config.ENABLE_LOGGING:
@@ -45,12 +47,13 @@ class HQ_Network(nn.Module):
         self.fc2 = nn.Linear(128, 128)
         self.actor = nn.Linear(128, action_size)
         self.critic = nn.Linear(128, 1)
-
         self.role_size = role_size
         self.local_state_size = local_state_size
+        self.global_state = global_state
         self.global_state_size = global_state_size
 
         self.hq_memory = []
+        self.to(self.device)
         
 
     def update_network(self, new_input_size):
@@ -61,7 +64,7 @@ class HQ_Network(nn.Module):
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[INFO] Updating HQ_Network input size from {self.fc1.in_features} to {new_input_size}")
-        self.fc1 = nn.Linear(new_input_size, 128)
+        self.fc1 = nn.Linear(new_input_size, 128).to(self.device)
 
     def forward(self, state, role, local_state, global_state):
         """
@@ -93,21 +96,48 @@ class HQ_Network(nn.Module):
         return task_assignment, self.critic(x)
         
 
-    def add_memory(self, state: list, action: int, reward: float = 0.0):
-        self.hq_memory.append({
+    def add_memory(self, state: list, role: list, local_state: list, global_state: list, action: int, reward: float = 0.0):
+        """
+        Store a full HQ memory entry for reinforcement learning.
+        Each part should be a list of floats representing the input state.
+
+        :param state: Shared/central state vector
+        :param role: One-hot or numerical role vector
+        :param local_state: Local (agent/HQ-specific) state vector
+        :param global_state: Global game state vector
+        :param action: Chosen action index
+        :param reward: Reward received (can be updated later)
+        """
+        memory_entry = {
             "state": state,
+            "role": role,
+            "local_state": local_state,
+            "global_state": global_state,
             "action": action,
             "reward": reward
-        })
+        }
+
+        self.hq_memory.append(memory_entry)
+
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[MEMORY] Added HQ experience: action={action}, reward={reward:.2f}, len={len(self.hq_memory)}",
+                level=logging.DEBUG
+            )
+
+
 
     def update_memory_rewards(self, total_reward: float):
+        """Update the reward for each memory entry."""
         for m in self.hq_memory:
             m["reward"] = total_reward
 
     def clear_memory(self):
+        """Clear the HQ memory."""
         self.hq_memory = []
 
     def has_memory(self):
+        """Check if the HQ memory is not empty."""
         return len(self.hq_memory) > 0
 
     def convert_state_to_tensor(self, aggregated_state):
@@ -166,36 +196,37 @@ class HQ_Network(nn.Module):
         full_feature_vector = torch.cat(
             [state_features, threat_features, resource_features, agent_states_tensor])
 
-        return full_feature_vector.view(1, -1)
+        return full_feature_vector.to(self.device).view(1, -1)
 
     def predict_strategy(self, global_state: dict) -> str:
         """
         Given the current global state, returns the best strategy label.
         """
-        # Prevent reentrant calls
         if hasattr(self, 'predicting'):
-            # Return default strategy if already predicting
             return self.strategy_labels[0]
         self.predicting = True
 
         try:
-            # 1. Encode the global state into a fixed-size input vector
-            state_vector = self.encode_state(global_state)
+            # 1. Extract structured input parts
+            state, role, local_state, global_state_vec = self.encode_state_parts()
+
             logger.log_msg(
                 f"[INFO] Predicting strategy for global state: {global_state}",
                 level=logging.DEBUG)
             logger.log_msg(
-                f"[DEBUG] Encoded state vector: {state_vector}",
+                f"[DEBUG] Encoded state vector: {state}",
                 level=logging.DEBUG)
 
-            # 2. Convert to tensor and run forward pass
+            # 2. Convert to tensors and move to correct device
+            device = self.device
+            state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+            role_tensor = torch.tensor(role, dtype=torch.float32, device=device).unsqueeze(0)
+            local_tensor = torch.tensor(local_state, dtype=torch.float32, device=device).unsqueeze(0)
+            global_tensor = torch.tensor(global_state_vec, dtype=torch.float32, device=device).unsqueeze(0)
+
+            # 3. Forward pass
             with torch.no_grad():
-                input_tensor = torch.tensor(
-                    state_vector, dtype=torch.float32).unsqueeze(0).to(self.device)  # ✅ Send to device
-
-                zeros = torch.zeros(0).to(self.device)
-                logits, _ = self.forward(input_tensor, zeros, zeros, zeros)
-
+                logits, _ = self.forward(state_tensor, role_tensor, local_tensor, global_tensor)
 
             # 🔍 Log raw logits
             logits_list = logits.squeeze(0).tolist()
@@ -204,10 +235,13 @@ class HQ_Network(nn.Module):
                     f"[LOGITS] {self.strategy_labels[i]}: {value:.4f}",
                     level=logging.INFO)
 
-            # 3. Choose the strategy with highest score
+            # 4. Select strategy with highest probability
             action_index = torch.argmax(logits).item()
             selected_strategy = self.strategy_labels[action_index]
-            self.add_memory(state_vector, action_index)
+
+            # 5. Store memory
+            self.add_memory(state, role, local_state, global_state_vec, action_index)
+
             logger.log_msg(
                 f"[HQ STRATEGY] Selected: {selected_strategy} (index: {action_index})",
                 level=logging.INFO)
@@ -216,71 +250,82 @@ class HQ_Network(nn.Module):
         finally:
             delattr(self, 'predicting')
 
-    def encode_state(self, global_state: dict) -> list:
+
+
+    def encode_state_parts(self):
         """
-        Converts the global state dictionary into a flat list of features
-        for input to the HQ strategy network.
+        Convert the global_state dictionary into structured input vectors
+        for the HQ neural network: [state, role, local_state, global_state].
         """
-        return [
-            global_state.get("gold_balance", 0),
-            global_state.get("food_balance", 0),
-            global_state.get("HQ_health", 100),
-            global_state.get("friendly_agent_count", 0),
-            global_state.get("enemy_agent_count", 0),
-            global_state.get("resource_count", 0),
-            global_state.get("threat_count", 0),
-            global_state.get("agent_density", 0),
-            # Add any other numeric signals you want the HQ to learn from
+
+        g = self.global_state
+
+        # Shared central state vector (used for main state input)
+        state_vector = [
+            g["HQ_health"] / 100.0,
+            g["gold_balance"] / 1000.0,
+            g["food_balance"] / 1000.0,
+            g["resource_count"] / 100.0,
+            g["threat_count"] / 10.0
         ]
+
+        # Role vector (placeholder: 1-hot HQ, or make dynamic later)
+        role_vector = [1.0, 0.0]  # e.g. [HQ, Agent] — assuming 2 roles
+
+        # Local state (near HQ)
+        nearest_resource = g["nearest_resource"]["location"]
+        nearest_threat = g["nearest_threat"]["location"]
+        local_vector = [
+            nearest_resource[0] / 100.0,  # Normalize to map size if known
+            nearest_resource[1] / 100.0,
+            nearest_threat[0] / 100.0,
+            nearest_threat[1] / 100.0,
+            g["agent_density"] / 10.0
+        ]
+
+        # Global map-wide state
+        global_vector = [
+            g["friendly_agent_count"] / 10.0,
+            g["enemy_agent_count"] / 10.0,
+            g["total_agents"] / 10.0,
+        ]
+
+        return state_vector, role_vector, local_vector, global_vector
+
 
     def train(self, memory, optimizer, gamma=0.99):
         """
         Trains the HQ strategy model using policy gradient.
-        :param memory: A list of dicts with keys: 'state', 'action', 'reward'
+        :param memory: A list of dicts with keys: 'state', 'role', 'local_state', 'global_state', 'action', 'reward'
         :param optimizer: Torch optimizer
         :param gamma: Discount factor for future rewards
         """
         if not memory:
-            logger.log_msg("[HQ TRAIN] No memory to train on.",
-                           level=logging.WARNING)
+            logger.log_msg("[HQ TRAIN] No memory to train on.", level=logging.WARNING)
             return
 
-        # Prepare batches
-        states = torch.tensor([m['state'] for m in memory],
-                              dtype=torch.float32, device=self.device)
-        actions = torch.tensor(
-            [m['action'] for m in memory], dtype=torch.long, device=self.device)
+        # Prepare batches from structured memory
+        device = self.device
+        states = torch.tensor([m['state'] for m in memory], dtype=torch.float32, device=device)
+        roles = torch.tensor([m['role'] for m in memory], dtype=torch.float32, device=device)
+        locals_ = torch.tensor([m['local_state'] for m in memory], dtype=torch.float32, device=device)
+        globals_ = torch.tensor([m['global_state'] for m in memory], dtype=torch.float32, device=device)
+        actions = torch.tensor([m['action'] for m in memory], dtype=torch.long, device=device)
         rewards = [m['reward'] for m in memory]
 
         # Compute discounted returns
         returns = []
-        G = 0
+        G = 0 
         for r in reversed(rewards):
             G = r + gamma * G
             returns.insert(0, G)
-        returns = torch.tensor(
-            returns, dtype=torch.float32, device=self.device)
+        returns = torch.tensor(returns, dtype=torch.float32, device=device)
 
         # Normalize returns
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
-        # Create properly-shaped dummy inputs for role/local/global state
-        batch_size = states.size(0)
-        role = torch.zeros(batch_size, self.role_size,
-                           dtype=torch.float32, device=self.device)
-        local_state = torch.zeros(
-            batch_size,
-            self.local_state_size,
-            dtype=torch.float32,
-            device=self.device)
-        global_state = torch.zeros(
-            batch_size,
-            self.global_state_size,
-            dtype=torch.float32,
-            device=self.device)
-
-        # Forward pass
-        logits, values = self.forward(states, role, local_state, global_state)
+        # Forward pass with full input
+        logits, values = self.forward(states, roles, locals_, globals_)
         probs = torch.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         log_probs = dist.log_prob(actions)
@@ -290,68 +335,25 @@ class HQ_Network(nn.Module):
         policy_loss = -(log_probs * advantage.detach()).mean()
         value_loss = advantage.pow(2).mean()
         loss = policy_loss + 0.5 * value_loss
-
+        entropy = dist.entropy().mean()
+        entropy_coeff = 0.01  # Added entropy coefficient
+        loss = policy_loss + 0.5*value_loss - entropy_coeff*entropy
+        # Backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        
 
         # Logging
         logger.log_msg(
             f"[HQ TRAIN] Loss: {loss.item():.4f}, Policy: {policy_loss.item():.4f}, Value: {value_loss.item():.4f}",
-            level=logging.INFO)
+            level=logging.INFO
+        )
+        
+    def save_model(self, path):
+        save_checkpoint(self, path)
 
+    def load_model(self, path):
+        load_checkpoint(self, path)
 
-#    _   _  ___     ____ ____  ___ _____ ___ ____
-#   | | | |/ _ \   / ___|  _ \|_ _|_   _|_ _/ ___|
-#   | |_| | | | | | |   | |_) || |  | |  | | |
-#   |  _  | |_| | | |___|  _ < | |  | |  | | |___
-#   |_| |_|\__\_\  \____|_| \_\___| |_| |___\____|
-#
-
-
-class HQ_Critic(nn.Module):
-    """
-    HQ Critic for evaluating task assignments. Inherits from nn.Module.
-    Evaluates the value of current task assignments and strategies.
-    """
-
-    def __init__(
-            self,
-            input_size=100,
-            role_size=5,
-            local_state_size=5,
-            global_state_size=5,
-            device=None):
-        super().__init__()
-        # Initialise the device to use (CPU or GPU)
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
-        self.role_size = role_size
-        self.local_state_size = local_state_size
-        self.global_state_size = global_state_size
-
-        # Shared layers for both Actor and Critic
-        self.fc1 = nn.Linear(input_size + self.local_state_size +
-                             self.role_size + self.global_state_size, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.critic = nn.Linear(128, 1)
-
-    def forward(self, state, role, local_state, global_state, mode='train'):
-        """
-        Forward pass through the HQCritic network.
-        :param state: The state vector (e.g., environmental state, resources, etc.)
-        :param role: The one-hot encoded role vector (e.g., gatherer, peacekeeper)
-        :param local_state: The local state vector for the agent (e.g., health, position)
-        :param global_state: The global state vector (e.g., faction status, resources)
-        :param mode: 'train' or 'evaluate', determines whether the model is being trained or evaluated
-        :return: Value estimate from the critic (how good the current task assignment is).
-        """
-        x = torch.cat([state, role, local_state, global_state], dim=-1)
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-
-        if mode == 'train':
-            return self.critic(x)  # Value estimate in training mode
-        else:
-            return None  # No value estimate in evaluation mode
 
