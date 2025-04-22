@@ -5,7 +5,7 @@ from SHARED.core_imports import *
 from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
-from NEURAL_NETWORK.Common import Training_device
+from NEURAL_NETWORK.Common import Training_device, get_hq_input_size_from_checkpoint
 from AGENT.agent_communication import CommunicationSystem
 import UTILITIES.utils_config as utils_config
 
@@ -84,6 +84,7 @@ class Faction():
                         logger.log_msg(
                             f"[ERROR] Network failed to Initialise for faction {self.id} (Type: {network_type})",
                             level=logging.ERROR)
+                        e 
                     raise AttributeError(
                         f"[ERROR] Network failed to Initialise for faction {self.id}: {str(e)}")
                 else:
@@ -183,6 +184,23 @@ class Faction():
             elif network_type == "HQNetwork":
                 try:
                     logger.log_msg(f"[DEBUG] Initialising HQNetwork...", level=logging.DEBUG)
+
+                    # Check if we're loading a saved HQ model
+                    if hasattr(self, "load_existing") and self.load_existing and hasattr(self, "models") and "HQ" in self.models:
+                        from NEURAL_NETWORK.Common import get_hq_input_size_from_checkpoint  # if not already imported
+                        input_size_from_ckpt = get_hq_input_size_from_checkpoint(self.models["HQ"])
+
+                        # Deduct known components to infer state_size
+                        role_size = utils_config.ROLE_VECTOR_SIZE       # or 5 if hardcoded
+                        local_state_size = 5
+                        global_state_size = 5
+                        state_size = input_size_from_ckpt - (role_size + local_state_size + global_state_size)
+
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(f"[HQ LOAD MODE] Using inferred state_size={state_size} from checkpoint input size={input_size_from_ckpt}",
+                                        level=logging.INFO)
+                    
+
                     return HQ_Network(
                         state_size=state_size,
                         action_size=action_size,
@@ -195,11 +213,7 @@ class Faction():
                 except Exception as e:
                     logger.log_msg(f"[ERROR] Failed to initialise HQNetwork: {e}", level=logging.ERROR)
                     raise
-            else:
-                logger.log_msg(
-                    f"[ERROR] Unsupported network type: {network_type}",
-                    level=logging.ERROR)
-                return None
+                    
 
         except Exception as e:
             logger.log_msg(

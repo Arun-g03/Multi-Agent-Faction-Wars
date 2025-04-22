@@ -49,8 +49,7 @@ def main():
 
         # Track menu options
         mode = None
-        utils_config.ENABLE_TENSORBOARD = False
-        auto_ENABLE_TENSORBOARD = False
+        
         clock = pygame.time.Clock()
 
         # Main loop
@@ -69,29 +68,22 @@ def main():
                     break  # Exit event processing
 
             if is_menu:
-                is_menu = menu_renderer.render_menu(
-                    utils_config.ENABLE_TENSORBOARD,
-                    auto_ENABLE_TENSORBOARD,
-                    mode,
-                    start_game_callback=lambda m,
-                    d,
-                    t: start_game(
-                        screen,
-                        m,
-                        d,
-                        t))
+                is_menu = menu_renderer.render_menu()
 
-                if not is_menu and menu_renderer.selected_mode:
+                # 🚨 Only act once menu has completed
+                if not is_menu and hasattr(menu_renderer, "pending_game_config"):
+                    config = menu_renderer.pending_game_config
+
                     game_manager = start_game(
                         screen=screen,
-                        mode=menu_renderer.selected_mode,
-                        ENABLE_TENSORBOARD=utils_config.ENABLE_TENSORBOARD,
-                        auto_ENABLE_TENSORBOARD=auto_ENABLE_TENSORBOARD
+                        mode=config["mode"],
+                        load_existing=config.get("load_existing", False),
+                        models_to_load=config.get("models", {})
                     )
 
                     if game_manager is None:
-                        print("GameManager failed to Initialise. Exiting.")
-                        running = False  # Stop the loop
+                        print("[ERROR] GameManager is None. Exiting.")
+                        running = False
                         break
 
                     game_renderer = GameRenderer(
@@ -105,6 +97,7 @@ def main():
 
                     print("[INFO] Switching to GameRenderer...")
                     is_game = True
+
 
             elif is_game:
                 if game_manager and game_renderer:
@@ -151,30 +144,42 @@ def main():
 
 
 def start_game(
-        screen,
-        mode,
-        ENABLE_TENSORBOARD=True,
-        auto_ENABLE_TENSORBOARD=True):
+    screen,
+    # plain string: "train" | "evaluate"
+    mode="train",
+    # True  → load .pth files you picked in the menu
+    load_existing=False,
+    # dict of paths → {"Agents": "...", "HQ": "...", …}
+    models_to_load=None
+                        ):
     """
-    Initialises and starts the game.
+    Initialise and start the game.
+
+    Returns:
+        GameManager instance on success, or None on failure.
     """
     try:
-        print(f"[INFO] Starting game in {mode} mode...")
+        print(f"[INFO] Starting game in {mode} mode…")
 
-        # Initialise GameManager
-        game_manager = GameManager(screen=screen, mode=mode)
+        # ── create GameManager ────────────────────────────────────────────────
+        game_manager = GameManager(
+            screen=screen,
+            mode=mode,
+            load_existing=load_existing,
+            models=models_to_load or {}      # keep an empty dict if None
+            
+        )
 
-        # Initialise the game with the selected mode
+        # ── call its own initialise routine ──────────────────────────────────
         game_manager.Initialise(mode)
+        print("[INFO] GameManager initialised successfully.")
 
-        print("[INFO] GameManager Initialised successfully.")
-
-        return game_manager  # Return GameManager so `main()` can run it
+        return game_manager
 
     except Exception as e:
-        print(f"Error starting the game: {e}")
+        print(f"[ERROR] Could not start the game: {e}")
         traceback.print_exc()
-        return None  # Return None to indicate failure
+        return None
 
 
 # Run the main function with profiling if enabled

@@ -17,6 +17,8 @@ from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
 from GAME.camera import Camera
 from RENDER.Game_Renderer import GameRenderer
 import UTILITIES.utils_config as utils_config
+from typing import Union, Dict, Any, Optional
+
 
 
 
@@ -31,20 +33,33 @@ device = Training_device
 
 
 class GameManager:
-    def __init__(
-            self,
-            mode,
-            save_dir="NEURAL_NETWORK/saved_models/Agents",
-            screen=None):
+    def __init__(self,
+                 screen,
+                 mode,
+                 save_dir="NEURAL_NETWORK/saved_models/Agents",
+                 load_existing=False,
+                 models=None):
+        
         # Initialise a logger specific to GameManager
         self.logger = Logger(
             log_file="game_manager_log.txt", log_level=logging.DEBUG)
-        self.mode = None  # Default mode is None
+        
         # Log initialisation
         if utils_config.ENABLE_LOGGING:
             self.logger.log_msg(
                 "GameManager initialised. Logs cleared for a new game.",
                 level=logging.INFO)
+        
+
+        self.load_existing = load_existing
+        self.models = models or {}
+        self.mode = mode or {} # Set the mode
+
+        self.set_mode(
+            mode,                          # 'train' | 'evaluate'
+            load_existing=self.load_existing,
+            models=self.models
+        )
 
         # Initialise the terrain
         self.terrain = Terrain()
@@ -52,7 +67,7 @@ class GameManager:
         self.faction_manager.factions = []  # Ensure factions list is initialised
         self.agents = []  # List to store all agents
         self.screen = screen  # Initialise the screen
-        self.mode = mode  # Set the mode
+        
         self.episode = 1
 
         # Initialise the resource manager with the terrain
@@ -101,19 +116,56 @@ class GameManager:
         # Here `save_dir` should be a valid path string
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
-        self.set_mode(mode)
 
-    def set_mode(self, mode):
-        """
-        Set the mode of the game (training, evaluation).
-        :param mode: The selected mode ('train' or 'evaluate').
-        """
-        if mode not in ['train', 'evaluate']:
-            raise ValueError(
-                f"Invalid mode: {mode}. Choose either 'train' or 'evaluate'.")
+    
+        
 
+    
+    def set_mode(
+        self,
+        mode: Union[str, Dict[str, Any]],  # can be 'train', 'evaluate', or a config dict
+        load_existing: bool = False,
+        models: Optional[Dict[str, str]] = None
+    ):
+        """
+        Sets the game mode and configures loading preferences.
+
+        Supports:
+            set_mode('train')
+            set_mode({
+                'mode': 'train',
+                'load_existing': True,
+                'models': {
+                    'gatherer': 'path/to/gatherer.pth',
+                    'peacekeeper': 'path/to/peacekeeper.pth',
+                    'HQ': 'path/to/hq.pth'
+                }
+            })
+        """
+
+        # ── 1) Unpack dict if needed ───────────────────────────────────────
+        if isinstance(mode, dict):
+            load_existing = mode.get('load_existing', load_existing)
+            models        = mode.get('models', models)
+            mode          = mode.get('mode', 'train')
+
+        # ── 2) Validate mode ───────────────────────────────────────────────
+        if mode not in ('train', 'evaluate'):
+            raise ValueError("mode must be 'train' or 'evaluate'")
+
+        # ── 3) Store config ────────────────────────────────────────────────
         self.mode = mode
-        print(f"Game mode set to: {self.mode}")
+        self.load_existing = load_existing
+        self.models = models or {}
+
+        print(f"[MODE] Game mode set to:       {self.mode}")
+        print(f"[MODE] Load existing models:   {self.load_existing}")
+        print(f"[MODE] Models to load:         {self.models}")
+
+            
+
+
+
 
     def Initialise_factions(self):
         try:
@@ -235,8 +287,7 @@ class GameManager:
         :param mode: The mode in which to Initialise the game ('train' or 'evaluate').
         """
         try:
-            if mode not in ['train', 'evaluate']:
-                mode = 'train'  # Default to 'train' if an invalid mode is provided
+            
             print(f"Initialising game in {mode} mode...")
 
             # Store the mode
@@ -407,6 +458,11 @@ class GameManager:
             faction.agents.extend(faction_agents)  # Assign its agents properly
             self.agents.extend(faction_agents)  # Keep global tracking
 
+            if self.load_existing and self.models:
+                self.load_models()
+            else:
+                pass #Skip model loading if load_existing is False
+
             # Print faction agent counts
             peacekeeper_count = sum(
                 1 for agent in faction.agents if isinstance(
@@ -415,6 +471,31 @@ class GameManager:
                 1 for agent in faction.agents if isinstance(agent, Gatherer))
             print(
                 f"Faction {faction.id} has {peacekeeper_count} Peacekeepers and {gatherer_count} Gatherers.")
+            
+    def load_models(self):
+        """
+        If load_existing is True, 
+            load the models from the paths specified in mode{} from menu_Render and gameManager.Set_Mode .
+
+        
+        """
+        print("[INFO] Loading model checkpoints...")
+        self.logger.log_msg(f"INFO", "Loading model checkpoints...{self.models}")
+        # HQ model (shared or per-faction if needed)
+        hq_path = self.models.get("HQ")
+        if hq_path:
+            for fac in self.faction_manager.factions:
+                if hasattr(fac, "network"):
+                    load_checkpoint(fac.network, hq_path)
+                    print(f"[LOAD] HQ checkpoint loaded for Faction {fac.id}")
+
+        # Agent role-specific models
+        for agent in self.agents:
+            ckpt = self.models.get(agent.role)
+            if ckpt and hasattr(agent, "ai"):
+                load_checkpoint(agent.ai, ckpt)
+                print(f"[LOAD] {agent.role.capitalize()} {agent.agent_id} restored from {ckpt}")
+
 
 
 #    ____                                  _                    _

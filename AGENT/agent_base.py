@@ -354,12 +354,15 @@ class BaseAgent:
                 task_info = state[7 + len(utils_config.TASK_TYPE_MAPPING):]
 
                 # Map task type index back to name (if any bit is 1)
-                try:
-                    task_type_index = task_one_hot.index(1)
-                    task_type_name = list(
-                        utils_config.TASK_TYPE_MAPPING.keys())[task_type_index]
-                except ValueError:
+                if 1 not in task_one_hot:
                     task_type_name = "none"
+                else:
+                    try:
+                        task_type_index = task_one_hot.index(1)
+                        task_type_name = list(utils_config.TASK_TYPE_MAPPING.keys())[task_type_index]
+                    except (ValueError, IndexError):
+                        task_type_name = "none"
+
 
                 logger.log_msg(
                     f"\n[STATE DEBUG] Agent {self.agent_id} ({self.role}) State:\n"

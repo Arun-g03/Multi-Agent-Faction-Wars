@@ -42,7 +42,7 @@ class HQ_Network(nn.Module):
                 f"[DEBUG] HQ_Network initialised with input size: {total_input_size}")
 
         #  Make input size dynamic
-        total_input_size = state_size + role_size + local_state_size + global_state_size
+        
         self.fc1 = nn.Linear(total_input_size, 128)
         self.fc2 = nn.Linear(128, 128)
         self.actor = nn.Linear(128, action_size)

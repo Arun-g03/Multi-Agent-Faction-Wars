@@ -66,12 +66,7 @@ class MenuRenderer:
 
         return button_rect
 
-    def render_menu(
-            self,
-            ENABLE_TENSORBOARD,
-            auto_ENABLE_TENSORBOARD,
-            mode,
-            start_game_callback):
+    def render_menu(self):
         self.screen.fill(BLACK)
         SCREEN_WIDTH = utils_config.SCREEN_WIDTH
         SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
@@ -151,11 +146,10 @@ class MenuRenderer:
                     simulation_config = self.game_setup_menu()
                     if simulation_config:
                         print("[INFO] Starting game with config:", simulation_config)
-                        start_game_callback(
-                            simulation_config,
-                            utils_config.ENABLE_TENSORBOARD,
-                            utils_config.ENABLE_TENSORBOARD)
-                        return False
+                        if simulation_config:
+                            print("[INFO] Ready to launch game with config:", simulation_config)
+                            self.pending_game_config = simulation_config
+                            return False  # exit menu, let main loop handle game launch
 
                 elif settings_button_rect.collidepoint(event.pos):
                     settings_menu = SettingsMenuRenderer(self.screen)
@@ -194,14 +188,14 @@ class MenuRenderer:
         
         # Step 1: Choose mode (Training or Evaluation)
         mode = self.select_simulation_mode()
-        if not mode:
-            return None  # User cancelled
+        if not mode or mode == "back":
+            return None  # Return None to indicate cancellation
         
         # Step 2: Choose whether to load existing models or start fresh
         if mode == "train":
             load_choice = self.render_load_choice()
             if load_choice is None:
-                return None  # User cancelled
+                return self.game_setup_menu()  # Return to mode selection
                 
             if load_choice is False:
                 # Start fresh training
@@ -215,12 +209,11 @@ class MenuRenderer:
             models = self.select_models_by_role()
             if not models:
                 self.show_message("Evaluation requires models to load")
-                return None
+                return self.game_setup_menu()  # Return to mode selection
                 
             return {"mode": "evaluate", "load_existing": True, "models": models}
         
         return None
-
     def select_simulation_mode(self):
         """
         Presents a screen for selecting between Training and Evaluation modes.
@@ -266,7 +259,7 @@ class MenuRenderer:
                         print("[INFO] Evaluation mode selected.")
                         return "evaluate"
                     elif cancel_button.collidepoint(event.pos):
-                        return None
+                        return self.render_menu()  # Return to main menu
 
     def render_load_choice(self):
         """
@@ -314,163 +307,59 @@ class MenuRenderer:
                     elif new_button.collidepoint(event.pos):
                         return False
                     elif cancel_button.collidepoint(event.pos):
-                        return None
-    
-    
+                        return self.select_simulation_mode()  # Return to mode selection
     
     def select_models_by_role(self):
         """
         Guides the user through selecting models for each agent role.
         Returns a dictionary mapping roles to selected model paths.
         """
-        # Base directory for saved models
         base_dir = os.path.join(os.getcwd(), "NEURAL_NETWORK", "saved_models")
-        
-        # Check if directory exists
-        if not os.path.exists(base_dir):
-            self.show_message("No saved models directory found")
-            pygame.display.flip()
-            return None
-        
-        # Dictionary to store selected models for each role
-        selected_models = {}
-        
-        # Handle gatherer models
-        gatherer_dir = os.path.join(base_dir, "Gatherer")
-        if os.path.exists(gatherer_dir):
-            try:
-                gatherer_models = [f for f in os.listdir(gatherer_dir) if f.endswith('.pth')]
-                if gatherer_models:
-                    gatherer_models.sort(key=lambda x: (self.extract_episode_number(x), self.extract_reward(x) or 0), reverse=True)
-                    selected_gatherer = self.select_model_for_role("Gatherer", gatherer_models, gatherer_dir)
-                    if selected_gatherer and selected_gatherer != "SKIP":
-                        selected_models["gatherer"] = selected_gatherer
-            except Exception as e:
-                self.show_message(f"Error accessing gatherer models: {str(e)}")
-                pygame.display.flip()
-
-        # Handle peacekeeper models
-        peacekeeper_dir = os.path.join(base_dir, "Peacekeeper")
-        if os.path.exists(peacekeeper_dir):
-            try:
-                peacekeeper_models = [f for f in os.listdir(peacekeeper_dir) if f.endswith('.pth')]
-                if peacekeeper_models:
-                    peacekeeper_models.sort(key=lambda x: (self.extract_episode_number(x), self.extract_reward(x) or 0), reverse=True)
-                    selected_peacekeeper = self.select_model_for_role("Peacekeeper", peacekeeper_models, peacekeeper_dir)
-                    if selected_peacekeeper and selected_peacekeeper != "SKIP":
-                        selected_models["peacekeeper"] = selected_peacekeeper
-            except Exception as e:
-                self.show_message(f"Error accessing peacekeeper models: {str(e)}")
-                pygame.display.flip()
-        
-        # Handle HQ models
+        agent_dir = os.path.join(base_dir, "Agents")
         hq_dir = os.path.join(base_dir, "HQ")
+
+        selected_models = {}
+        roles = {
+            "gatherer": "gatherer",
+            "peacekeeper": "peacekeeper"
+        }
+
+        # Handle gatherer and peacekeeper (Agents/)
+        for role, keyword in roles.items():
+            if os.path.exists(agent_dir):
+                files = self.find_model_files_for_role(agent_dir, keyword)
+                files.sort(key=lambda x: (self.extract_episode_number(x), self.extract_reward(x) or 0), reverse=True)
+                selected = self.select_model_for_role(role.capitalize(), files, agent_dir)
+                if selected is None:  # User clicked back
+                    return self.render_load_choice()
+                if selected != "SKIP":
+                    selected_models[role] = selected
+            else:
+                self.show_message("Missing directory: saved_models/Agents")
+                return self.render_load_choice()
+
+        # Handle HQ
         if os.path.exists(hq_dir):
-            try:
-                hq_models = [f for f in os.listdir(hq_dir) if f.endswith('.pth')]
-                if hq_models:
-                    hq_models.sort(key=lambda x: (self.extract_episode_number(x), self.extract_reward(x) or 0), reverse=True)
-                    selected_hq = self.select_model_for_role("HQ", hq_models, hq_dir)
-                    if selected_hq and selected_hq != "SKIP":
-                        selected_models["HQ"] = selected_hq
-            except Exception as e:
-                self.show_message(f"Error accessing HQ models: {str(e)}")
-                pygame.display.flip()
-        
+            hq_models = [f for f in os.listdir(hq_dir) if f.endswith('.pth')]
+            hq_models.sort(key=lambda x: (self.extract_episode_number(x), self.extract_reward(x) or 0), reverse=True)
+            selected = self.select_model_for_role("HQ", hq_models, hq_dir)
+            if selected is None:  # User clicked back
+                return self.render_load_choice()
+            if selected != "SKIP":
+                selected_models["HQ"] = selected
+        else:
+            self.show_message("Missing directory: saved_models/HQ")
+            return self.render_load_choice()
+
         if not selected_models:
             self.show_message("No models were selected")
-            pygame.display.flip()
-            return None
-            
+            return self.render_load_choice()
+
         return selected_models
 
-    def select_model_for_role(self, role, model_files, role_path):
-        """
-        Displays a list of models for a specific agent role and lets the user select one.
-        Returns the selected model path, "SKIP" to skip this role, or None to cancel.
-        """
-        SCREEN_WIDTH = utils_config.SCREEN_WIDTH
-        SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
-        
-        # Variables for scrolling
-        scroll_offset = 0
-        max_visible_models = 8
-        button_height = 40
-        button_width = 500
-        button_spacing = 10
-        
-        while True:
-            self.screen.fill(BLACK)
-            
-            # Draw title
-            self.draw_text(self.screen, f"Select a Model for {role}", MENU_FONT, 28, WHITE,
-                        SCREEN_WIDTH // 2, 80)
-            
-            # Draw scrolling instructions if needed
-            if len(model_files) > max_visible_models:
-                self.draw_text(self.screen, "Use mouse wheel to scroll", MENU_FONT, 18, GREY,
-                            SCREEN_WIDTH // 2, 120)
-            
-            # Draw model buttons
-            visible_models = model_files[scroll_offset:scroll_offset + max_visible_models]
-            
-            for i, model_name in enumerate(visible_models):
-                y_pos = 160 + i * (button_height + button_spacing)
-                
-                # Extract episode and reward info if available
-                episode_num = self.extract_episode_number(model_name)
-                reward = self.extract_reward(model_name)
-                
-                # Create button with model name
-                model_button = self.create_button(
-                    self.screen, model_name, MENU_FONT, 16, BLUE, (0, 0, 220), (0, 0, 180),
-                    SCREEN_WIDTH // 2 - button_width // 2, y_pos, button_width, button_height)
-                    
-            # Skip button
-            skip_button = self.create_button(
-                self.screen, f"Skip {role}", MENU_FONT, 18, RED, (0, 180, 0), (0, 120, 0),
-                SCREEN_WIDTH // 2 - 250, SCREEN_HEIGHT - 120, 200, 40)
-                
-            # Back button
-            back_button = self.create_button(
-                self.screen, "Back", MENU_FONT, 18, GREY, (220, 0, 0), (180, 0, 0),
-                SCREEN_WIDTH // 2 + 50, SCREEN_HEIGHT - 120, 200, 40)
-                
-            pygame.display.flip()
-            
-            # Handle events
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                    
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Left click
-                        if back_button.collidepoint(event.pos):
-                            return None
-                            
-                        if skip_button.collidepoint(event.pos):
-                            return "SKIP"
-                            
-                        # Check if a model was selected
-                        for i, model_name in enumerate(visible_models):
-                            y_pos = 160 + i * (button_height + button_spacing)
-                            model_button = pygame.Rect(
-                                SCREEN_WIDTH // 2 - button_width // 2, 
-                                y_pos, 
-                                button_width, 
-                                button_height
-                            )
-                            
-                            if model_button.collidepoint(event.pos):
-                                return os.path.join(role_path, model_name)
-                                
-                    elif event.button == 4:  # Scroll up
-                        scroll_offset = max(0, scroll_offset - 1)
-                    elif event.button == 5:  # Scroll down
-                        max_offset = max(0, len(model_files) - max_visible_models)
-                        scroll_offset = min(max_offset, scroll_offset + 1)
-
+    
+    
+    
     def extract_episode_number(self, filename):
         """Extract episode number from filename if present."""
         try:
@@ -492,7 +381,35 @@ class MenuRenderer:
         except:
             pass
         return None  # Default if not found
-    def show_message(self, message, duration=2000):
+    
+    def find_model_files_for_role(self, directory, keyword):
+        """
+        Finds and returns a sorted list of model filenames from a directory based on a keyword.
+        
+        :param directory: Path to the model directory
+        :param keyword: Keyword to filter models by (e.g., 'gatherer')
+        :return: Sorted list of model filenames (most recent or highest reward first)
+        """
+        if not os.path.exists(directory):
+            self.show_message(f"Missing directory: {directory}")
+            return []
+
+        # Filter by keyword and extension
+        files = [f for f in os.listdir(directory) if keyword in f.lower() and f.endswith(".pth")]
+
+        # Sort by (episode number, reward) descending
+        files.sort(
+            key=lambda x: (
+                self.extract_episode_number(x),
+                self.extract_reward(x) or 0
+            ),
+            reverse=True
+        )
+        return files
+
+
+        
+    def show_message(self, message, duration=1000):
         """
         Shows a message on screen for a specified duration.
         """
@@ -511,3 +428,102 @@ class MenuRenderer:
         
         # Wait for specified duration
         pygame.time.wait(duration)
+
+
+    def select_model_for_role(self, role, model_files, role_path):
+        """
+        Displays a list of models for a specific agent role and lets the user select one.
+        Returns the selected model path, "SKIP" to skip this role, or None to cancel.
+        """
+        SCREEN_WIDTH = utils_config.SCREEN_WIDTH
+        SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
+
+        scroll_offset = 0
+        max_visible_models = 8
+        button_height = 40
+        button_width = 500
+        button_spacing = 10
+        selected_model = None
+
+        while True:
+            self.screen.fill(BLACK)
+
+            self.draw_text(self.screen, f"Select a Model for {role}", MENU_FONT, 28, WHITE,
+                        SCREEN_WIDTH // 2, 80)
+
+            if len(model_files) > max_visible_models:
+                self.draw_text(self.screen, "Use mouse wheel to scroll", MENU_FONT, 18, GREY,
+                            SCREEN_WIDTH // 2, 120)
+            elif len(model_files) == 0:
+                self.draw_text(self.screen, f"No saved models found for {role}.", MENU_FONT, 20, RED,
+                            SCREEN_WIDTH // 2, 160)
+
+            visible_models = model_files[scroll_offset:scroll_offset + max_visible_models]
+
+            for i, model_name in enumerate(visible_models):
+                y_pos = 160 + i * (button_height + button_spacing)
+                is_selected = selected_model == os.path.join(role_path, model_name)
+
+                model_button = self.create_button(
+                    self.screen, model_name, MENU_FONT, 16,
+                    GREEN if is_selected else BLUE,
+                    (0, 220, 0) if is_selected else (0, 0, 220),
+                    (0, 180, 0),
+                    SCREEN_WIDTH // 2 - button_width // 2,
+                    y_pos,
+                    button_width,
+                    button_height
+                )
+
+            # Skip and Back
+            back_button = self.create_button(
+                self.screen, "Back", MENU_FONT, 18, GREY, (120, 120, 120), (90, 90, 90),
+                SCREEN_WIDTH // 2 - 250, SCREEN_HEIGHT - 120, 200, 40)
+
+            skip_button = self.create_button(
+                self.screen, f"Skip {role}", MENU_FONT, 18, RED, (220, 0, 0), (180, 0, 0),
+                SCREEN_WIDTH // 2 + 50, SCREEN_HEIGHT - 120, 200, 40)
+            # Continue
+            continue_enabled = selected_model is not None and len(model_files) > 0
+            if continue_enabled:
+                continue_button = self.create_button(
+                    self.screen, "Continue", MENU_FONT, 18,
+                    GREEN if continue_enabled else DARK_GREY,
+                    (0, 180, 0) if continue_enabled else GREY,
+                    (0, 120, 0) if continue_enabled else GREY,
+                    SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 60, 200, 40)
+
+            pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if back_button.collidepoint(event.pos):
+                            return None
+                        if skip_button.collidepoint(event.pos):
+                            return "SKIP"
+
+                        for i, model_name in enumerate(visible_models):
+                            y_pos = 160 + i * (button_height + button_spacing)
+                            model_button = pygame.Rect(
+                                SCREEN_WIDTH // 2 - button_width // 2,
+                                y_pos,
+                                button_width,
+                                button_height
+                            )
+                            if model_button.collidepoint(event.pos):
+                                selected_model = os.path.join(role_path, model_name)
+                                print(f"[SELECTED] {role} model: {selected_model}")
+
+                        if continue_enabled and continue_button.collidepoint(event.pos):
+                            return selected_model if selected_model else "SKIP"
+
+                    elif event.button == 4:  # scroll up
+                        scroll_offset = max(0, scroll_offset - 1)
+                    elif event.button == 5:  # scroll down
+                        max_offset = max(0, len(model_files) - max_visible_models)
+                        scroll_offset = min(max_offset, scroll_offset + 1)
