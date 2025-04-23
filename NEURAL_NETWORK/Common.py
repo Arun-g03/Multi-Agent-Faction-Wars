@@ -97,3 +97,52 @@ def get_hq_input_size_from_checkpoint(path):
     checkpoint = torch.load(path, map_location='cpu')
     weight = checkpoint['model_state_dict']['fc1.weight']
     return weight.shape[1]  # This is the input dimension
+
+
+
+def clone_best_agents(agents, alpha=0.8, min_gap=5.0):
+    """
+    Clone the best-performing agent into the bottom 50% using soft interpolation.
+
+    - Uses exponential moving average of rewards.
+    - Clones weights softly using alpha-blend.
+    - Only applies if best agent is clearly ahead.
+    """
+    if len(agents) < 2:
+        return
+
+    # Ensure each agent has a running reward initialized
+    for agent in agents:
+        rewards = agent.ai.memory.get("rewards", [])
+        last_reward = rewards[-1] if rewards else 0
+        if not hasattr(agent, "running_reward"):
+            agent.running_reward = last_reward
+        else:
+            agent.running_reward = 0.9 * agent.running_reward + 0.1 * last_reward
+
+    # Sort agents by smoothed reward
+    sorted_agents = sorted(agents, key=lambda a: a.running_reward, reverse=True)
+    best_agent = sorted_agents[0]
+    best_reward = best_agent.running_reward
+
+    # Calculate average to assess cloning value
+    avg_reward = sum(a.running_reward for a in sorted_agents) / len(sorted_agents)
+
+    # Clone only if best agent is noticeably ahead
+    if best_reward < avg_reward + min_gap:
+        logger.log_msg(f"[CLONE] Skipping cloning — top agent not far ahead enough (distance: {best_reward - avg_reward:.2f})")
+        return
+
+    # Soft copy into bottom 50%
+    num_to_clone = len(sorted_agents) // 2
+    for agent in sorted_agents[-num_to_clone:]:
+        if agent is best_agent:
+            continue  # skip self
+        soft_clone(agent.ai, best_agent.ai, alpha=alpha)
+        logger.log_msg(f"[CLONE] {agent.role} {agent.agent_id} softly cloned from best agent {best_agent.agent_id} (distance: {best_reward - agent.running_reward:.2f})")
+
+
+def soft_clone(target_model, source_model, alpha=0.8):
+    with torch.no_grad():
+        for t_param, s_param in zip(target_model.parameters(), source_model.parameters()):
+            t_param.data.copy_(alpha * s_param.data + (1 - alpha) * t_param.data)

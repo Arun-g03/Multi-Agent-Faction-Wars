@@ -222,6 +222,37 @@ class TensorBoardLogger:
         except Exception as e:
             print(f"Error closing TensorBoard writer: {str(e)}")
 
+    def run_tensorboard(log_dir="RUNTIME_LOGS/Tensorboard_logs", port=6006):
+        """
+        Launch TensorBoard pointing at the specified log directory.
+        Opens the browser automatically.
+        """
+        # Ensure path is absolute
+        abs_log_path = os.path.abspath(log_dir)
+        print(f"[TensorBoard] Launching TensorBoard at: {abs_log_path}")
+
+        def _launch():
+            try:
+                subprocess.Popen(
+                    ["tensorboard", f"--logdir={abs_log_path}", f"--port={port}"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                time.sleep(2)  # Give TensorBoard a moment to start
+                webbrowser.open(f"http://localhost:{port}")
+            except Exception as e:
+                print(f"[TensorBoard ERROR] Failed to launch TensorBoard: {e}")
+
+        threading.Thread(target=_launch, daemon=True).start()
+
+
+    def stop_tensorboard():
+        global tensorboard_process
+        if tensorboard_process and tensorboard_process.poll() is None:
+            print("\033[91m[TensorBoard] Shutting down...\033[0m")            
+            tensorboard_process.terminate()
+            tensorboard_process.wait(timeout=3)
+
 
 class MatplotlibPlotter:
     def __init__(self, file_path="simulation_metrics.csv"):

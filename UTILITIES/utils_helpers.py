@@ -178,3 +178,6 @@ def generate_random_colour(used_colours=None, min_distance=100):
                 colour, used) >= min_distance for used in used_colours)):
             used_colours.append(colour)  # Add to the list of used colours
             return colour
+
+
+

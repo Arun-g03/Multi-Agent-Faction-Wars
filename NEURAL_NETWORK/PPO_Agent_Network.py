@@ -26,7 +26,7 @@ class PPOModel(nn.Module):
             action_size=10,
             learning_rate=1e-4,
             gamma=0.70,
-            clip_epsilon=0.2,
+            clip_epsilon=0.1,
             entropy_coeff=0.01,
             lambda_=0.95,
             device=Training_device
@@ -121,48 +121,56 @@ class PPOModel(nn.Module):
                 level=logging.DEBUG)
 
         return action.item(), dist.log_prob(action), value.item()
+    
+
+    def choose_action_batch(self, state_batch, valid_masks=None):
+        """
+        Batched version of choose_action().
+        Args:
+            state_batch: Tensor [B, input_dim]
+            valid_masks: List of index sets (or None) per agent for contextual action masking
+        Returns:
+            actions: [B] numpy array of action indices
+            log_probs: [B] numpy array of log_probs
+            values: [B] numpy array of state values
+        """
+        if state_batch is None or len(state_batch) == 0:
+            raise ValueError("Empty state_batch provided to choose_action_batch.")
+
+        logits, values = self.ai.forward(state_batch)
+        probs = torch.zeros_like(logits)
+
+        for i in range(len(state_batch)):
+            agent_logits = logits[i]
+
+            if valid_masks and valid_masks[i] is not None:
+                mask = torch.full_like(agent_logits, float('-inf'))
+                mask[valid_masks[i]] = agent_logits[valid_masks[i]]
+                agent_logits = mask
+
+            agent_probs = torch.softmax(agent_logits, dim=-1)
+
+            if torch.isnan(agent_probs).any() or torch.isinf(agent_probs).any():
+                raise ValueError(f"[PROBS ERROR] NaNs/Infs in batch index {i} logits!")
+
+            probs[i] = agent_probs
+
+        if self.training_mode == "train":
+            dist = torch.distributions.Categorical(probs)
+            actions = dist.sample()
+            log_probs = dist.log_prob(actions)
+        else:
+            actions = torch.argmax(probs, dim=-1)
+            log_probs = torch.log(torch.gather(probs, 1, actions.unsqueeze(-1)).squeeze(-1))
+
+        return (
+            actions.cpu().numpy(),
+            log_probs.cpu().numpy(),
+            values.squeeze(-1).cpu().numpy()
+        )
+
 
     
-    def get_valid_action_indices(self, resource_manager, agents):
-        role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
-        valid_indices = set()
-
-        # Always include movement and exploration
-        for i, action in enumerate(role_actions):
-            if action.startswith("move") or action == "explore":
-                valid_indices.add(i)
-
-        # Light context filtering
-        for i, action in enumerate(role_actions):
-            if action == "mine_gold":
-                resources = self.agent.detect_resources(
-                    resource_manager, threshold=5)
-                if any(r.__class__.__name__ == "GoldLump" for r in resources):
-                    valid_indices.add(i)
-
-            elif action == "forage_apple":
-                resources = self.agent.detect_resources(
-                    resource_manager, threshold=5)
-                if any(r.__class__.__name__ == "AppleTree" for r in resources):
-                    valid_indices.add(i)
-
-            elif action == "heal_with_apple":
-                if self.agent.Health < 90 and self.agent.faction.food_balance > 0:
-                    valid_indices.add(i)
-
-            elif action in ["eliminate_threat", "patrol"]:
-                threats = self.agent.detect_threats(
-                    agents, enemy_hq={"faction_id": -1})
-                if threats:
-                    valid_indices.add(i)
-
-        # Mild fallback boost: if only a few are valid, allow full list
-        if len(valid_indices) < max(2, len(role_actions) // 2):
-            # give more room to try stuff
-            return list(range(len(role_actions)))
-        else:
-            return list(valid_indices)
-
     def store_transition(
             self,
             state,

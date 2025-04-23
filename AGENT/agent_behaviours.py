@@ -296,8 +296,7 @@ class AgentBehaviour:
             reward = 1
         else:
             reward = -1
-        if utils_config.ENABLE_TENSORBOARD:
-            # Add TensorBoard logging here too
+        if utils_config.ENABLE_TENSORBOARD and task_state is not None:
             try:
                 episode = getattr(self.agent.faction, "episode", 0)
                 faction_id = self.agent.faction.id
@@ -311,6 +310,7 @@ class AgentBehaviour:
                     logger.log_msg(
                         f"[TensorBoard] Failed to log independent task reward: {e}",
                         level=logging.WARNING)
+
 
         return reward
 
@@ -377,9 +377,8 @@ class AgentBehaviour:
                 reward += 7  # Bonus for eliminating threats effectively
 
                 # 🧠 Log to TensorBoard
-        if utils_config.ENABLE_TENSORBOARD:
+        if utils_config.ENABLE_TENSORBOARD and task_state is not None:
             try:
-
                 episode = getattr(agent.faction, "episode", 0)
                 faction_id = agent.faction.id
                 TensorBoardLogger().log_scalar(
@@ -392,6 +391,7 @@ class AgentBehaviour:
                     logger.log_msg(
                         f"[TensorBoard] Failed to log task reward: {e}",
                         level=logging.WARNING)
+
 
         return reward
 

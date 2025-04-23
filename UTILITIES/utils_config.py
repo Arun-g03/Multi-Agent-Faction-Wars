@@ -22,11 +22,13 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = True
+ENABLE_LOGGING = False
 """Enable logging for debugging"""
 
-ENABLE_TENSORBOARD = False
+ENABLE_TENSORBOARD = True
 """Enable tensorboard for visualisation"""
+
+ENABLE_BATCHED_INFERENCE = True
 
 
 #    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ _____ ___ _   _  ____ ____
@@ -40,9 +42,9 @@ ENABLE_TENSORBOARD = False
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 50  # How many episodes or games to train for
+EPISODES_LIMIT = 10  # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 100
+STEPS_PER_EPISODE = 400
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)

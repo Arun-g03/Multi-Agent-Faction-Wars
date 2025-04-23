@@ -2,7 +2,7 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from RENDER.Common import SETTINGS_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY
+from RENDER.Common import SETTINGS_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY, get_font
 import UTILITIES.utils_config as utils_config
 
 #    ____       _   _   _                   __  __
@@ -17,7 +17,7 @@ class SettingsMenuRenderer:
     """ Class for rendering the settings menu. """
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont(SETTINGS_FONT, 24)
+        self.font = get_font(24, SETTINGS_FONT, False)
         self.selected_category = "debugging"
         self.saved = False
         self.input_mode = False
@@ -40,7 +40,7 @@ class SettingsMenuRenderer:
             "debugging": [
                 ("TensorBoard", "ENABLE_TENSORBOARD"),
                 ("Logging", "ENABLE_LOGGING"),
-                ("Profiling", "ENABLE_PROFILE_BOOL"),
+                ("Performance Profiling", "ENABLE_PROFILE_BOOL"),
 
             ],
             "episode settings": [
@@ -96,13 +96,10 @@ class SettingsMenuRenderer:
                     setting["options"] = [True, False]
                 self.settings_by_category[category].append(setting)
 
-        self.check_icon = pygame.font.SysFont(
-            SETTINGS_FONT, 40).render('✔', True, GREEN)
-        self.cross_icon = pygame.font.SysFont(
-            SETTINGS_FONT, 40).render('❌', True, RED)
+        
 
     def draw_text(self, text, size, colour, x, y):
-        font_obj = pygame.font.SysFont(SETTINGS_FONT, size)
+        font_obj = get_font(size, SETTINGS_FONT)
         text_surface = font_obj.render(text, True, colour)
         text_rect = text_surface.get_rect(topleft=(x, y))
         self.screen.blit(text_surface, text_rect)
@@ -220,6 +217,7 @@ class SettingsMenuRenderer:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+                TensorBoardLogger.stop_tensorboard()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()

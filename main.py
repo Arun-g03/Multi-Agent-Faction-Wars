@@ -108,6 +108,7 @@ def main():
                             print(
                                 "\033[91m[INFO] Exiting game after run() stopped.\033[0m")
                             pygame.quit()
+                            tensorboard_logger.stop_tensorboard()
                             sys.exit()
 
                         game_renderer.render(
@@ -123,6 +124,7 @@ def main():
                         print("[INFO] Game closed successfully.")
                         pygame.quit()
                         sys.exit()
+                        tensorboard_logger.stop_tensorboard()
                     except Exception as e:
                         print(f"Unexpected error during the game loop: {e}")
                         traceback.print_exc()
@@ -134,12 +136,14 @@ def main():
 
         print("\033[91m[INFO] Exiting game...\033[0m")
         pygame.quit()  # Ensure Pygame fully shuts down
+        tensorboard_logger.stop_tensorboard()
         sys.exit()  # Ensure Python exits completely
 
     except Exception as e:
         print(f"An error occurred: {e}")
         traceback.print_exc()
         pygame.quit()
+        tensorboard_logger.stop_tensorboard()
         sys.exit()
 
 

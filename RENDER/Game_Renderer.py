@@ -4,7 +4,7 @@ from SHARED.core_imports import *
 """File Specific Imports"""
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
 import UTILITIES.utils_config as utils_config
-from RENDER.Common import GAME_FONT
+from RENDER.Common import GAME_FONT, get_font, get_text_surface
 
 
 logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
@@ -19,18 +19,10 @@ logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
 #
 
 pygame.init()
-pygame.font.init()
-
-FONT_CACHE = {}
 
 
-def get_font(size):
-    """
-    Retrieves a font from cache or creates a new one if not cached.
-    """
-    if size not in FONT_CACHE:
-        FONT_CACHE[size] = pygame.font.SysFont(GAME_FONT, size)
-    return FONT_CACHE[size]
+
+
 
 
 class GameRenderer:
@@ -210,7 +202,7 @@ class GameRenderer:
                 self.screen.blit(base_image_scaled, (screen_x, screen_y))
 
                 # Display the faction ID at the center of the base
-                text = self.font.render(str(faction.id), True, (0, 0, 0))
+                text = get_text_surface(str(faction.id), "Arial", 24, (0, 0, 0))                
                 text_rect = text.get_rect(
                     center=(
                         screen_x +
@@ -318,71 +310,51 @@ class GameRenderer:
 
 
     def render_hud(self, screen, episode, step, factions, resource_counts):
-        font = get_font(20)
+        font_size = 20
         lines = []
 
         # Episode and Step
-        lines.append(
-            font.render(
-                f"Episode: {episode}/{utils_config.EPISODES_LIMIT} | Step: {step} /{utils_config.STEPS_PER_EPISODE}",
-                True,
-                (255,
-                 255,
-                 255)))
+        lines.append(get_text_surface(
+            f"Episode: {episode}/{utils_config.EPISODES_LIMIT} | Step: {step} /{utils_config.STEPS_PER_EPISODE}",
+            GAME_FONT, font_size, (255, 255, 255)
+        ))
 
         # Time
         elapsed_time = pygame.time.get_ticks() // 1000
-        hours, minutes, seconds = elapsed_time // 3600, (elapsed_time %
-                                                         3600) // 60, elapsed_time % 60
-        lines.append(
-            font.render(
-                f"Time: {hours:02d}:{minutes:02d}:{seconds:02d}",
-                True,
-                (255,
-                 255,
-                 255)))
+        hours, minutes, seconds = elapsed_time // 3600, (elapsed_time % 3600) // 60, elapsed_time % 60
+        lines.append(get_text_surface(
+            f"Time: {hours:02d}:{minutes:02d}:{seconds:02d}",
+            GAME_FONT, font_size, (255, 255, 255)
+        ))
 
         # Resources
-        lines.append(font.render(
-            "Resources available:", True, (255, 255, 255)))
-        lines.append(
-            font.render(
-                f"Gold Lumps: {resource_counts.get('gold_lumps', 0)}, Gold: {resource_counts.get('gold_quantity', 0)}",
-                True,
-                (255,
-                 255,
-                 255)))
-        lines.append(
-            font.render(
-                f"Apple Trees: {resource_counts.get('apple_trees', 0)}, Apples: {resource_counts.get('apple_quantity', 0)}",
-                True,
-                (255,
-                 255,
-                 255)))
+        lines.append(get_text_surface("Resources available:", GAME_FONT, font_size, (255, 255, 255)))
+        lines.append(get_text_surface(
+            f"Gold Lumps: {resource_counts.get('gold_lumps', 0)}, Gold: {resource_counts.get('gold_quantity', 0)}",
+            GAME_FONT, font_size, (255, 255, 255)
+        ))
+        lines.append(get_text_surface(
+            f"Apple Trees: {resource_counts.get('apple_trees', 0)}, Apples: {resource_counts.get('apple_quantity', 0)}",
+            GAME_FONT, font_size, (255, 255, 255)
+        ))
 
         # Leaderboard
-        lines.append(font.render(
-            "Faction Leaderboard:", True, (255, 255, 255)))
-        sorted_factions = sorted(
-            factions, key=lambda f: f.gold_balance, reverse=True)
+        lines.append(get_text_surface("Faction Leaderboard:", GAME_FONT, font_size, (255, 255, 255)))
+        sorted_factions = sorted(factions, key=lambda f: f.gold_balance, reverse=True)
         for faction in sorted_factions[:4]:
-            lines.append(
-                font.render(
-                    f"Faction {faction.id} - Gold: {faction.gold_balance}, Food: {faction.food_balance}, Agents: {len(faction.agents)}",
-                    True,
-                    (255,
-                     255,
-                     255)))
+            lines.append(get_text_surface(
+                f"Faction {faction.id} - Gold: {faction.gold_balance}, Food: {faction.food_balance}, Agents: {len(faction.agents)}",
+                GAME_FONT, font_size, (255, 255, 255)
+            ))
 
         # 🧮 Compute background size dynamically
         padding = 10
-        line_height = font.get_height() + 4
+        line_height = get_font(font_size).get_height() + 4
         max_width = max(line.get_width() for line in lines)
         total_height = len(lines) * line_height
 
         # 🎨 Create dynamic HUD background
-        hud_background = pygame.Surface(
-            (max_width + 2 * padding, total_height + 2 * padding))
+        hud_background = pygame.Surface((max_width + 2 * padding, total_height + 2 * padding))
         hud_background.set_alpha(128)
         hud_background.fill((0, 0, 0))
         screen.blit(hud_background, (10, 10))
@@ -392,6 +364,7 @@ class GameRenderer:
             screen.blit(line, (10 + padding, 10 + padding + i * line_height))
 
         pygame.display.update()
+
 
 #       _                    _
 #      / \   __ _  ___ _ __ | |_ ___
@@ -595,8 +568,7 @@ class GameRenderer:
 
         # Render text on the tooltip
         for i, line in enumerate(lines):
-            line_surface = font.render(
-                line, True, (255, 255, 255))  # White text
+            line_surface = get_text_surface(line, "Arial", 16, (255, 255, 255))            
             tooltip_surface.blit(
                 line_surface, (padding, i * line_height + padding))
 

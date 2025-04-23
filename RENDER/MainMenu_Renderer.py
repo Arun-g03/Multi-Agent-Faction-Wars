@@ -3,7 +3,8 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-from RENDER.Common import MENU_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY, DARK_GREEN
+from UTILITIES.utils_logger import TensorBoardLogger
+from RENDER.Common import MENU_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY, DARK_GREEN, get_font
 from RENDER.Settings_Renderer import SettingsMenuRenderer
 from RENDER.Credits_Renderer import CreditsRenderer
 
@@ -21,12 +22,12 @@ from RENDER.Credits_Renderer import CreditsRenderer
 class MenuRenderer:
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont(MENU_FONT, 24)
+        self.font = get_font(24, MENU_FONT)
         self.selected_mode = None
         print("MenuRenderer initialised")
 
     def draw_text(self, surface, text, font, size, colour, x, y):
-        font_obj = pygame.font.SysFont(font, size)
+        font_obj = get_font(size, font)
         text_surface = font_obj.render(text, True, colour)
         text_rect = text_surface.get_rect(center=(x, y))
         surface.blit(text_surface, text_rect)
@@ -84,10 +85,9 @@ class MenuRenderer:
             MENU_FONT,
             28,
             WHITE,
-            SCREEN_WIDTH //
-            2,
-            base_y -
-            100)
+            SCREEN_WIDTH // 2,
+            base_y - 100
+        )
         self.draw_text(
             self.screen,
             "Created as part of my BSC Computer Science final year project",
@@ -95,7 +95,8 @@ class MenuRenderer:
             20,
             WHITE,
             SCREEN_WIDTH // 2,
-            base_y - 70)
+            base_y - 70
+        )
         self.draw_text(self.screen, "Main Menu", MENU_FONT,
                     28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
 
@@ -117,27 +118,35 @@ class MenuRenderer:
         settings_button_rect = self.create_button(
             self.screen, "Settings", MENU_FONT, button_font_size, GREY, (
                 180, 180, 180), (100, 100, 100),
-            center_x, base_y + (button_height + button_spacing) *
-            1, button_width, button_height
+            center_x, base_y + (button_height + button_spacing) * 1, button_width, button_height
         )
 
         credits_button_rect = self.create_button(
             self.screen, "Credits", MENU_FONT, button_font_size, DARK_GREY, (
                 160, 160, 160), (90, 90, 90),
-            center_x, base_y + (button_height + button_spacing) *
-            2, button_width, button_height
+            center_x, base_y + (button_height + button_spacing) * 2, button_width, button_height
         )
+
+        # Check if log files exist
+        log_dir = "RUNTIME_LOGS/Tensorboard_logs"
+        log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+
+        if log_files_exist:
+            tensorboard_button_rect = self.create_button(
+                self.screen, "Tensorboard", MENU_FONT, button_font_size, BLUE, (0, 0, 150), (0, 0, 200),
+                center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
+            )
 
         exit_button_rect = self.create_button(
             self.screen, "Exit", MENU_FONT, button_font_size, RED, (
                 150, 0, 0), (200, 0, 0),
-            center_x, base_y + (button_height + button_spacing) *
-            3, button_width, button_height
+            center_x, base_y + (button_height + button_spacing) * 4, button_width, button_height
         )
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+                TensorBoardLogger.stop_tensorboard()
                 sys.exit()
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -146,10 +155,8 @@ class MenuRenderer:
                     simulation_config = self.game_setup_menu()
                     if simulation_config:
                         print("[INFO] Starting game with config:", simulation_config)
-                        if simulation_config:
-                            print("[INFO] Ready to launch game with config:", simulation_config)
-                            self.pending_game_config = simulation_config
-                            return False  # exit menu, let main loop handle game launch
+                        self.pending_game_config = simulation_config
+                        return False  # exit menu, let main loop handle game launch
 
                 elif settings_button_rect.collidepoint(event.pos):
                     settings_menu = SettingsMenuRenderer(self.screen)
@@ -164,17 +171,21 @@ class MenuRenderer:
                         print("[INFO] Updated settings:", updated)
 
                 elif credits_button_rect.collidepoint(event.pos):
-                    # Make sure this import exists at the top
                     credits = CreditsRenderer(self.screen)
                     credits.run()
+
+                elif tensorboard_button_rect.collidepoint(event.pos):
+                    TensorBoardLogger.run_tensorboard()
 
                 elif exit_button_rect.collidepoint(event.pos):
                     print("[INFO] Exiting game...")
                     pygame.quit()
+                    TensorBoardLogger.stop_tensorboard()  # Kill TensorBoard if running
                     sys.exit()
 
         pygame.display.flip()
         return True
+
 
     def game_setup_menu(self):
         """
@@ -201,8 +212,11 @@ class MenuRenderer:
                 # Start fresh training
                 return {"mode": "train", "load_existing": False}
             else:
-                # Load existing models for training
-                return {"mode": "train", "load_existing": True, "models": load_choice["models"]}
+                try:
+                    # Load existing models for training
+                    return {"mode": "train", "load_existing": True, "models": load_choice["models"]}
+                except:
+                    self.MenuRenderer()            
                 
         elif mode == "evaluate":
             # For evaluation, we always need to load models
@@ -249,6 +263,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
+                    TensorBoardLogger.stop_tensorboard()
                     sys.exit()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -296,6 +311,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
+                    TensorBoardLogger.stop_tensorboard()
                     sys.exit()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -464,8 +480,10 @@ class MenuRenderer:
                 y_pos = 160 + i * (button_height + button_spacing)
                 is_selected = selected_model == os.path.join(role_path, model_name)
 
+                display_name = self.prettify_model_name(model_name)
+
                 model_button = self.create_button(
-                    self.screen, model_name, MENU_FONT, 16,
+                    self.screen, display_name, MENU_FONT, 16,
                     GREEN if is_selected else BLUE,
                     (0, 220, 0) if is_selected else (0, 0, 220),
                     (0, 180, 0),
@@ -498,6 +516,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
+                    TensorBoardLogger.stop_tensorboard()
                     sys.exit()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -527,3 +546,39 @@ class MenuRenderer:
                     elif event.button == 5:  # scroll down
                         max_offset = max(0, len(model_files) - max_visible_models)
                         scroll_offset = min(max_offset, scroll_offset + 1)
+
+    def prettify_model_name(self, filename):
+        """
+        Converts filenames like:
+        Best_gatherer_episode_3_reward_29.00.pth
+        Into:
+        Gatherer  |  Episode 3  |  Reward 29.00
+        """
+        name = filename.replace(".pth", "")
+
+        # Remove "Best" if present
+        name = name.replace("Best_", "").replace("Best", "")
+
+        # Extract parts
+        parts = name.split("_")
+        role = ""
+        episode = ""
+        reward = ""
+
+        for i, part in enumerate(parts):
+            if part.lower() in ["gatherer", "peacekeeper", "hq"]:
+                role = part.capitalize()
+            elif part == "episode" and i + 1 < len(parts):
+                episode = f"Episode {parts[i + 1]}"
+            elif part == "reward" and i + 1 < len(parts):
+                try:
+                    reward_val = float(parts[i + 1])
+                    reward = f"Reward {reward_val:.2f}"
+                except ValueError:
+                    reward = f"Reward {parts[i + 1]}"
+
+        # Fallback
+        if not role:
+            role = "Unknown"
+
+        return f"{role:<10} | {episode:<10} | {reward:<10}"

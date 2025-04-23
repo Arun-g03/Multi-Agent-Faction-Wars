@@ -1,0 +1,100 @@
+[PROFILING RESULTS - SORTED BY EXECUTION TIME]
+         10090598 function calls (10090577 primitive calls) in 43.187 seconds
+
+   Ordered by: internal time
+   List reduced from 158 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    42716   11.257    0.000   11.257    0.000 {built-in method pygame.display.flip}
+    42717    4.665    0.000    4.665    0.000 {method 'fill' of 'pygame.surface.Surface' objects}
+        3    4.628    1.543   39.547   13.182 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:436(select_model_for_role)
+   337309    4.571    0.000    4.571    0.000 {built-in method pygame.draw.rect}
+   382128    3.525    0.000    3.525    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+   382128    2.794    0.000    2.794    0.000 {method 'render' of 'pygame.font.Font' objects}
+   337309    2.501    0.000   14.380    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:34(create_button)
+  1659020    2.436    0.000    2.436    0.000 {built-in method pygame.event.get}
+   382128    2.182    0.000    9.050    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:28(draw_text)
+   248798    1.085    0.000    2.152    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:77(join)
+   497966    0.824    0.000    1.005    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:124(splitdrive)
+   248449    0.655    0.000    0.896    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:536(prettify_model_name)
+      2/1    0.579    0.290   41.679   41.679 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:267(render_load_choice)
+   382129    0.398    0.000    0.420    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\Common.py:23(get_font)
+  1740213    0.279    0.000    0.279    0.000 {method 'replace' of 'str' objects}
+   382128    0.150    0.000    0.150    0.000 {method 'get_rect' of 'pygame.surface.Surface' objects}
+        1    0.145    0.145    0.506    0.506 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:220(select_simulation_mode)
+   747617    0.078    0.000    0.078    0.000 {built-in method builtins.isinstance}
+   337309    0.070    0.000    0.070    0.000 {built-in method pygame.mouse.get_pos}
+   747487    0.064    0.000    0.064    0.000 {built-in method nt.fspath}
+   337347    0.060    0.000    0.060    0.000 {method 'collidepoint' of 'pygame.rect.Rect' objects}
+     1051    0.056    0.000   43.121    0.041 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:69(render_menu)
+        1    0.052    0.052    0.052    0.052 {built-in method pygame.base.quit}
+583048/583042    0.049    0.000    0.049    0.000 {built-in method builtins.len}
+   248449    0.024    0.000    0.024    0.000 {method 'strip' of 'str' objects}
+        1    0.023    0.023    0.024    0.024 {built-in method pygame.display.set_mode}
+        1    0.012    0.012   43.187   43.187 main.py:32(main)
+      762    0.004    0.000    0.006    0.000 {method 'join' of 'str' objects}
+        1    0.002    0.002    0.020    0.020 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:55(initsysfonts_win32)
+      352    0.002    0.000    0.002    0.000 {built-in method winreg.EnumValue}
+      378    0.002    0.000    0.009    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:95(_parse_font_entry_win)
+     4718    0.002    0.000    0.002    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:45(<genexpr>)
+      367    0.002    0.000    0.003    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:180(split)
+        6    0.001    0.000    0.001    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:366(font_constructor)
+        5    0.001    0.000    0.001    0.000 {built-in method builtins.print}
+        6    0.001    0.000    0.001    0.000 {built-in method nt.stat}
+      352    0.001    0.000    0.002    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:203(splitext)
+      352    0.001    0.000    0.001    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\genericpath.py:121(_splitext)
+     5136    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+      343    0.000    0.000    0.003    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:221(dirname)
+
+
+
+
+[PROFILING RESULTS - SORTED BY FUNCTION CALLS]
+         10090598 function calls (10090577 primitive calls) in 43.187 seconds
+
+   Ordered by: call count
+   List reduced from 158 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  1740213    0.279    0.000    0.279    0.000 {method 'replace' of 'str' objects}
+  1659020    2.436    0.000    2.436    0.000 {built-in method pygame.event.get}
+   747617    0.078    0.000    0.078    0.000 {built-in method builtins.isinstance}
+   747487    0.064    0.000    0.064    0.000 {built-in method nt.fspath}
+583048/583042    0.049    0.000    0.049    0.000 {built-in method builtins.len}
+   497966    0.824    0.000    1.005    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:124(splitdrive)
+   382129    0.398    0.000    0.420    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\Common.py:23(get_font)
+   382128    2.182    0.000    9.050    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:28(draw_text)
+   382128    3.525    0.000    3.525    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+   382128    0.150    0.000    0.150    0.000 {method 'get_rect' of 'pygame.surface.Surface' objects}
+   382128    2.794    0.000    2.794    0.000 {method 'render' of 'pygame.font.Font' objects}
+   337347    0.060    0.000    0.060    0.000 {method 'collidepoint' of 'pygame.rect.Rect' objects}
+   337309    2.501    0.000   14.380    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:34(create_button)
+   337309    0.070    0.000    0.070    0.000 {built-in method pygame.mouse.get_pos}
+   337309    4.571    0.000    4.571    0.000 {built-in method pygame.draw.rect}
+   248798    1.085    0.000    2.152    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:77(join)
+   248449    0.655    0.000    0.896    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:536(prettify_model_name)
+   248449    0.024    0.000    0.024    0.000 {method 'strip' of 'str' objects}
+    42717    4.665    0.000    4.665    0.000 {method 'fill' of 'pygame.surface.Surface' objects}
+    42716   11.257    0.000   11.257    0.000 {built-in method pygame.display.flip}
+     5136    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+     4718    0.002    0.000    0.002    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:45(<genexpr>)
+     4347    0.000    0.000    0.000    0.000 {method 'isalnum' of 'str' objects}
+     1078    0.000    0.000    0.000    0.000 {method 'rstrip' of 'str' objects}
+     1056    0.000    0.000    0.000    0.000 {method 'rfind' of 'str' objects}
+     1051    0.056    0.000   43.121    0.041 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:69(render_menu)
+      762    0.004    0.000    0.006    0.000 {method 'join' of 'str' objects}
+      729    0.000    0.000    0.000    0.000 {method 'split' of 'str' objects}
+      443    0.000    0.000    0.000    0.000 {method 'endswith' of 'str' objects}
+      384    0.000    0.000    0.006    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:42(_simplename)
+      378    0.000    0.000    0.000    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:48(_addfont)
+      378    0.002    0.000    0.009    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\pygame\sysfont.py:95(_parse_font_entry_win)
+      369    0.000    0.000    0.000    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:34(_get_bothseps)
+      367    0.002    0.000    0.003    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:180(split)
+      352    0.001    0.000    0.002    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:203(splitext)
+      352    0.001    0.000    0.001    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\genericpath.py:121(_splitext)
+      352    0.002    0.000    0.002    0.000 {built-in method winreg.EnumValue}
+      352    0.000    0.000    0.000    0.000 {built-in method builtins.max}
+      343    0.000    0.000    0.003    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:221(dirname)
+      284    0.000    0.000    0.000    0.000 {method 'remove' of 'list' objects}
+
+

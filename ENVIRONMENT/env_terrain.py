@@ -4,7 +4,7 @@ from SHARED.core_imports import *
 """File Specific Imports"""
 from SHARED.core_imports import *
 from RENDER.Game_Renderer import get_font
-from RENDER.Common import GREEN
+from RENDER.Common import GREEN, get_text_surface
 import UTILITIES.utils_config as utils_config
 
 class Terrain:
@@ -256,8 +256,7 @@ class Terrain:
                 # Render faction ID only if render_ids is True
                 if render_ids:
                     faction_id = cell['faction'] if cell['faction'] != 'None' else '0'
-                    text = font.render(str(faction_id), True,
-                                       (255, 255, 255))  # White text
+                    text = get_text_surface(str(faction_id), "arial", 12, (255, 255, 255))  # White text                    
                     text_rect = text.get_rect(
                         center=(
                             world_x +

@@ -1,0 +1,100 @@
+[PROFILING RESULTS - SORTED BY EXECUTION TIME]
+         16085987 function calls (16016219 primitive calls) in 51.207 seconds
+
+   Ordered by: internal time
+   List reduced from 4799 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+   489587    3.644    0.000    3.644    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:417(<genexpr>)
+    13263    3.583    0.000    3.583    0.000 {built-in method pygame.display.flip}
+      500    3.328    0.007    7.864    0.016 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\ENVIRONMENT\env_terrain.py:126(draw)
+   253081    2.731    0.000    2.731    0.000 {method 'fill' of 'pygame.surface.Surface' objects}
+   246744    2.522    0.000    6.980    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:363(receive_report)
+   113212    2.239    0.000    2.596    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:473(<genexpr>)
+   712538    1.982    0.000    1.982    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+    32509    1.549    0.000    1.736    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_base.py:486(detect_resources)
+     8000    1.302    0.000    9.543    0.001 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_base.py:439(observe)
+      962    1.244    0.001    1.244    0.001 {method 'run_backward' of 'torch._C._EngineBase' objects}
+    94737    1.230    0.000    1.230    0.000 {built-in method pygame.draw.rect}
+   246744    1.227    0.000    8.208    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_communication.py:134(agent_to_hq)
+   218516    1.200    0.000    1.200    0.000 {method 'copy' of 'pygame.surface.Surface' objects}
+   806420    1.126    0.000    1.126    0.000 {built-in method pygame.event.get}
+        3    0.961    0.320   10.109    3.370 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:436(select_model_for_role)
+   303493    0.878    0.000    6.163    0.000 {built-in method builtins.next}
+     8558    0.855    0.000    0.855    0.000 {built-in method nt._getfinalpathname}
+   109017    0.852    0.000    0.852    0.000 {method 'render' of 'pygame.font.Font' objects}
+   353141    0.827    0.000    0.827    0.000 {built-in method pygame.transform.scale}
+        6    0.787    0.131    6.152    1.025 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\NEURAL_NETWORK\PPO_Agent_Network.py:209(train)
+     1300    0.778    0.001    0.778    0.001 {built-in method pygame.image.load}
+    92212    0.692    0.000    4.020    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:34(create_button)
+    19281    0.681    0.000    0.681    0.000 {method 'item' of 'torch._C.TensorBase' objects}
+   108064    0.632    0.000    2.686    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:28(draw_text)
+     1000    0.608    0.001    0.608    0.001 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:922(<genexpr>)
+    24001    0.593    0.000    2.951    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_base.py:594(get_state)
+     4855    0.468    0.000    0.505    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\UTILITIES\utils_helpers.py:79(find_closest_actor)
+  5790749    0.465    0.000    0.466    0.000 {built-in method builtins.hasattr}
+      500    0.458    0.001    9.326    0.019 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\Game_Renderer.py:52(render)
+     7083    0.450    0.000    0.450    0.000 {built-in method nt.stat}
+        6    0.384    0.064    0.717    0.120 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\NEURAL_NETWORK\PPO_Agent_Network.py:363(compute_gae)
+     1002    0.372    0.000    3.215    0.003 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:453(clean_global_state)
+   1872/1    0.350    0.000    3.482    3.482 {built-in method builtins.exec}
+     1142    0.307    0.000    0.307    0.000 {built-in method torch.tensor}
+    61760    0.270    0.000    0.539    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:77(join)
+   137184    0.236    0.000    0.286    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:124(splitdrive)
+     2992    0.232    0.000    0.243    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_behaviours.py:255(is_task_valid)
+     3144    0.228    0.000    1.049    0.000 {built-in method builtins.sum}
+      970    0.223    0.000    0.366    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\torch\distributions\distribution.py:41(__init__)
+     3932    0.202    0.000    0.202    0.000 {built-in method torch._C._nn.linear}
+
+
+
+
+[PROFILING RESULTS - SORTED BY FUNCTION CALLS]
+         16085987 function calls (16016219 primitive calls) in 51.207 seconds
+
+   Ordered by: call count
+   List reduced from 4799 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  5790749    0.465    0.000    0.466    0.000 {built-in method builtins.hasattr}
+877923/875019    0.083    0.000    0.091    0.000 {built-in method builtins.isinstance}
+   806420    1.126    0.000    1.126    0.000 {built-in method pygame.event.get}
+   712538    1.982    0.000    1.982    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+503045/502382    0.041    0.000    0.041    0.000 {built-in method builtins.len}
+   489587    3.644    0.000    3.644    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:417(<genexpr>)
+   353141    0.827    0.000    0.827    0.000 {built-in method pygame.transform.scale}
+   323684    0.027    0.000    0.027    0.000 {method 'append' of 'list' objects}
+   303493    0.878    0.000    6.163    0.000 {built-in method builtins.next}
+   259786    0.029    0.000    0.029    0.000 {method 'get' of 'dict' objects}
+   253081    2.731    0.000    2.731    0.000 {method 'fill' of 'pygame.surface.Surface' objects}
+   246744    2.522    0.000    6.980    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:363(receive_report)
+   246744    1.227    0.000    8.208    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_communication.py:134(agent_to_hq)
+   243956    0.043    0.000    0.048    0.000 {built-in method builtins.getattr}
+   228597    0.020    0.000    0.020    0.000 {built-in method nt.fspath}
+   218516    1.200    0.000    1.200    0.000 {method 'copy' of 'pygame.surface.Surface' objects}
+   215706    0.117    0.000    0.117    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\ENVIRONMENT\env_resources.py:260(is_depleted)
+   171396    0.093    0.000    0.093    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\ENVIRONMENT\env_resources.py:383(is_depleted)
+   164329    0.021    0.000    0.021    0.000 {method 'replace' of 'str' objects}
+   137184    0.236    0.000    0.286    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:124(splitdrive)
+   136762    0.022    0.000    0.022    0.000 {method 'collidepoint' of 'pygame.rect.Rect' objects}
+   113212    2.239    0.000    2.596    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:473(<genexpr>)
+   113064    0.044    0.000    0.044    0.000 {method 'get_rect' of 'pygame.surface.Surface' objects}
+   110827    0.117    0.000    0.149    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\Common.py:23(get_font)
+   109017    0.852    0.000    0.852    0.000 {method 'render' of 'pygame.font.Font' objects}
+   108064    0.632    0.000    2.686    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:28(draw_text)
+    94737    1.230    0.000    1.230    0.000 {built-in method pygame.draw.rect}
+    93712    0.021    0.000    0.021    0.000 {built-in method pygame.mouse.get_pos}
+    92212    0.692    0.000    4.020    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\RENDER\MainMenu_Renderer.py:34(create_button)
+    64419    0.014    0.000    0.014    0.000 {method 'startswith' of 'str' objects}
+    61760    0.270    0.000    0.539    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\ntpath.py:77(join)
+    48933    0.006    0.000    0.006    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\torch\_jit_internal.py:103(is_scripting)
+    47872    0.098    0.000    0.098    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_behaviours.py:170(<genexpr>)
+    40123    0.008    0.000    0.008    0.000 {method 'endswith' of 'str' objects}
+    34009    0.124    0.000    0.139    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_base.py:517(detect_threats)
+    32509    1.549    0.000    1.736    0.000 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_base.py:486(detect_resources)
+31990/31742    0.003    0.000    0.003    0.000 {built-in method builtins.hash}
+    31390    0.008    0.000    0.010    0.000 C:\Users\arun-\AppData\Local\Programs\Python\Python39\lib\sre_parse.py:164(__getitem__)
+    31224    0.008    0.000    0.008    0.000 c:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\.venv\lib\site-packages\sympy\core\assumptions.py:489(as_property)
+    29096    0.003    0.000    0.003    0.000 {built-in method builtins.id}
+
+

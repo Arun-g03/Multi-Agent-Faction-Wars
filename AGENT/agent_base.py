@@ -92,6 +92,8 @@ class BaseAgent:
             # utils_config.NETWORK_TYPE_MAPPING
             network_type_int = utils_config.NETWORK_TYPE_MAPPING.get(
                 network_type, 1)  # Default to "none" if not found
+            
+            self.current_step = 0
 
             # Agent-specific initialisation
             self.x: float = x
@@ -323,7 +325,7 @@ class BaseAgent:
                 f"{self.role} task state updated to {task_state}.",
                 level=logging.DEBUG)
 
-    def update(self, resource_manager, agents, hq_state):
+    def update(self, resource_manager, agents, hq_state, step=None):
         """
         Update the agent's state. This includes:
         - Performing assigned tasks.
@@ -331,6 +333,7 @@ class BaseAgent:
         - Reporting experiences to the faction.
 
         """
+        self.current_step = step
         self._perception_cache = None
         try:
             # Log the current task before performing it
@@ -436,7 +439,7 @@ class BaseAgent:
     def observe(self, all_agents, enemy_hq, resource_manager):
         """Observe and report threats and resources."""
         # Detect threats
-        observed_threats = self.detect_threats(all_agents, enemy_hq)
+        observed_threats = self.detect_threats(all_agents, enemy_hq, current_step=self.current_step)
 
         # Log all observed threats
         if observed_threats:
@@ -480,77 +483,70 @@ class BaseAgent:
         if observed_resources:
             print(f"Agent {self.role} detected resources: {observed_resources}\n") """
 
-    def detect_resources(
-            self,
-            resource_manager,
-            threshold=utils_config.Agent_field_of_view):
+    def detect_resources(self, resource_manager, threshold=utils_config.Agent_field_of_view, current_step=None):
         """
-        Detect resources within the given threshold distance (in grid units).
+        Optimized detection using squared distance, caching, and step throttling.
         """
-        detected_resources = []
+        Throttle_steps = 1
+        current_step = getattr(self, "current_step", 0)
+        if hasattr(self, "last_resource_check_step") and current_step - self.last_resource_check_step < Throttle_steps:
+            return getattr(self, "cached_detected_resources", [])
+
+        self.last_resource_check_step = current_step
+
         agent_grid_x = self.x // utils_config.CELL_SIZE
         agent_grid_y = self.y // utils_config.CELL_SIZE
-        # print(f"Agent {self.agent_id} is at grid position ({agent_grid_x}, {agent_grid_y})")
+        threshold_sq = threshold ** 2
+
+        detected_resources = []
 
         for resource in resource_manager.resources:
-            if resource.is_depleted():  # Skip depleted resources
+            if resource.is_depleted():
                 continue
 
-            # Ensure resource position is in grid coordinates
-            resource_grid_x = resource.grid_x
-            resource_grid_y = resource.grid_y
+            dx = resource.grid_x - agent_grid_x
+            dy = resource.grid_y - agent_grid_y
 
-            # Calculate Euclidean distance in grid units
-            distance = ((resource_grid_x - agent_grid_x) ** 2 +
-                        (resource_grid_y - agent_grid_y) ** 2) ** 0.5
-
-            if distance <= threshold:  # Compare with threshold in grid units
-                # print(f"Resource at ({resource_grid_x}, {resource_grid_y}) is {distance:.2f} units away from agent at ({agent_grid_x}, {agent_grid_y})")
+            if dx * dx + dy * dy <= threshold_sq:
                 detected_resources.append(resource)
 
+        self.cached_detected_resources = detected_resources
         return detected_resources
 
-    def detect_threats(self, all_agents, enemy_hq):
-        """Detect threats (enemy agents or HQs) within local view."""
+
+    def detect_threats(self, all_agents, enemy_hq, current_step=None):
+        """Detect threats (enemy agents or HQs) within local view — with throttling and caching."""
+        # Determine current step
+        current_step = current_step or getattr(self, "current_step", 0)
+        throttle_steps = 1 # Throttle the threat detection to once per step
+
+        if hasattr(self, "last_threat_check_step") and current_step - self.last_threat_check_step < throttle_steps:
+            return getattr(self, "cached_detected_threats", [])
+
+        self.last_threat_check_step = current_step
+
         threats = []
+        perception_radius_px = self.local_view * utils_config.CELL_SIZE
+        radius_sq = perception_radius_px ** 2
 
         # Detect enemy agents
         for agent in all_agents:
-            # Calculate distance to agent
-            distance = ((agent.x - self.x) ** 2 +
-                        (agent.y - self.y) ** 2) ** 0.5
-
-            # Ensure the agent is within perception radius
-            if distance > self.local_view * utils_config.CELL_SIZE:
+            if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, utils_config.AgentIDStruc):
+                continue
+            if agent.agent_id == self.agent_id or agent.agent_id.faction_id == self.faction.id:
                 continue
 
-            # Ensure valid IDs and attributes
-            if not hasattr(
-                    agent,
-                    "agent_id") or not isinstance(
-                    agent.agent_id,
-                    utils_config.AgentIDStruc):
-                logger.warning(
-                    f"Invalid agent detected by Agent {self.agent_id}: {agent}. Skipping threat detection."
-                )
+            dx = agent.x - self.x
+            dy = agent.y - self.y
+            if dx * dx + dy * dy > radius_sq:
                 continue
 
-            # Skip self-detection
-            if agent.agent_id == self.agent_id:
-                continue
-
-            # Skip friendly agents
-            if agent.agent_id.faction_id == self.faction.id:
-                continue
-
-            # Add threat if all conditions are met
-            threat = {
-                "id": agent.agent_id,  # Use the AgentID namedtuple
-                "faction": agent.agent_id.faction_id,  # Include the faction ID for clarity
+            threats.append({
+                "id": agent.agent_id,
+                "faction": agent.agent_id.faction_id,
                 "type": f"agent.{agent.role}",
                 "location": (agent.x, agent.y),
-            }
-            threats.append(threat)
+            })
 
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
@@ -560,26 +556,25 @@ class BaseAgent:
 
         # Detect enemy HQ
         if "position" in enemy_hq and enemy_hq.get("faction_id") is not None:
-            distance_to_hq = ((enemy_hq["position"][0] - self.x) **
-                              2 + (enemy_hq["position"][1] - self.y) ** 2) ** 0.5
-            if distance_to_hq <= self.local_view * utils_config.CELL_SIZE:
-                threat = {
-                    # Use AgentID for HQ
+            dx = enemy_hq["position"][0] - self.x
+            dy = enemy_hq["position"][1] - self.y
+            if dx * dx + dy * dy <= radius_sq:
+                threats.append({
                     "id": utils_config.AgentIDStruc(faction_id=enemy_hq["faction_id"], agent_id="HQ"),
-                    # Use the faction ID from HQ
                     "faction": enemy_hq["faction_id"],
                     "type": "Faction HQ",
                     "location": enemy_hq["position"],
-                }
-                threats.append(threat)
+                })
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Agent {self.agent_id} detected enemy HQ at location {enemy_hq['position']}.",
                         level=logging.DEBUG)
 
-        # Return all detected threats
+        # Cache and return
+        self.cached_detected_threats = threats
         return threats
+
 
     #                       _                                     _     _          _   _  ___
 #    ___  ___ _ __   __| |   __ _   _ __ ___ _ __   ___  _ __| |_  | |_ ___   | | | |/ _ \
@@ -602,18 +597,18 @@ class BaseAgent:
                 f"[ERROR] hq_state is None for agent {self.role} in faction {self.faction.id}!")
 
         # ✅ Use actual agent perception functions
-        perceived_threats = self.detect_threats(agents, hq_state)
+        perceived_threats = self.detect_threats(agents, hq_state, current_step=self.current_step)
         perceived_resources = self.detect_resources(resource_manager)
 
         # 🔍 Find closest ones
-        nearest_threat = find_closest_actor(
-            perceived_threats,
-            entity_type="threat",
-            requester=self) if perceived_threats else None
-        nearest_resource = find_closest_actor(
-            perceived_resources,
-            entity_type="resource",
-            requester=self) if perceived_resources else None
+        if getattr(self, "last_state_step", -1) != self.current_step:
+            self.nearest_threat = find_closest_actor(perceived_threats, entity_type="threat", requester=self) if perceived_threats else None
+            self.nearest_resource = find_closest_actor(perceived_resources, entity_type="resource", requester=self) if perceived_resources else None
+            self.last_state_step = self.current_step
+
+        nearest_threat = self.nearest_threat
+        nearest_resource = self.nearest_resource
+
 
         # 🧠 Build base state vector
         core_state = [
@@ -650,9 +645,11 @@ class BaseAgent:
             "position", (-1, -1)) if self.current_task else (-1, -1)
         task_target_x = task_target[0] / utils_config.WORLD_WIDTH
         task_target_y = task_target[1] / utils_config.WORLD_HEIGHT
-        current_action_norm = self.current_action / \
-            len(self.role_actions) if getattr(
-                self, "current_action", -1) >= 0 else -1
+        current_action = getattr(self, "current_action", -1)
+        if current_action is None or not isinstance(current_action, int) or current_action < 0:
+            current_action_norm = -1
+        else:
+            current_action_norm = current_action / len(self.role_actions)
 
         task_info = [task_target_x, task_target_y, current_action_norm]
 

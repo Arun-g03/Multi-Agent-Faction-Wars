@@ -10,7 +10,7 @@ from AGENT.agent_base import Peacekeeper, Gatherer
 from AGENT.agent_factions import Faction
 from AGENT.agent_faction_manager import FactionManager
 from AGENT.agent_communication import CommunicationSystem
-from NEURAL_NETWORK.Common import Training_device, save_checkpoint, load_checkpoint
+from NEURAL_NETWORK.Common import Training_device, save_checkpoint, load_checkpoint, clone_best_agents
 from GAME.game_rules import check_victory
 from ENVIRONMENT.env_terrain import Terrain
 from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
@@ -18,6 +18,7 @@ from GAME.camera import Camera
 from RENDER.Game_Renderer import GameRenderer
 import UTILITIES.utils_config as utils_config
 from typing import Union, Dict, Any, Optional
+
 
 
 
@@ -117,7 +118,8 @@ class GameManager:
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
         
-        self.models_loaded_once = False
+        self.models_loaded_once = False # Ensure models are loaded only once at the start
+        self.exit_after_episode = False # Set to True if you want to exit the sim loop and return to menu after an episode
 
     
         
@@ -200,25 +202,30 @@ class GameManager:
             keys = pygame.key.get_pressed()
             self.handle_camera_movement(keys)
 
+            # 🧼 Clear prior-step action decisions (important for batching)
+            for agent in self.agents:
+                agent.current_action = None
+                agent.log_prob = None
+                agent.value = None
+
             # 👥 Update each agent (movement, task execution, learning)
             for agent in self.agents[:]:
                 try:
                     if agent.Health <= 0:
-                        print(
-                            f"Agent {agent.role} from faction {agent.faction.id} has died.")
+                        print(f"Agent {agent.role} from faction {agent.faction.id} has died.")
                         if agent in agent.faction.agents:
                             agent.faction.remove_agent(agent)
                         self.agents.remove(agent)
                         continue
 
                     hq_state = agent.faction.aggregate_faction_state()
-                    agent.update(self.resource_manager, self.agents, hq_state)
+                    agent.update(self.resource_manager, self.agents, hq_state, step=self.current_step)
 
                 except Exception as e:
                     print(f"An error occurred for agent {agent.role}: {e}")
                     traceback.print_exc()
 
-            # 🧠 Let agents share what they observed (threats, resources)
+            # 🧠 Let agents share what they observed
             for agent in self.agents:
                 agent.observe(
                     all_agents=self.agents,
@@ -226,12 +233,11 @@ class GameManager:
                     resource_manager=self.resource_manager
                 )
 
-            # Update HQ logic, assign new tasks, and handle strategy switching
+            # 🏢 Let HQs assign strategies/tasks
             for faction in self.faction_manager.factions:
-                faction.update(self.resource_manager,
-                               self.agents, self.current_step)
+                faction.update(self.resource_manager, self.agents, self.current_step)
 
-            # 🔁 Increment the simulation step
+            # 🔁 Step forward
             self.current_step += 1
 
         except Exception as e:
@@ -622,6 +628,7 @@ class GameManager:
 
                 self.current_step = 0
                 episode_reward = 0
+                
 
                 while self.current_step < utils_config.STEPS_PER_EPISODE:
                     for event in pygame.event.get():
@@ -638,6 +645,7 @@ class GameManager:
                                 except Exception as e:
                                     raise e
                             pygame.quit()
+                            TensorBoardLogger.stop_tensorboard()
                             sys.exit()
 
                     self.step()
@@ -824,9 +832,16 @@ class GameManager:
 
                         self.best_scores_per_role[role] = top5
 
+                    # 🔁 Clone best agents per role into bottom 50% (softly)
+                    for role in role_rewards:
+                        agents_of_role = [a for a in self.agents if a.role == role]
+                        clone_best_agents(agents_of_role)
+
                     # ✅ Finally: clear memory for all agents
                     for agent in self.agents:
                         agent.ai.clear_memory()
+
+
 
 
 
@@ -923,7 +938,7 @@ class GameManager:
                 print(
                     f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
                 pygame.quit()
-                sys.exit()
+                return self.render_menu()
 
             return True
 
@@ -933,6 +948,7 @@ class GameManager:
             print(f"An error occurred in {self.mode}: {e}")
             traceback.print_exc()
             pygame.quit()
+            TensorBoardLogger.stop_tensorboard()
             sys.exit()
 
     def handle_event(self, event):
