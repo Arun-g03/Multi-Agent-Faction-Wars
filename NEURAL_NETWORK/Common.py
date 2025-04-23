@@ -52,27 +52,38 @@ def load_checkpoint(model_obj, path, device=None):
     checkpoint = torch.load(path, map_location=device or model_obj.device)
     print(f"\nLoading checkpoint from {path}")
 
-    # 🧠 Dynamic fix for size mismatch
+    # Load model state
     if 'model_state_dict' in checkpoint:
         model_state = checkpoint['model_state_dict']
 
-        # Check if 'fc1.weight' size matches current model
+        # Check for input mismatch and update if needed
         fc1_weights = model_state.get('fc1.weight')
         if fc1_weights is not None:
             saved_input_size = fc1_weights.shape[1]
             current_input_size = model_obj.fc1.in_features
             if saved_input_size != current_input_size:
                 print(f"[RESIZE] Updating input size from {current_input_size} to {saved_input_size}")
-                model_obj.update_network(saved_input_size)  # Dynamically update structure
+                model_obj.update_network(saved_input_size)
 
-        # Now safe to load
+        # Load weights
         model_obj.load_state_dict(model_state)
 
-    # Load optimizer if available
+        # ✅ Always verify model weights after loading
+        sample_weight = next(iter(model_obj.parameters())).flatten()[0].item()
+        if utils_config.ENABLE_LOGGING: 
+            logger.log_msg(
+            f"[VERIFY] Loaded weight sample: {sample_weight:.5f} from {path}",
+            level=logging.DEBUG
+                                )
+
+    # Optional: Load optimizer
     if hasattr(model_obj, "optimizer") and checkpoint.get("optimizer_state_dict"):
         model_obj.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    # Update training counter if stored
     if hasattr(model_obj, "total_updates"):
         model_obj.total_updates = checkpoint.get("total_updates", 0)
+
 
     if utils_config.ENABLE_LOGGING:
         logger.log_msg(f"[MODEL LOADED] {model_obj.__class__.__name__} loaded from {path}")

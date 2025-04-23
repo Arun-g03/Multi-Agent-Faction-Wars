@@ -116,6 +116,8 @@ class GameManager:
         # Here `save_dir` should be a valid path string
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
+        
+        self.models_loaded_once = False
 
     
         
@@ -458,8 +460,9 @@ class GameManager:
             faction.agents.extend(faction_agents)  # Assign its agents properly
             self.agents.extend(faction_agents)  # Keep global tracking
 
-            if self.load_existing and self.models:
+            if self.load_existing and self.models and not self.models_loaded_once:
                 self.load_models()
+                self.models_loaded_once = True
             else:
                 pass #Skip model loading if load_existing is False
 
@@ -847,56 +850,56 @@ class GameManager:
                                 
 
                                 # -- Top-5 Tracking --
-                                faction_key = f"Faction_{faction.id}"
-                                if not hasattr(self, "best_hq_scores"):
-                                    self.best_hq_scores = {}
-                                if faction_key not in self.best_hq_scores:
-                                    self.best_hq_scores[faction_key] = []
+                                if not hasattr(self, "global_hq_top5"):
+                                    self.global_hq_top5 = []
 
                                 hq_model_dir = "NEURAL_NETWORK/saved_models/HQ/"
                                 os.makedirs(hq_model_dir, exist_ok=True)
 
-                                # Load existing models from disk
+                                # Load all HQ models regardless of faction
                                 model_files = [
                                     (os.path.join(hq_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
                                     for f in os.listdir(hq_model_dir)
-                                    if f.startswith(f"HQ_Faction_{faction.id}_") and "_reward_" in f
+                                    if f.startswith("HQ_Faction_") and "_reward_" in f
                                 ]
 
-                                # Combine with in-memory and current reward
-                                all_scores = model_files + self.best_hq_scores[faction_key] + [(None, hq_reward)]
-                                all_scores = list({(p, r) for p, r in all_scores})  # deduplicate
-                                all_scores.sort(key=lambda x: x[1], reverse=True)
+                                # Combine disk models + in-memory top list + current result
+                                combined_scores = model_files + self.global_hq_top5 + [(None, hq_reward)]
+                                combined_scores = list({(p, r) for p, r in combined_scores})  # deduplicate
+                                combined_scores.sort(key=lambda x: x[1], reverse=True)
 
-                                # Save only if this reward is one of the top 5 and not already saved
-                                top5 = all_scores[:5]
+                                top5 = combined_scores[:5]
+
+                                # Save if this reward is in the top-5 and not yet saved
                                 if (None, hq_reward) in top5:
                                     save_name = f"HQ_Faction_{faction.id}_episode_{self.episode}_reward_{hq_reward:.2f}.pth"
                                     save_path = os.path.join(hq_model_dir, save_name)
                                     if hasattr(faction.network, "save_model"):
                                         faction.network.save_model(save_path)
                                         print(f"[SAVE] HQ model for Faction {faction.id} saved at {save_path}")
+
+                                    # Update saved path in top5
                                     top5 = [(save_path if p is None else p, r) for p, r in top5]
 
                                     if utils_config.ENABLE_LOGGING:
                                         self.logger.log_msg(
-                                            f"[SAVE] Top-5 HQ model saved for {faction_key} at {save_path} (reward={hq_reward:.2f})",
-                                            level=logging.INFO)
+                                            f"[SAVE] Top-5 HQ model saved globally at {save_path} (reward={hq_reward:.2f})",
+                                            level=logging.INFO
+                                        )
 
-                                # ✅ Only prune if too many on disk
+                                # Prune any excess beyond global top 5
                                 if len(model_files) > 5:
                                     keep_paths = set(p for p, _ in top5)
                                     for f in os.listdir(hq_model_dir):
                                         f_path = os.path.join(hq_model_dir, f)
-                                        if f_path not in keep_paths and f.startswith(f"HQ_Faction_{faction.id}_") and "_reward_" in f:
+                                        if f_path not in keep_paths and f.startswith("HQ_Faction_") and "_reward_" in f:
                                             os.remove(f_path)
                                             if utils_config.ENABLE_LOGGING:
-                                                self.logger.log_msg(
-                                                    f"[PRUNE] Removed outdated HQ model: {f_path}",
-                                                    level=logging.INFO)
+                                                self.logger.log_msg(f"[PRUNE] Removed outdated HQ model: {f_path}", level=logging.INFO)
 
-                                # Save updated top-5 list
-                                self.best_hq_scores[faction_key] = top5
+                                # Save the updated global top-5 HQ networks list
+                                self.global_hq_top5 = top5
+
 
                                 faction.network.clear_memory()
 
