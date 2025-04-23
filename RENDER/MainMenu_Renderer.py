@@ -25,6 +25,7 @@ class MenuRenderer:
         self.font = get_font(24, MENU_FONT)
         self.selected_mode = None
         print("MenuRenderer initialised")
+        self.tensorboard_logger = TensorBoardLogger() 
 
     def draw_text(self, surface, text, font, size, colour, x, y):
         font_obj = get_font(size, font)
@@ -146,7 +147,8 @@ class MenuRenderer:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                TensorBoardLogger.stop_tensorboard()
+                 # Access the singleton instance
+                self.tensorboard_logger.stop_tensorboard() 
                 sys.exit()
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -180,7 +182,8 @@ class MenuRenderer:
                 elif exit_button_rect.collidepoint(event.pos):
                     print("[INFO] Exiting game...")
                     pygame.quit()
-                    TensorBoardLogger.stop_tensorboard()  # Kill TensorBoard if running
+                    
+                    self.tensorboard_logger.stop_tensorboard() # Kill TensorBoard if running
                     sys.exit()
 
         pygame.display.flip()
@@ -263,7 +266,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
-                    TensorBoardLogger.stop_tensorboard()
+                    self.tensorboard_logger.stop_tensorboard()
                     sys.exit()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -311,7 +314,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
-                    TensorBoardLogger.stop_tensorboard()
+                    self.tensorboard_logger.stop_tensorboard()
                     sys.exit()
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -516,7 +519,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
-                    TensorBoardLogger.stop_tensorboard()
+                    self.tensorboard_logger.stop_tensorboard()
                     sys.exit()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:

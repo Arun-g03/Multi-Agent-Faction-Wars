@@ -49,36 +49,48 @@ def check_and_install_dependencies():
             if pkg_name and not importlib.util.find_spec(pkg_name):
                 missing_packages.append(pip_lines[i])
 
-        """Check if the the pytorch machine learning components are missing: torch, torchvision, torchaudio
-            and install with the correct command:
-            pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-        """
         special_missing = [
             pkg for pkg in [
                 "torch",
                 "torchvision",
                 "torchaudio"] if importlib.util.find_spec(pkg) is None]
 
+        if not missing_packages and not special_missing:
+            print("[INFO] All dependencies are installed.")
+            return True
+
         if special_missing:
-            print(
-                "\n[INFO] Detected missing torch-related packages. Installing from PyTorch custom index...")
+            print("\n[INFO] Missing PyTorch packages:")
+            for pkg in special_missing:
+                print(f"- {pkg}")
+
+        if missing_packages:
+            print("\n[INFO] Missing other packages:")
+            for pkg in missing_packages:
+                print(f"- {pkg}")
+
+        user_input = input("\nDo you want to install these missing packages? (y/n): ")
+        if user_input.lower() == 'n':
+            print("[INFO] Installation cancelled by user.")
+            print("Cannot continue without these packages. Exiting...")
+            return False
+        if special_missing:
+            print("\n[INFO] Installing PyTorch packages...")
             subprocess.check_call([
                 sys.executable, "-m", "pip", "install",
                 "torch", "torchvision", "torchaudio",
                 "--index-url", "https://download.pytorch.org/whl/cu118"
             ])
-            # Remove torch-related entries to avoid duplicate install
+
+        if missing_packages:
+            print("\n[INFO] Installing other packages...")
             missing_packages = [pkg for pkg in missing_packages if extract_package_name(
                 pkg) not in special_missing]
+            if missing_packages:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", *missing_packages])
 
-        if not missing_packages:
-            print("[INFO] All other dependencies are installed.")
-            return True
-
-        print("\n[INFO] Installing other missing dependencies...\n")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", *missing_packages])
-        print("[INFO] Dependencies installed successfully!")
+        print("[INFO] All dependencies installed successfully!")
         return True
 
     except Exception as e:

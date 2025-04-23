@@ -12,7 +12,7 @@ def check_training_device():
     # Check for GPU
     Training_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if torch.cuda.is_available():
-        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f"\n Using GPU: {torch.cuda.get_device_name(0)} \n")
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"\033[93mUsing GPU: {torch.cuda.get_device_name(0)}\033[0m")

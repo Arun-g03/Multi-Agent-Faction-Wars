@@ -112,6 +112,7 @@ class TensorBoardLogger:
 
     """
     _instance = None  # Singleton reference
+    tensorboard_process = None
     # Global flag to enable/disable TensorBoard logging
 
     def __new__(cls, log_dir="log"):
@@ -222,36 +223,44 @@ class TensorBoardLogger:
         except Exception as e:
             print(f"Error closing TensorBoard writer: {str(e)}")
 
-    def run_tensorboard(log_dir="RUNTIME_LOGS/Tensorboard_logs", port=6006):
+    def run_tensorboard(self, log_dir="RUNTIME_LOGS/Tensorboard_logs", port=6006):
         """
         Launch TensorBoard pointing at the specified log directory.
         Opens the browser automatically.
         """
-        # Ensure path is absolute
+        if self.tensorboard_process:
+            print("[TensorBoard] Already running.")
+            return
+
         abs_log_path = os.path.abspath(log_dir)
-        print(f"[TensorBoard] Launching TensorBoard at: {abs_log_path}")
+        print(f"[TensorBoard] Launching at: {abs_log_path}")
 
         def _launch():
             try:
-                subprocess.Popen(
+                self.tensorboard_process = subprocess.Popen(
                     ["tensorboard", f"--logdir={abs_log_path}", f"--port={port}"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
-                time.sleep(2)  # Give TensorBoard a moment to start
+                time.sleep(2)
                 webbrowser.open(f"http://localhost:{port}")
             except Exception as e:
-                print(f"[TensorBoard ERROR] Failed to launch TensorBoard: {e}")
+                print(f"[TensorBoard ERROR] Failed to launch: {e}")
 
         threading.Thread(target=_launch, daemon=True).start()
 
 
-    def stop_tensorboard():
-        global tensorboard_process
-        if tensorboard_process and tensorboard_process.poll() is None:
-            print("\033[91m[TensorBoard] Shutting down...\033[0m")            
-            tensorboard_process.terminate()
-            tensorboard_process.wait(timeout=3)
+    def stop_tensorboard(self):
+        if not self.tensorboard_process:
+            print("\033[91m[TensorBoard] Stop called on TensorBoard but it was not started anyway.\033[0m")
+            return
+
+        if self.tensorboard_process.poll() is None:
+            print("\033[91m[TensorBoard] Shutting down...\033[0m")
+            self.tensorboard_process.terminate()
+            self.tensorboard_process.wait(timeout=3)
+        else:
+            print("\033[91m[TensorBoard] TensorBoard is not running.\033[0m")
 
 
 class MatplotlibPlotter:
