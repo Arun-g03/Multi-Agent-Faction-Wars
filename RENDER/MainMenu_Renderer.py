@@ -123,7 +123,11 @@ class MenuRenderer:
 
         # Check if log files exist
         log_dir = "RUNTIME_LOGS/Tensorboard_logs"
-        log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+        if os.path.exists(log_dir):
+            log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+        else:
+            log_files_exist = False        
+        
 
         
         tensorboard_button_rect = self.create_button(
@@ -169,8 +173,10 @@ class MenuRenderer:
 
                 elif tensorboard_button_rect.collidepoint(event.pos):
                     log_dir = "RUNTIME_LOGS/Tensorboard_logs"
-                    log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
-                    
+                    if os.path.exists(log_dir):
+                        log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+                    else:
+                        log_files_exist = False                    
                     # Create the logger and check if it's None (TensorBoard disabled)
                     tensorboard_logger = TensorBoardLogger()
                     msg_duration = utils_config.FPS*3*4

@@ -162,7 +162,7 @@ class PPOModel(nn.Module):
                 level=logging.DEBUG
             )
 
-    def train(self, mode='train'):
+    def train(self, mode='train', batching=False):
         """
         Train the PPO agent using stored experiences.
         In evaluation mode, we don’t perform training.
@@ -212,66 +212,109 @@ class PPOModel(nn.Module):
                         logger.log_msg(f"[ERROR] Failed to compute GAE: {e}", level=logging.ERROR)
                     return
 
-                # Now process each experience one by one (no batching)
-                for idx in range(len(self.memory["rewards"])):
-                    state = states[idx:idx+1]  # single experience
-                    action = actions[idx:idx+1]
-                    log_prob_old = log_probs_old[idx:idx+1]
-                    advantage = advantages[idx:idx+1]
-                    return_ = returns[idx:idx+1]
+                if batching:
+                    # === Batched training ===
+                    batch_size = 32
+                    dataset_size = len(rewards)
+                    indices = np.arange(dataset_size)
+                    np.random.shuffle(indices)
 
-                    # Forward pass through the model
-                    logits, new_values = self.ai(state)
+                    for start in range(0, dataset_size, batch_size):
+                        end = start + batch_size
+                        batch_idx = indices[start:end]
 
-                    # Check for NaN or Inf values in the logits or probabilities
-                    if torch.isnan(logits).any() or torch.isinf(logits).any():
+                        # Slice batch tensors
+                        state = states[batch_idx]
+                        action = actions[batch_idx]
+                        log_prob_old = log_probs_old[batch_idx]
+                        advantage = advantages[batch_idx]
+                        return_ = returns[batch_idx]
+
+                        # Forward pass
+                        logits, new_values = self.ai(state)
+                        probs = torch.softmax(logits, dim=-1)
+                        dist = torch.distributions.Categorical(probs)
+                        new_log_probs = dist.log_prob(action)
+                        entropy = dist.entropy().mean()
+
+                        ratio = torch.exp(new_log_probs - log_prob_old)
+                        surr1 = ratio * advantage
+                        surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantage
+                        policy_loss = -torch.min(surr1, surr2).mean()
+                        value_loss = (return_ - new_values.squeeze(-1)).pow(2).mean()
+                        loss = policy_loss + 0.5 * value_loss - self.entropy_coeff * entropy
+
+                        self.optimizer.zero_grad()
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
+                        self.optimizer.step()
+                        self.total_updates += 1
+
                         if utils_config.ENABLE_LOGGING:
-                            logger.log_msg(f"[TRAIN LOGITS ERROR] NaNs in logits during training", level=logging.ERROR)
-                        return
+                            logger.log_msg(
+                                f"[TRAIN][BATCHED] Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, "
+                                f"ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
+                                level=logging.DEBUG
+                            )
+                else:
 
-                    probs = torch.softmax(logits, dim=-1)
+                    # Now process each experience one by one (no batching)
+                    for idx in range(len(self.memory["rewards"])):
+                        state = states[idx:idx+1]  # single experience
+                        action = actions[idx:idx+1]
+                        log_prob_old = log_probs_old[idx:idx+1]
+                        advantage = advantages[idx:idx+1]
+                        return_ = returns[idx:idx+1]
 
-                    if torch.isnan(probs).any() or torch.isinf(probs).any():
+                        # Forward pass through the model
+                        logits, new_values = self.ai(state)
+
+                        # Check for NaN or Inf values in the logits or probabilities
+                        if torch.isnan(logits).any() or torch.isinf(logits).any():
+                            if utils_config.ENABLE_LOGGING:
+                                logger.log_msg(f"[TRAIN LOGITS ERROR] NaNs in logits during training", level=logging.ERROR)
+                            return
+
+                        probs = torch.softmax(logits, dim=-1)
+
+                        if torch.isnan(probs).any() or torch.isinf(probs).any():
+                            if utils_config.ENABLE_LOGGING:
+                                logger.log_msg(f"[TRAIN PROBS ERROR] NaNs in probs during training", level=logging.ERROR)
+                            return
+
+                        dist = torch.distributions.Categorical(probs)
+                        new_log_probs = dist.log_prob(action)
+                        entropy = dist.entropy().mean()
+
+                        # Calculate the ratio and surrogates
+                        ratio = torch.exp(new_log_probs - log_prob_old)
+                        surr1 = ratio * advantage
+                        surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantage
+                        policy_loss = -torch.min(surr1, surr2).mean()
+
+                        value_loss = (return_ - new_values.squeeze(-1)).pow(2).mean()
+                        loss = policy_loss + 0.5 * value_loss - self.entropy_coeff * entropy
+
+                        # Backpropagation
+                        self.optimizer.zero_grad()
+                        loss.backward()
+
+                        # Clip gradients
+                        torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
+
+                        self.total_updates += 1
+                        self.optimizer.step()
+
                         if utils_config.ENABLE_LOGGING:
-                            logger.log_msg(f"[TRAIN PROBS ERROR] NaNs in probs during training", level=logging.ERROR)
-                        return
-
-                    dist = torch.distributions.Categorical(probs)
-                    new_log_probs = dist.log_prob(action)
-                    entropy = dist.entropy().mean()
-
-                    # Calculate the ratio and surrogates
-                    ratio = torch.exp(new_log_probs - log_prob_old)
-                    surr1 = ratio * advantage
-                    surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantage
-                    policy_loss = -torch.min(surr1, surr2).mean()
-
-                    value_loss = (return_ - new_values.squeeze(-1)).pow(2).mean()
-                    loss = policy_loss + 0.5 * value_loss - self.entropy_coeff * entropy
-
-                    # Backpropagation
-                    self.optimizer.zero_grad()
-                    loss.backward()
-
-                    # Clip gradients
-                    torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
-
-                    self.total_updates += 1
-                    self.optimizer.step()
-
-                    if utils_config.ENABLE_LOGGING:
-                        logger.log_msg(
-                            f"[TRAIN] Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, "
-                            f"ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
-                            level=logging.DEBUG)
+                            logger.log_msg(
+                                f"[TRAIN] Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, "
+                                f"ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
+                                level=logging.DEBUG)
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg("[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
 
-            elif mode == 'evaluate':
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg("[EVALUATE MODE] No training applied.", level=logging.DEBUG)
-
+            
 
 
             elif mode == 'evaluate':

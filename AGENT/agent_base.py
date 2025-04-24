@@ -213,71 +213,63 @@ class BaseAgent:
                     level=logging.ERROR)
             return False
 
-    def move(self, dx, dy):
+    def move(self, dx, dy, sub_tile_precision=False):
         try:
-            # Calculate new potential position
-            new_x = self.x + dx * self.speed
-            new_y = self.y + dy * self.speed
+            cell_size = utils_config.CELL_SIZE
 
-            # Convert pixel coordinates to grid coordinates
-            grid_x = int(new_x // utils_config.CELL_SIZE)
-            grid_y = int(new_y // utils_config.CELL_SIZE)
-            current_grid_x = int(self.x // utils_config.CELL_SIZE)
-            current_grid_y = int(self.y // utils_config.CELL_SIZE)
+            if sub_tile_precision:
+                # Pixel-precision movement
+                new_x = self.x + dx * self.speed
+                new_y = self.y + dy * self.speed
+            else:
+                # Snap to nearest tile
+                new_x = (int(self.x // cell_size) + dx) * cell_size
+                new_y = (int(self.y // cell_size) + dy) * cell_size
 
-            # Check if the new position is valid and on land
+            grid_x = int(new_x // cell_size)
+            grid_y = int(new_y // cell_size)
+            current_grid_x = int(self.x // cell_size)
+            current_grid_y = int(self.y // cell_size)
+
             if self.can_move_to(new_x, new_y):
-                # Mark the current cell as faction territory (with bounds
-                # check)
-                if 0 <= current_grid_x < len(
-                        self.terrain.grid) and 0 <= current_grid_y < len(
-                        self.terrain.grid[0]):
+                # Mark old tile as faction-owned
+                if 0 <= current_grid_x < len(self.terrain.grid) and 0 <= current_grid_y < len(self.terrain.grid[0]):
                     self.terrain.grid[current_grid_x][current_grid_y]['faction'] = self.faction.id
 
-                # Update agent position
                 self.x = new_x
                 self.y = new_y
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"Agent {self.agent_id} ({self.role}) moved to ({new_x}, {new_y})")
 
-                # Update position history
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(f"Agent {self.agent_id} ({self.role}) moved to ({new_x}, {new_y})")
+
+                # Record recent positions to detect "stuck" agents
                 self.recent_positions = getattr(self, "recent_positions", [])
                 self.recent_positions.append((self.x, self.y))
                 if len(self.recent_positions) > 10:
                     self.recent_positions.pop(0)
 
-                # Check if stuck
                 if len(set(self.recent_positions)) <= 2:
-                    if utils_config.ENABLE_LOGGING:
-                        logger.log_msg(
-                            f"Agent {self.agent_id} ({self.role}) is likely stuck. "
-                            f"Recent positions: {self.recent_positions}. Penalising.",
-                            level=logging.WARNING)
+                    logger.log_msg(
+                        f"Agent {self.agent_id} ({self.role}) is likely stuck. Penalizing.",
+                        level=logging.WARNING
+                    )
                     self.Health -= 2
-                    if utils_config.ENABLE_LOGGING:
-                        logger.log_msg(
-                            f"Agent {self.agent_id} ({self.role}) has been penalised for being stuck.")
                     if self.Health <= 0:
-                        print(
-                            f"Agent {self.agent_id} ({self.role}) has died from being stuck.")
+                        print(f"Agent {self.agent_id} ({self.role}) has died from being stuck.")
 
-                # Mark new cell as faction territory (with bounds check)
-                if 0 <= grid_x < len(
-                        self.terrain.grid) and 0 <= grid_y < len(
-                        self.terrain.grid[0]):
+                # Mark new tile as faction-owned
+                if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(self.terrain.grid[0]):
                     self.terrain.grid[grid_x][grid_y]['faction'] = self.faction.id
             else:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Agent {self.agent_id} ({self.role}) attempted invalid move to ({new_x}, {new_y}).",
-                        level=logging.ERROR)
+                        level=logging.ERROR
+                    )
 
         except Exception as e:
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[ERROR] Exception during move(): {repr(e)}",
-                    level=logging.ERROR)
+            logger.log_msg(f"[ERROR] Exception in move(): {e}", level=logging.ERROR)
+
 
     def is_near(self, target, threshold=3):
         """

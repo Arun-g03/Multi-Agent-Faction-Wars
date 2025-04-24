@@ -736,8 +736,8 @@ class GameManager:
                         f"Faction {faction.id} food balance: {faction.food_balance}")
                     print(
                         f"Faction {faction.id} agents alive: {len(faction.agents)}")
-                    print(
-                        f"Faction {faction.id} reward by role: {role_rewards}")
+                    for role, reward in role_rewards.items():
+                        print(f"Faction {faction.id} {role} reward: {reward}")
 
                 # 🔁 Train agents at the end of the episode
                 if self.mode == "train":
@@ -752,7 +752,7 @@ class GameManager:
                                 self.logger.log_msg(
                                     f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
                             try:
-                                agent.ai.train(mode="train")
+                                agent.ai.train(mode="train", batching=True)
                             except Exception as e:
                                 print(
                                     f"Training failed for agent {agent.agent_id}: {e}")

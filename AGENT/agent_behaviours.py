@@ -106,9 +106,7 @@ class AgentBehaviour:
         if state is None:
             raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
 
-        faction_id = self.agent.faction.id
-
-        # Early invalidation of stale or unreachable task
+        # === Check and clear invalid task ===
         if self.agent.current_task:
             task_type = self.agent.current_task.get("type")
             task_target = self.agent.current_task.get("target")
@@ -117,7 +115,7 @@ class AgentBehaviour:
                 self.agent.current_task = None
                 self.agent.update_task_state(utils_config.TaskState.NONE)
 
-        # No task to perform — acting independently
+        # === No current task: act independently ===
         if not self.agent.current_task:
             valid_indices = self.get_valid_action_indices(resource_manager, agents)
             action_index, log_prob, value = self.ai.choose_action(state, valid_indices=valid_indices)
@@ -127,46 +125,51 @@ class AgentBehaviour:
             self.agent.value = value
 
             task_state = self.perform_action(action_index, state, resource_manager, agents)
-            reward = self.assign_reward_for_independent_action(task_state)
+            action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][action_index]
 
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(f"[SELF] Agent {self.agent.role} has no task. Acting independently with action index {action_index}.", level=logging.INFO)
+            reward = self.assign_reward(
+                agent=self.agent,
+                task_type="independent",
+                task_state=task_state,
+                action=action,
+                target_pos=(0, 0),
+                current_pos=(self.agent.x, self.agent.y),
+                is_independent=True
+            )
 
+            logger.log_msg(f"[SELF] Agent {self.agent.role} acting independently with action '{action}'.", level=logging.INFO)
+
+            self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
             return reward, task_state
 
-        # Task is ongoing, especially for move_to tasks
-        if self.agent.current_task.get("state") != utils_config.TaskState.ONGOING:
-            self.agent.current_task["state"] = utils_config.TaskState.ONGOING
+        # === Task is valid and ongoing ===
+        self.agent.current_task["state"] = utils_config.TaskState.ONGOING
+        logger.log_msg(f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}", level=logging.INFO)
 
-        if utils_config.ENABLE_LOGGING:
-            logger.log_msg(f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}", level=logging.INFO)
+        task_type = self.agent.current_task.get("type", "unknown")
+        target_position = self.agent.current_task.get("target", {}).get("position", (0, 0))
+        current_position = (self.agent.x, self.agent.y)
 
-        # If the task is a "move_to" task, ensure the agent moves towards the target position
-        if self.agent.current_task.get("type") == "move_to":
-            target_position = self.agent.current_task.get("target", {}).get("position")
-            current_position = (self.agent.x, self.agent.y)
+        # === Special handling for move_to completion ===
+        if task_type == "move_to" and self.calculate_distance(current_position, target_position) <= utils_config.Agent_Interact_Range:
+            self.agent.update_task_state(utils_config.TaskState.SUCCESS)
+            action_name = "move"  # or last action if known
 
-            # Check if the agent has reached the target position (within a threshold)
-            if self.calculate_distance(current_position, target_position) <= utils_config.Agent_Interact_Range:
-                self.agent.update_task_state(utils_config.TaskState.SUCCESS)
+            reward = self.assign_reward(
+                agent=self.agent,
+                task_type=task_type,
+                task_state=utils_config.TaskState.SUCCESS,
+                action=action_name,
+                target_pos=target_position,
+                current_pos=current_position,
+                is_independent=False
+            )
 
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[TASK COMPLETE] Agent {self.agent.agent_id} reached target at {target_position}. Task completed.",
-                        level=logging.INFO)
+            self.agent.current_task["state"] = utils_config.TaskState.NONE
+            self.agent.current_task = None
+            return reward, utils_config.TaskState.SUCCESS
 
-                reward = self.assign_reward_for_task_action(
-                    task_state=utils_config.TaskState.SUCCESS,
-                    task_type="move_to",
-                    agent=self.agent,
-                    target_position=target_position,
-                    current_position=current_position
-                )
-
-                return reward, utils_config.TaskState.SUCCESS
-
-
-        # If the agent is still performing the task (e.g., moving toward the target)
+        # === Continue task execution ===
         action_index, log_prob, value = self.ai.choose_action(state)
         self.agent.current_action = action_index
         self.agent.log_prob = log_prob
@@ -174,39 +177,29 @@ class AgentBehaviour:
 
         task_state = self.perform_action(action_index, state, resource_manager, agents)
 
-        # Optional task-action consistency check
-        task_type = self.agent.current_task.get("type", "unknown")
+        actual_action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
         expected_method = utils_config.TASK_METHODS_MAPPING.get(task_type)
-        actual_method = utils_config.ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
-        if expected_method != actual_method and task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
-            logger.log_msg(f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_method}' but expected '{expected_method}' for task '{task_type}'.", level=logging.INFO)
+
+        if expected_method != actual_action and task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+            logger.log_msg(f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_action}' but expected '{expected_method}' for task '{task_type}'.", level=logging.INFO)
             task_state = utils_config.TaskState.ONGOING
 
-        reward = self.assign_reward_for_task_action(
-            task_state=task_state,
-            task_type=task_type,
+        reward = self.assign_reward(
             agent=self.agent,
-            target_position=self.agent.current_task.get("target", {}).get("position", (0, 0)),
-            current_position=(self.agent.x, self.agent.y)
+            task_type=task_type,
+            task_state=task_state,
+            action=actual_action,
+            target_pos=target_position,
+            current_pos=current_position,
+            is_independent=False
         )
 
-        # Only update task state when task is finished (e.g., reached the target)
         if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
-            self.agent.current_task["state"] = utils_config.TaskState.NONE # Make them idle again
+            self.agent.current_task["state"] = utils_config.TaskState.NONE
             logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
             self.agent.current_task = None
 
-        # Storing transition to memory
-        self.agent.ai.store_transition(
-            state=state,
-            action=self.agent.current_action,
-            log_prob=self.agent.log_prob,
-            reward=reward,
-            local_value=self.agent.value,
-            global_value=0,
-            done=(task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
-        )
-
+        self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
         return reward, task_state
 
 
@@ -315,115 +308,88 @@ class AgentBehaviour:
 
         return False  # Default to invalid
 
+    def assign_reward(self, agent, task_type, task_state, action, target_pos, current_pos, is_independent=False):
+        reward = 0.0
+        dist = self.calculate_distance(current_pos, target_pos)
 
-    def assign_reward_for_independent_action(self, task_state):
+        # === Task Completion (Normalized Success) ===
         if task_state == utils_config.TaskState.SUCCESS:
-            reward = 1
+            reward += 1.0  # Base normalized reward
+            reward += max(0.0, 0.5 - 0.1 * dist)  # Efficiency bonus
 
+            # Task-specific bonus
+            if task_type == "gather":
+                reward += 0.25
+            elif task_type == "eliminate":
+                reward += 0.5
+
+        # === Task Failure (Normalized Penalty) ===
         elif task_state == utils_config.TaskState.FAILURE:
-            reward = -2
+            reward -= 1.0
+            reward -= 0.05 * dist  # Soft penalty based on distance
+
+        # === Ongoing Tasks (Shaping) ===
         elif task_state == utils_config.TaskState.ONGOING:
-            reward = 0
-        else:
-            reward = -1
-        if utils_config.ENABLE_TENSORBOARD and task_state is not None:
-            try:
-                episode = getattr(self.agent.faction, "episode", 0)
-                faction_id = self.agent.faction.id
-                TensorBoardLogger().log_scalar(
-                    f"Faction_{faction_id}/Task_independent_{task_state.name}",
-                    reward,
-                    episode
-                )
-            except Exception as e:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[TensorBoard] Failed to log independent task reward: {e}",
-                        level=logging.WARNING)
+            reward += max(0.0, 0.3 - 0.05 * dist)
 
+            if self.is_backtracking(current_pos, target_pos):
+                reward -= 0.3
 
-        return reward
+            reward += self.shape_action_bonus(task_type, action)
 
-    def assign_reward_for_task_action(
-            self,
-            task_state,
-            task_type,
-            agent,
-            target_position,
-            current_position):
-        """
-        Assign rewards based on task state, task progress, time, and path efficiency.
-        """
-        # Reward for task success
-        if task_state == utils_config.TaskState.SUCCESS:
-            reward = 10  # High reward for successful task completion
-
-            # Reward for fast completion (based on distance to target)
-            distance_travelled = self.calculate_distance(
-                current_position, target_position)
-            # Reward for covering less distance
-            reward += max(0, 5 - distance_travelled)
-
-        # Penalise task failure
-        elif task_state == utils_config.TaskState.FAILURE:
-            reward = -50  # Penalise failure
-            # Heavier penalty for failure with more distance
-            reward -= 2 * \
-                self.calculate_distance(current_position, target_position)
-
-        # Reward for ongoing tasks (neutral or progress-based)
-        elif task_state == utils_config.TaskState.ONGOING:
-            reward = 1  # Neutral reward
-
-            # Reward for moving closer to the target
-            distance_travelled = self.calculate_distance(
-                current_position, target_position)
-            # Encourage quicker movement towards target
-            reward += max(0, 3 - distance_travelled)
-
-            # Penalise backtracking (agent going away from the target)
-            if self.is_backtracking(current_position, target_position):
-                reward -= 3  # Penalise for going backwards
-
-        # Penalise invalid task states
+        # === Invalid Task or Unknown ===
         elif task_state == utils_config.TaskState.INVALID:
-            reward = -3  # Penalise invalid states
-
-        # Default penalty for unknown task states
+            reward -= 0.5
         else:
-            reward = -1  # Default penalty for unknown task states
+            reward -= 0.2
 
-        # If the task is related to gathering (e.g., close to the target,
-        # collecting resources)
-        if task_type == "gather":
-            # Reward for completing gather actions quickly
-            if task_state == utils_config.TaskState.SUCCESS:
-                reward += 5  # Bonus for fast gathering
+        # === Independent Reward Logic (Fallback)
+        if is_independent and task_state != utils_config.TaskState.SUCCESS:
+            reward = {
+                utils_config.TaskState.FAILURE: -0.2,
+                utils_config.TaskState.ONGOING: 0.0,
+                utils_config.TaskState.INVALID: -0.3
+            }.get(task_state, -0.1)
 
-        # If the task is related to eliminating (e.g., threat elimination)
-        if task_type == "eliminate":
-            # Reward for eliminating threats with minimal risk
-            if task_state == utils_config.TaskState.SUCCESS:
-                reward += 7  # Bonus for eliminating threats effectively
-
-                # 🧠 Log to TensorBoard
+        # === Log Normalized Reward ===
         if utils_config.ENABLE_TENSORBOARD and task_state is not None:
             try:
                 episode = getattr(agent.faction, "episode", 0)
                 faction_id = agent.faction.id
-                TensorBoardLogger().log_scalar(
-                    f"Faction_{faction_id}/Task_{task_type}_{task_state.name}",
-                    reward,
-                    episode
-                )
+                suffix = "independent" if is_independent else f"{task_type}_{task_state.name}"
+                TensorBoardLogger().log_scalar(f"Faction_{faction_id}/Task_{suffix}", reward, episode)
             except Exception as e:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[TensorBoard] Failed to log task reward: {e}",
-                        level=logging.WARNING)
-
+                logger.log_msg(f"[TensorBoard] Failed to log reward: {e}", level=logging.WARNING)
 
         return reward
+
+
+
+    def shape_action_bonus(self, task_type, action):
+        if task_type == "eliminate":
+            return 0.3 if action == "eliminate_threat" else 0.1 if action.startswith("move") else 0.0
+        if task_type == "gather":
+            return 0.3 if action in ["mine_gold", "forage_apple"] else 0.1 if action.startswith("move") else 0.0
+        if task_type in ["move_to", "explore"]:
+            return 0.1 if action.startswith("move") else 0.0
+        return 0.0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def calculate_distance(self, pos1, pos2):
         """
