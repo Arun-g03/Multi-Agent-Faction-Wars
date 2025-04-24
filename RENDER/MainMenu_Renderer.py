@@ -26,7 +26,7 @@ class MenuRenderer:
         self.font = get_font(24, MENU_FONT)
         self.selected_mode = None
         print("MenuRenderer initialised")
-        tensorboard_logger = TensorBoardLogger() 
+        
 
     def draw_text(self, surface, text, font, size, colour, x, y, bold=False):
         font_obj = get_font(size, font, bold)
@@ -204,8 +204,8 @@ class MenuRenderer:
                             ]
                             
                             if runs_with_logs:
-                                run_list = ", ".join(runs_with_logs)
-                                self.show_message(f"Launching TensorBoard with runs: {run_list}", 
+                                run_list = "\n    - " + "\n    - ".join(runs_with_logs)
+                                self.show_message(f"Launching TensorBoard with runs:\n{run_list}", 
                                                 duration=msg_duration, bold=True)
                             else:
                                 self.show_message("Launching TensorBoard with available logs", 
@@ -251,14 +251,26 @@ class MenuRenderer:
                 
             if load_choice is False:
                 # Start fresh training
+                # Create a new TensorBoard run for this fresh training session
+                tensorboard_logger = TensorBoardLogger()
+                if tensorboard_logger:
+                    TensorBoardLogger.reset()
+                    print(f"[INFO] Created new TensorBoard run for fresh training")
+                
                 return {"mode": "train", "load_existing": False}
             else:
                 try:
+                    # Create a new TensorBoard run for this continued training session
+                    tensorboard_logger = TensorBoardLogger()
+                    if tensorboard_logger:
+                        TensorBoardLogger.reset()
+                        print(f"[INFO] Created new TensorBoard run for continued training")
+                    
                     # Load existing models for training
                     return self.render_menu()
                 except:
-                    self.MenuRenderer()            
-                
+                    self.MenuRenderer()
+                    
         elif mode == "evaluate":
             # For evaluation, we always need to load models
             models = self.select_models_by_role()
@@ -266,9 +278,16 @@ class MenuRenderer:
                 self.show_message("Evaluation requires models to load")
                 return self.game_setup_menu()  # Return to mode selection
                 
+            # Create a new TensorBoard run for this evaluation session
+            tensorboard_logger = TensorBoardLogger()
+            if tensorboard_logger:
+                TensorBoardLogger.reset()
+                print(f"[INFO] Created new TensorBoard run for evaluation")
+            
             return {"mode": "evaluate", "load_existing": True, "models": models}
         
         return None
+
     def select_simulation_mode(self):
         """
         Presents a screen for selecting between Training and Evaluation modes.
