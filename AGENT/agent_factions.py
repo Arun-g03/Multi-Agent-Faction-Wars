@@ -1129,7 +1129,7 @@ class Faction():
                     level=logging.WARNING)
                 return retest_strategy()
 
-            # ✅ Strategy is valid — assign peacekeepers to move to HQ
+            # Strategy is valid — assign peacekeepers to move to HQ
             self.defensive_position = hq_pos
             logger.log_msg(
                 f"[HQ STRATEGY] Nearby threat detected. Assigning peacekeepers to defend HQ at {hq_pos}.",
@@ -1200,7 +1200,7 @@ class Faction():
                 level=logging.WARNING)
             return retest_strategy()
 
-        # ✅ Set current strategy only if it's valid and successful
+        # Set current strategy only if it's valid and successful
         self.current_strategy = action
 
     def compute_hq_reward(self, victory: bool = False) -> float:

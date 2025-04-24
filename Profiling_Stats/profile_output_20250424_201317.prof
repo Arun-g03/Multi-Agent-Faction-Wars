@@ -1,0 +1,100 @@
+[PROFILING RESULTS - SORTED BY EXECUTION TIME]
+         9338926 function calls (9322141 primitive calls) in 31.501 seconds
+
+   Ordered by: internal time
+   List reduced from 4025 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    3.001    3.001    3.001    3.001 {built-in method pygame.time.wait}
+    10306    2.899    0.000    2.899    0.000 {built-in method pygame.display.update}
+  1315135    1.608    0.000    1.608    0.000 {built-in method pygame.event.get}
+   101129    1.606    0.000    1.606    0.000 {method 'fill' of 'pygame.surface.Surface' objects}
+    22915    1.480    0.000    1.480    0.000 {built-in method nt.stat}
+       50    1.293    0.026    2.836    0.057 \ENVIRONMENT\env_terrain.py:126(draw)
+   302986    1.145    0.000    1.145    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+    14789    1.013    0.000    1.189    0.000 \AGENT\agent_factions.py:471(<genexpr>)
+    10277    0.950    0.000    0.950    0.000 {built-in method nt.listdir}
+     1192    0.724    0.001    1.335    0.001 \newenv\lib\site-packages\torch\_tensor_str.py:122(__init__)
+    10205    0.716    0.000   12.701    0.001 \RENDER\MainMenu_Renderer.py:72(render_menu)
+    73922    0.668    0.000    0.668    0.000 \AGENT\agent_factions.py:415(<genexpr>)
+     1292    0.652    0.001    0.652    0.001 {built-in method pygame.image.load}
+    51031    0.648    0.000    0.648    0.000 {built-in method pygame.draw.rect}
+    71588    0.591    0.000    0.591    0.000 {method 'render' of 'pygame.font.Font' objects}
+     3251    0.540    0.000    0.600    0.000 \AGENT\agent_base.py:515(detect_resources)
+    87516    0.483    0.000    0.483    0.000 {method 'copy' of 'pygame.surface.Surface' objects}
+    51031    0.450    0.000    2.251    0.000 \RENDER\MainMenu_Renderer.py:37(create_button)
+    71444    0.445    0.000    2.022    0.000 \RENDER\MainMenu_Renderer.py:31(draw_text)
+    17112    0.382    0.000    1.358    0.000 {built-in method builtins.any}
+    37050    0.382    0.000    1.189    0.000 \AGENT\agent_factions.py:361(receive_report)
+     4579    0.377    0.000    0.377    0.000 {method 'item' of 'torch._C.TensorBase' objects}
+     1192    0.350    0.000    0.350    0.000 {built-in method torch.masked_select}
+   140272    0.337    0.000    0.337    0.000 {built-in method pygame.transform.scale}
+        1    0.300    0.300    1.037    1.037 \RENDER\MainMenu_Renderer.py:244(select_simulation_mode)
+        1    0.265    0.265    0.915    0.915 \RENDER\MainMenu_Renderer.py:291(render_load_choice)
+   1193/1    0.263    0.000    2.019    2.019 {built-in method builtins.exec}
+     4227    0.254    0.000    0.254    0.000 {method 'to' of 'torch._C.TensorBase' objects}
+      104    0.249    0.002    0.249    0.002 \AGENT\agent_factions.py:989(<genexpr>)
+      800    0.223    0.000    1.717    0.002 \AGENT\agent_base.py:468(observe)
+  2786247    0.212    0.000    0.212    0.000 {built-in method builtins.hasattr}
+    13265    0.190    0.000    0.448    0.000 Python39\lib\logging\__init__.py:282(__init__)
+    37050    0.187    0.000    1.376    0.000 \AGENT\agent_communication.py:134(agent_to_hq)
+      400    0.175    0.000    0.175    0.000 {built-in method torch.multinomial}
+    20410    0.155    0.000    0.909    0.000 \RENDER\MainMenu_Renderer.py:127(<genexpr>)
+    13265    0.154    0.000    0.154    0.000 {method 'flush' of '_io.TextIOWrapper' objects}
+       50    0.152    0.003    3.203    0.064 \RENDER\Game_Renderer.py:51(render)
+    46967    0.136    0.000    1.852    0.000 {built-in method builtins.next}
+        1    0.132    0.132   31.511   31.511 main.py:27(main)
+      410    0.118    0.000    0.171    0.000 \newenv\lib\site-packages\torch\distributions\distribution.py:270(_validate_sample)
+
+
+
+
+[PROFILING RESULTS - SORTED BY FUNCTION CALLS]
+         9338926 function calls (9322141 primitive calls) in 31.501 seconds
+
+   Ordered by: call count
+   List reduced from 4025 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  2786247    0.212    0.000    0.212    0.000 {built-in method builtins.hasattr}
+  1315135    1.608    0.000    1.608    0.000 {built-in method pygame.event.get}
+   386788    0.049    0.000    0.049    0.000 {method 'startswith' of 'str' objects}
+376867/375145    0.038    0.000    0.044    0.000 {built-in method builtins.isinstance}
+   363254    0.083    0.000    0.123    0.000 \newenv\lib\site-packages\torch\_dynamo\allowed_functions.py:322(<genexpr>)
+   302986    1.145    0.000    1.145    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+145317/144691    0.013    0.000    0.013    0.000 {built-in method builtins.len}
+   140272    0.337    0.000    0.337    0.000 {built-in method pygame.transform.scale}
+   101580    0.009    0.000    0.009    0.000 {method 'append' of 'list' objects}
+   101129    1.606    0.000    1.606    0.000 {method 'fill' of 'pygame.surface.Surface' objects}
+   100843    0.012    0.000    0.012    0.000 {method 'get' of 'dict' objects}
+    88215    0.010    0.000    0.010    0.000 {built-in method nt.fspath}
+    87516    0.483    0.000    0.483    0.000 {method 'copy' of 'pygame.surface.Surface' objects}
+    73922    0.668    0.000    0.668    0.000 \AGENT\agent_factions.py:415(<genexpr>)
+    71944    0.037    0.000    0.037    0.000 {method 'get_rect' of 'pygame.surface.Surface' objects}
+    71758    0.082    0.000    0.107    0.000 \RENDER\Common.py:23(get_font)
+    71588    0.591    0.000    0.591    0.000 {method 'render' of 'pygame.font.Font' objects}
+    71444    0.445    0.000    2.022    0.000 \RENDER\MainMenu_Renderer.py:31(draw_text)
+    66104    0.013    0.000    0.013    0.000 {method 'collidepoint' of 'pygame.rect.Rect' objects}
+    65517    0.032    0.000    0.032    0.000 \ENVIRONMENT\env_resources.py:383(is_depleted)
+    59673    0.030    0.000    0.030    0.000 \ENVIRONMENT\env_resources.py:260(is_depleted)
+    55574    0.017    0.000    0.019    0.000 {built-in method builtins.getattr}
+    51181    0.018    0.000    0.018    0.000 {built-in method pygame.mouse.get_pos}
+    51031    0.450    0.000    2.251    0.000 \RENDER\MainMenu_Renderer.py:37(create_button)
+    51031    0.648    0.000    0.648    0.000 {built-in method pygame.draw.rect}
+    48554    0.011    0.000    0.011    0.000 {method 'replace' of 'str' objects}
+    46967    0.136    0.000    1.852    0.000 {built-in method builtins.next}
+    44803    0.011    0.000    0.011    0.000 {method 'rfind' of 'str' objects}
+    37050    0.382    0.000    1.189    0.000 \AGENT\agent_factions.py:361(receive_report)
+    37050    0.187    0.000    1.376    0.000 \AGENT\agent_communication.py:134(agent_to_hq)
+    34952    0.079    0.000    0.098    0.000 Python39\lib\ntpath.py:124(splitdrive)
+    29834    0.008    0.000    0.010    0.000 Python39\lib\sre_parse.py:164(__getitem__)
+    29104    0.007    0.000    0.007    0.000 \newenv\lib\site-packages\sympy\core\assumptions.py:489(as_property)
+    28898    0.005    0.000    0.005    0.000 {method 'rstrip' of 'str' objects}
+    28664    0.004    0.000    0.004    0.000 {built-in method _thread.get_ident}
+28196/28106    0.002    0.000    0.002    0.000 {built-in method builtins.hash}
+    26586    0.006    0.000    0.006    0.000 {method 'acquire' of '_thread.RLock' objects}
+    26586    0.003    0.000    0.003    0.000 {method 'release' of '_thread.RLock' objects}
+    26530    0.011    0.000    0.011    0.000 Python39\lib\logging\__init__.py:791(filter)
+    26530    0.014    0.000    0.019    0.000 Python39\lib\logging\__init__.py:896(acquire)
+
+

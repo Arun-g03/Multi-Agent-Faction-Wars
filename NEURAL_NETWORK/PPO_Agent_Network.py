@@ -214,14 +214,15 @@ class PPOModel(nn.Module):
 
                 if batching:
                     # === Batched training ===
-                    batch_size = 32
+                    batch_size = 64
                     dataset_size = len(rewards)
                     indices = np.arange(dataset_size)
                     np.random.shuffle(indices)
 
                     for start in range(0, dataset_size, batch_size):
                         end = start + batch_size
-                        batch_idx = indices[start:end]
+                        batch_idx = torch.tensor(indices[start:end], dtype=torch.long, device=self.device)
+
 
                         # Slice batch tensors
                         state = states[batch_idx]

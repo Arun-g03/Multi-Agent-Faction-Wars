@@ -56,7 +56,7 @@ class FactionManager:
             action_size= len(utils_config.HQ_STRATEGY_OPTIONS),
             role_size=5,
             local_state_size=10,
-            global_state_size=15,
+            global_state_size=16,
             network_type="HQNetwork"):
         """
         Fully reset the list of factions and assign agents.

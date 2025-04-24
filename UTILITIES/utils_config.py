@@ -22,10 +22,10 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = True
+ENABLE_LOGGING = False
 """Enable logging for debugging"""
 
-ENABLE_TENSORBOARD = False
+ENABLE_TENSORBOARD = True
 """Enable tensorboard for visualisation"""
 
 
@@ -42,9 +42,9 @@ ENABLE_TENSORBOARD = False
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 10  # How many episodes or games to train for
+EPISODES_LIMIT = 10 # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 1000
+STEPS_PER_EPISODE = 4000
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -71,7 +71,7 @@ ModelMetrics_Path = "logs/"
 #
 
 # Pygame Settings
-FPS = 240  # Frames per second # Customise as needed!
+FPS = 120  # Frames per second # Customise as needed!
 
 # Screen Dimensions
 
@@ -80,6 +80,8 @@ ASPECT_RATIO = 0.6  # Customise as needed!
 
 SCREEN_WIDTH = 1920 * ASPECT_RATIO
 SCREEN_HEIGHT = 1080 * ASPECT_RATIO
+
+SUB_TILE_PRECISION=False
 
 # FPS cap and screen dimenions
 # Change these to change the game window size
@@ -92,11 +94,19 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 #      \_/\_/ \___/|_|  |_|\__,_|
 #
 
-
+# The size of each cell in the grid
+CELL_SIZE = 20
 # World Dimensions
 # Size of the in-game world
-WORLD_WIDTH = 500  # Customise as needed!
-WORLD_HEIGHT = 500  # Customise as needed!
+num_cells_width = 30  # Number of cells horizontally
+num_cells_height = 30  # Number of cells vertically
+
+# Size of each cell (in pixels)
+
+
+# Calculate the world dimensions in pixels
+WORLD_WIDTH = num_cells_width * CELL_SIZE
+WORLD_HEIGHT = num_cells_height * CELL_SIZE
 
 
 # Perlin Noise Settings
@@ -114,8 +124,7 @@ RED = (255, 0, 0)  # Red
 APPLE_TREE_colour = (0, 255, 0)  # A brighter green for apple trees
 GOLD_colour = (255, 215, 0)  # Gold colour
 
-# The size of each cell in the grid
-CELL_SIZE = 20
+
 
 Grass_Texture_Path = "RENDER\IMAGES\Grass Tiles/Grass 001.png"  # Grass texture path
 Water_Texture_Path = "RENDER\IMAGES\Water+.png"  # Water texture path
@@ -337,7 +346,7 @@ Gatherer_PNG = 'RENDER\IMAGES\gatherer.png'  # Path to gatherer image
 Gold_Cost_for_Agent = 10  # Gold cost for an agent
 
 
-DEF_AGENT_STATE_SIZE = 10 + len(TASK_TYPE_MAPPING)
+DEF_AGENT_STATE_SIZE = 11 + len(TASK_TYPE_MAPPING)
 
 """
 WARNING: DO NOT MODIFY THE STATE SIZE!

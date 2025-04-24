@@ -200,8 +200,26 @@ class AgentBehaviour:
             self.agent.current_task = None
 
         self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
+        
+        # === Behavior Debug Block ===
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg("="*60, level=logging.INFO)
+            logger.log_msg(f"Agent Decision Summary", level=logging.INFO)
+            logger.log_msg(f"Agent ID      : {self.agent.agent_id or 'None'}", level=logging.INFO)
+            logger.log_msg(f"Role          : {self.agent.role or 'None'}", level=logging.INFO)
+            logger.log_msg(f"Position      : ({getattr(self.agent, 'x', 'None'):.1f}, {getattr(self.agent, 'y', 'None'):.1f})", level=logging.INFO)
+            logger.log_msg(f"Health        : {self.agent.Health or 'None'}", level=logging.INFO)
+            logger.log_msg(f"Task Type     : {task_type or 'None'}", level=logging.INFO)
+            logger.log_msg(f"Task State    : {task_state.name if task_state else 'None'}", level=logging.INFO)
+            logger.log_msg(f"Action        : {actual_action or 'None'}", level=logging.INFO)
+            logger.log_msg(f"Target Pos    : {target_position or 'None'}", level=logging.INFO)
+            logger.log_msg(f"Reward        : {reward if reward is not None else 'None'}", level=logging.INFO)
+            logger.log_msg(f"Log Prob      : {self.agent.log_prob if hasattr(self.agent, 'log_prob') else 'None'}", level=logging.INFO)
+            logger.log_msg(f"Value Est.    : {self.agent.value if hasattr(self.agent, 'value') else 'None'}", level=logging.INFO)
+            logger.log_msg(f"Done?         : {task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE] if task_state else 'None'}", level=logging.INFO)
+            logger.log_msg("="*60, level=logging.INFO)        
+        
         return reward, task_state
-
 
 
     def get_valid_action_indices(self, resource_manager, agents):
@@ -668,7 +686,13 @@ class AgentBehaviour:
     def find_unexplored_areas(self):
         unexplored = []
         field_of_view = utils_config.Agent_field_of_view
-        grid_x, grid_y = self.agent.x // utils_config.CELL_SIZE, self.agent.y // utils_config.CELL_SIZE
+
+        if utils_config.SUB_TILE_PRECISION:
+            grid_x = int(self.agent.x // utils_config.CELL_SIZE)
+            grid_y = int(self.agent.y // utils_config.CELL_SIZE)
+        else:
+            grid_x = int(self.agent.x)
+            grid_y = int(self.agent.y)
 
         for dx in range(-field_of_view, field_of_view + 1):
             for dy in range(-field_of_view, field_of_view + 1):
@@ -679,11 +703,15 @@ class AgentBehaviour:
                     and self.agent.terrain.grid[x][y]["faction"] != self.agent.faction.id
                 ):
                     unexplored.append((x, y))
+
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} identified unexplored areas: {unexplored}.",
-                level=logging.DEBUG)
+                level=logging.DEBUG
+            )
+
         return unexplored
+
 
 
 #     ____       _   _                             _        _   _
@@ -726,7 +754,7 @@ class AgentBehaviour:
                 pygame.draw.circle(screen, (255, 0, 0), (int(
                     gold_lump.x), int(gold_lump.y)), 5)  # Red dot = target
 
-            # ✅ In range → mine
+            # In range → mine
             if self.agent.is_near(gold_lump, interact_radius):
                 gold_lump.mine()
                 self.agent.faction.gold_balance += 1

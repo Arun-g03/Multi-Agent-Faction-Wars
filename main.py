@@ -18,9 +18,24 @@ except subprocess.CalledProcessError:
 
 
 class MainGame:
-    def __init__(self):
+    def __init__(self, run_name=None):
         self.MainTITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
-        self.tensorboard_logger = TensorBoardLogger(log_dir="RUNTIME_LOGS\Tensorboard_logs")
+        
+        # Create a timestamp-based run name if none is provided
+        if run_name is None:
+            import datetime
+            current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            run_name = f"run_{current_time}"
+        
+        # Store the run name for reference
+        self.run_name = run_name
+        
+        # Set the default run name for all TensorBoardLogger instances
+        TensorBoardLogger.set_default_run_name(run_name)
+        
+        # Initialize TensorBoard logger
+        self.tensorboard_logger = TensorBoardLogger(log_dir="RUNTIME_LOGS/Tensorboard_logs")
+
         self.game_renderer = None
         self.game_manager = None
 

@@ -3,7 +3,7 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-from UTILITIES.utils_logger import TensorBoardLogger
+from UTILITIES.utils_tensorboard import TensorBoardLogger
 from RENDER.Common import MENU_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY, DARK_GREEN, get_font
 from RENDER.Settings_Renderer import SettingsMenuRenderer
 from RENDER.Credits_Renderer import CreditsRenderer
@@ -173,22 +173,50 @@ class MenuRenderer:
 
                 elif tensorboard_button_rect.collidepoint(event.pos):
                     log_dir = "RUNTIME_LOGS/Tensorboard_logs"
+                    
+                    # Check if the log directory exists
                     if os.path.exists(log_dir):
-                        log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+                        # Get all run directories
+                        run_dirs = [d for d in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, d))]
+                        
+                        # Check for log files in run directories
+                        log_files_exist = any(
+                            any(f.startswith("events.out") for f in os.listdir(os.path.join(log_dir, run_dir)))
+                            for run_dir in run_dirs if os.path.exists(os.path.join(log_dir, run_dir))
+                        )
                     else:
-                        log_files_exist = False                    
-                    # Create the logger and check if it's None (TensorBoard disabled)
+                        log_files_exist = False
+                    
+                    # Get the current TensorBoard logger
                     tensorboard_logger = TensorBoardLogger()
                     msg_duration = utils_config.FPS*3*4
+                    
                     if tensorboard_logger is None:
                         # TensorBoard is disabled in config
-                        self.show_message("TensorBoard is disabled in settings. Please enable it first.", duration=msg_duration, bold=True)
+                        self.show_message("TensorBoard is disabled in settings. Please enable it first.", 
+                                        duration=msg_duration, bold=True)
                     else:
                         if log_files_exist:
+                            # Get all available runs with log files
+                            runs_with_logs = [
+                                d for d in run_dirs if 
+                                any(f.startswith("events.out") for f in os.listdir(os.path.join(log_dir, d)))
+                            ]
+                            
+                            if runs_with_logs:
+                                run_list = ", ".join(runs_with_logs)
+                                self.show_message(f"Launching TensorBoard with runs: {run_list}", 
+                                                duration=msg_duration, bold=True)
+                            else:
+                                self.show_message("Launching TensorBoard with available logs", 
+                                                duration=msg_duration, bold=True)
+                            
                             tensorboard_logger.run_tensorboard()
                         else:
-                            self.show_message("Hmmm. No TensorBoard logs found... Launching Tensorboard anyway", duration=msg_duration, bold=True)
+                            self.show_message("No TensorBoard logs found yet. Launching TensorBoard anyway.", 
+                                            duration=msg_duration, bold=True)
                             tensorboard_logger.run_tensorboard()
+
 
                         
                 elif exit_button_rect.collidepoint(event.pos):

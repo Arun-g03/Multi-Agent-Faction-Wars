@@ -410,6 +410,7 @@ class GameRenderer:
                         camera.zoom,
                         width=2)
 
+                    
                     # Interact Range
                     pygame.draw.circle(
                         self.screen,
@@ -422,6 +423,7 @@ class GameRenderer:
                         utils_config.CELL_SIZE *
                         camera.zoom,
                         width=2)
+
 
                     # 🎯 Highlight task target
                     if isinstance(agent.current_task, dict):
@@ -519,9 +521,18 @@ class GameRenderer:
                         task_info = "Task: None"
 
                     action = (
-                        agent.role_actions[agent.current_action]
-                        if 0 <= agent.current_action < len(agent.role_actions)
-                        else "None")
+                            agent.role_actions[agent.current_action]
+                            if isinstance(agent.current_action, int) and 0 <= agent.current_action < len(agent.role_actions)
+                            else "None"
+                        )
+
+
+                    if utils_config.SUB_TILE_PRECISION:
+                        pos_string = f"({round(agent.x)}, {round(agent.y)})"
+                    else:
+                        grid_x = int(agent.x // utils_config.CELL_SIZE)
+                        grid_y = int(agent.y // utils_config.CELL_SIZE)
+                        pos_string = f"Grid: ({grid_x}, {grid_y})"
 
                     self.render_tooltip(
                         f"ID: {agent.agent_id}\n"
@@ -529,8 +540,9 @@ class GameRenderer:
                         f"{task_info}\n"
                         f"Action: {action}\n"
                         f"Health: {agent.Health}\n"
-                        f"Position: ({round(agent.x)}, {round(agent.y)})"
+                        f"Position: {pos_string}"
                     )
+
 
 
 #    _____           _ _   _

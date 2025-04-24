@@ -69,7 +69,7 @@ def load_checkpoint(model_obj, path, device=None):
         # Load weights
         model_obj.load_state_dict(model_state)
 
-        # ✅ Always verify model weights after loading
+        # Always verify model weights after loading
         sample_weight = next(iter(model_obj.parameters())).flatten()[0].item()
         if utils_config.ENABLE_LOGGING: 
             logger.log_msg(

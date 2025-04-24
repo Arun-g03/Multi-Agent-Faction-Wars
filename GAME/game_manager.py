@@ -199,7 +199,7 @@ class GameManager:
 
     def step(self):
         try:
-            # 🧭 Handle camera movement input
+            # Handle camera movement input
             keys = pygame.key.get_pressed()
             self.handle_camera_movement(keys)
 
@@ -209,7 +209,7 @@ class GameManager:
                 agent.log_prob = None
                 agent.value = None
 
-            # 👥 Update each agent (movement, task execution, learning)
+            # Update each agent (movement, task execution, learning)
             for agent in self.agents[:]:
                 try:
                     if agent.Health <= 0:
@@ -220,13 +220,14 @@ class GameManager:
                         continue
 
                     hq_state = agent.faction.aggregate_faction_state()
+                    self.logger.log_msg(f"agent postion: {agent.x} {agent.y}")
                     agent.update(self.resource_manager, self.agents, hq_state, step=self.current_step)
 
                 except Exception as e:
                     print(f"An error occurred for agent {agent.role}: {e}")
                     traceback.print_exc()
 
-            # 🧠 Let agents share what they observed
+            # Let agents share what they observed
             for agent in self.agents:
                 agent.observe(
                     all_agents=self.agents,
@@ -234,11 +235,11 @@ class GameManager:
                     resource_manager=self.resource_manager
                 )
 
-            # 🏢 Let HQs assign strategies/tasks
+            # Let HQs assign strategies/tasks
             for faction in self.faction_manager.factions:
                 faction.update(self.resource_manager, self.agents, self.current_step)
 
-            # 🔁 Step forward
+            # Step forward
             self.current_step += 1
 
         except Exception as e:
@@ -639,7 +640,7 @@ class GameManager:
                                 self.logger.log_msg(
                                     "Window closed - Exiting game.", level=logging.INFO)
 
-                            # ✅ Flush and close the logger before quitting
+                            # Flush and close the logger before quitting
                             self.cleanup(QUIT=True)
                             
 
@@ -832,7 +833,7 @@ class GameManager:
                         agents_of_role = [a for a in self.agents if a.role == role]
                         clone_best_agents(agents_of_role)
 
-                    # ✅ Finally: clear memory for all agents
+                    # Finally: clear memory for all agents
                     for agent in self.agents:
                         agent.ai.clear_memory()
 
@@ -1001,6 +1002,18 @@ class GameManager:
             self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
         if keys[pygame.K_MINUS]:  # Zoom out
             self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
+
+    def cleanup(self, QUIT):
+        if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger = TensorBoardLogger()
+            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
+
+        
+
+        if QUIT:
+            pygame.quit()
+            sys.exit()  # Ensure the system fully exits when quitting the game
+            print("[INFO] - Game_manager.py ---- Game closed successfully.")
 
 
 #    ____                              _        _____                 _
