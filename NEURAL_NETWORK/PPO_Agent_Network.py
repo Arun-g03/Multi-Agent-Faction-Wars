@@ -123,51 +123,7 @@ class PPOModel(nn.Module):
         return action.item(), dist.log_prob(action), value.item()
     
 
-    def choose_action_batch(self, state_batch, valid_masks=None):
-        """
-        Batched version of choose_action().
-        Args:
-            state_batch: Tensor [B, input_dim]
-            valid_masks: List of index sets (or None) per agent for contextual action masking
-        Returns:
-            actions: [B] numpy array of action indices
-            log_probs: [B] numpy array of log_probs
-            values: [B] numpy array of state values
-        """
-        if state_batch is None or len(state_batch) == 0:
-            raise ValueError("Empty state_batch provided to choose_action_batch.")
-
-        logits, values = self.ai.forward(state_batch)
-        probs = torch.zeros_like(logits)
-
-        for i in range(len(state_batch)):
-            agent_logits = logits[i]
-
-            if valid_masks and valid_masks[i] is not None:
-                mask = torch.full_like(agent_logits, float('-inf'))
-                mask[valid_masks[i]] = agent_logits[valid_masks[i]]
-                agent_logits = mask
-
-            agent_probs = torch.softmax(agent_logits, dim=-1)
-
-            if torch.isnan(agent_probs).any() or torch.isinf(agent_probs).any():
-                raise ValueError(f"[PROBS ERROR] NaNs/Infs in batch index {i} logits!")
-
-            probs[i] = agent_probs
-
-        if self.training_mode == "train":
-            dist = torch.distributions.Categorical(probs)
-            actions = dist.sample()
-            log_probs = dist.log_prob(actions)
-        else:
-            actions = torch.argmax(probs, dim=-1)
-            log_probs = torch.log(torch.gather(probs, 1, actions.unsqueeze(-1)).squeeze(-1))
-
-        return (
-            actions.cpu().numpy(),
-            log_probs.cpu().numpy(),
-            values.squeeze(-1).cpu().numpy()
-        )
+    
 
 
     
@@ -213,150 +169,125 @@ class PPOModel(nn.Module):
 
         :param mode: 'train' or 'evaluate'
         """
-        required_keys = ["states", "actions",
-                         "log_probs", "rewards", "values", "dones"]
+        try:
 
-        if mode == 'train':
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    "[AGENT NETWORK] Training Agent...", level=logging.DEBUG)
+            required_keys = ["states", "actions", "log_probs", "rewards", "values", "dones"]
 
-            # Check if memory is populated
-            if not all(len(self.memory[k]) > 0 for k in required_keys):
+            if mode == 'train':
                 if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        "[ERROR] Training :skipped Memory buffer is incomplete or empty. " +
-                        ", ".join(
-                            f"{k}={len(self.memory[k])}" for k in required_keys),
-                        level=logging.ERROR)
-                return
+                    logger.log_msg("[AGENT NETWORK] Training Agent...", level=logging.DEBUG)
 
-            # Ensure sufficient transitions for training
-            if len(self.memory["rewards"]) < 10:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[WARNING] Training skipped: Not enough transitions in memory. "
-                        f"Current transitions: {len(self.memory['rewards'])}",
-                        level=logging.WARNING)
-                return
+                # Check if memory is populated
+                if not all(len(self.memory[k]) > 0 for k in required_keys):
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            "[ERROR] Training :skipped Memory buffer is incomplete or empty. " +
+                            ", ".join(f"{k}={len(self.memory[k])}" for k in required_keys),
+                            level=logging.ERROR)
+                    return
 
-            # Convert stored memory to tensors
-            states = torch.tensor(self.memory["states"], dtype=torch.float32, device=self.device)
-            actions = torch.tensor(self.memory["actions"], dtype=torch.long, device=self.device)
-            log_probs_old = torch.stack(self.memory["log_probs"]).detach()
-            rewards = self.memory["rewards"]
-            local_values  = torch.tensor(self.memory["values"],       dtype=torch.float32, device=self.device)
-            global_values = torch.tensor(self.memory["global_values"],dtype=torch.float32, device=self.device)
-            dones = torch.tensor(self.memory["dones"], dtype=torch.float32, device=self.device)
-            # Compute returns and advantages using GAE
-            try:
-                returns, advantages = self.compute_gae(
-                    rewards, 
-                    local_values, 
-                    global_values, 
-                    dones
-                )
-            except ValueError as e:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[ERROR] Failed to compute GAE: {e}",
-                        level=logging.ERROR)
-                return
+                # Ensure sufficient transitions for training
+                if len(self.memory["rewards"]) < 10:
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"[WARNING] Training skipped: Not enough transitions in memory. "
+                            f"Current transitions: {len(self.memory['rewards'])}",
+                            level=logging.WARNING)
+                    return
 
-            # Determine effective number of training epochs
-            dataset_size = len(self.memory["rewards"])
-            batch_size = 32
-            indices = np.arange(dataset_size)
-            ppo_epochs = getattr(self, 'ppo_epochs', 10)
-            batches_per_epoch = max(1, int(dataset_size) // int(batch_size))
-            effective_epochs = min(ppo_epochs, batches_per_epoch)
+                # Convert stored memory to tensors
+                states = torch.tensor(self.memory["states"], dtype=torch.float32, device=self.device)
+                actions = torch.tensor(self.memory["actions"], dtype=torch.long, device=self.device)
+                log_probs_old = torch.stack(self.memory["log_probs"]).detach().to(self.device)
+                rewards = self.memory["rewards"]
+                local_values = torch.tensor(self.memory["values"], dtype=torch.float32, device=self.device)
+                global_values = torch.tensor(self.memory["global_values"], dtype=torch.float32, device=self.device)
+                dones = torch.tensor(self.memory["dones"], dtype=torch.float32, device=self.device)
 
-            for epoch in range(effective_epochs):
-                np.random.shuffle(indices)
-                for start in range(0, dataset_size, batch_size):
-                    end = start + batch_size
-                    batch_idx = indices[start:end]
+                # Compute returns and advantages using GAE
+                try:
+                    returns, advantages = self.compute_gae(rewards, local_values, global_values, dones)
+                except ValueError as e:
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(f"[ERROR] Failed to compute GAE: {e}", level=logging.ERROR)
+                    return
 
-                    states_batch = states[batch_idx]
-                    actions_batch = actions[batch_idx]
-                    log_probs_old_batch = log_probs_old[batch_idx]
-                    advantages_batch = advantages[batch_idx]
-                    returns_batch = returns[batch_idx]
+                # Now process each experience one by one (no batching)
+                for idx in range(len(self.memory["rewards"])):
+                    state = states[idx:idx+1]  # single experience
+                    action = actions[idx:idx+1]
+                    log_prob_old = log_probs_old[idx:idx+1]
+                    advantage = advantages[idx:idx+1]
+                    return_ = returns[idx:idx+1]
 
-                    #Move all batches to model's device
-                    states_batch = states_batch.to(self.device)
-                    actions_batch = actions_batch.to(self.device)
-                    log_probs_old_batch = log_probs_old_batch.to(self.device)
-                    advantages_batch = advantages_batch.to(self.device)
-                    returns_batch = returns_batch.to(self.device)
+                    # Forward pass through the model
+                    logits, new_values = self.ai(state)
 
-                    logits, new_values = self.ai(states_batch)
-
-
-                    if torch.isnan(logits).any().item(
-                    ) or torch.isinf(logits).any().item():
+                    # Check for NaN or Inf values in the logits or probabilities
+                    if torch.isnan(logits).any() or torch.isinf(logits).any():
                         if utils_config.ENABLE_LOGGING:
-                            logger.log_msg(
-                                f"[TRAIN LOGITS ERROR] NaNs in logits during training epoch {epoch}",
-                                level=logging.ERROR)
+                            logger.log_msg(f"[TRAIN LOGITS ERROR] NaNs in logits during training", level=logging.ERROR)
                         return
 
                     probs = torch.softmax(logits, dim=-1)
-                    if torch.isnan(probs).any().item(
-                    ) or torch.isinf(probs).any().item():
+
+                    if torch.isnan(probs).any() or torch.isinf(probs).any():
                         if utils_config.ENABLE_LOGGING:
-                            logger.log_msg(
-                                f"[TRAIN PROBS ERROR] NaNs in probs during training epoch {epoch}",
-                                level=logging.ERROR)
+                            logger.log_msg(f"[TRAIN PROBS ERROR] NaNs in probs during training", level=logging.ERROR)
                         return
 
-                    dist = Categorical(probs)
-                    new_log_probs = dist.log_prob(actions_batch)
+                    dist = torch.distributions.Categorical(probs)
+                    new_log_probs = dist.log_prob(action)
                     entropy = dist.entropy().mean()
 
-                    ratio = torch.exp(new_log_probs - log_probs_old_batch)
-                    surr1 = ratio * advantages_batch
-                    surr2 = torch.clamp(
-                        ratio,
-                        1 - self.clip_epsilon,
-                        1 + self.clip_epsilon) * advantages_batch
+                    # Calculate the ratio and surrogates
+                    ratio = torch.exp(new_log_probs - log_prob_old)
+                    surr1 = ratio * advantage
+                    surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantage
                     policy_loss = -torch.min(surr1, surr2).mean()
 
-                    value_loss = (returns_batch -
-                                  new_values.squeeze(-1)).pow(2).mean()
+                    value_loss = (return_ - new_values.squeeze(-1)).pow(2).mean()
                     loss = policy_loss + 0.5 * value_loss - self.entropy_coeff * entropy
 
+                    # Backpropagation
                     self.optimizer.zero_grad()
                     loss.backward()
-                    if utils_config.ENABLE_TENSORBOARD:
-                        TensorBoardLogger().log_scalar(
-                            f"Agent_{self.AgentID}/PolicyLoss", policy_loss.item(), self.total_updates)
-                        TensorBoardLogger().log_scalar(
-                            f"Agent_{self.AgentID}/ValueLoss", value_loss.item(), self.total_updates)
-                        TensorBoardLogger().log_scalar(
-                            f"Agent_{self.AgentID}/TotalLoss", loss.item(), self.total_updates)
-                        TensorBoardLogger().log_scalar(
-                            f"Agent_{self.AgentID}/Entropy", entropy.item(), self.total_updates)
-                    
-                    
+
+                    # Clip gradients
                     torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
+
                     self.total_updates += 1
                     self.optimizer.step()
 
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
-                            f"[TRAIN] Epoch {epoch + 1}: Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
+                            f"[TRAIN] Loss={loss.item():.4f}, PolicyLoss={policy_loss.item():.4f}, "
+                            f"ValueLoss={value_loss.item():.4f}, Entropy={entropy.item():.4f}",
                             level=logging.DEBUG)
 
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    "[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg("[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
 
-        elif mode == 'evaluate':
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    "[EVALUATE MODE] No training applied.",
-                    level=logging.DEBUG)
+            elif mode == 'evaluate':
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg("[EVALUATE MODE] No training applied.", level=logging.DEBUG)
+
+
+
+            elif mode == 'evaluate':
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        "[EVALUATE MODE] No training applied.",
+                        level=logging.DEBUG)
+        
+        except Exception as e:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(f"[ERROR] Exception in PPOAgent.train: {e}", level=logging.ERROR)
+                    print(f"[DEBUG] rewards: {type(rewards)}, len={len(rewards)}")
+                    traceback.print_exc()
+                return
+                
+        
 
         
 

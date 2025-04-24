@@ -42,7 +42,7 @@ class CreditsRenderer:
                 center=(self.screen.get_width() // 2, 150 + i * 40))
             self.screen.blit(rendered, rect)
 
-        pygame.display.flip()
+        pygame.display.update()
 
     def run(self):
         running = True

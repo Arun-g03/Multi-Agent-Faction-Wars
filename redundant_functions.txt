@@ -1,0 +1,56 @@
+Redundant (uncalled) functions grouped by file:
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_base.py:
+def is_within_detection_range
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_behaviours.py:
+def explore
+def forage_apple
+def get_agent_by_location
+def handle_eliminate_task
+def handle_explore_task
+def handle_gather_task
+def handle_move_to_task
+def heal_with_apple
+def mine_gold
+def patrol
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_communication.py:
+def agent_to_agent
+def broadcast
+def clear_messages
+def get_latest_reports
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\AGENT\agent_factions.py:
+
+def clear_experience_buffer
+def is_under_attack
+
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\GAME\game_manager.py:
+def get_agent_state
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\GAME\game_rules.py:
+def resolve_conflict
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\NEURAL_NETWORK\HQ_Network.py:
+def convert_state_to_tensor
+def has_memory
+
+
+
+📄 C:\Users\arun-\OneDrive - University College Birmingham\Uni work\Year 3\Final Year Project\MultiAgent Faction Wars - Repo\UTILITIES\utils_logger.py:
+def _launch
+def log_histogram
+def log_metrics
+def log_text
+def plot_boxplot
+def plot_correlation_matrix
+def plot_heatmap
+def plot_histogram
+def plot_metrics
+def plot_pairplot
+def plot_single_metric
+def plot_violinplot
+def save_plot_as_image
+def send_to_tensorboard

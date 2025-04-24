@@ -9,6 +9,7 @@ from RENDER.Settings_Renderer import SettingsMenuRenderer
 from RENDER.Credits_Renderer import CreditsRenderer
 
 
+
 #    __  __    _    ___ _   _   __  __ _____ _   _ _   _
 #   |  \/  |  / \  |_ _| \ | | |  \/  | ____| \ | | | | |
 #   | |\/| | / _ \  | ||  \| | | |\/| |  _| |  \| | | | |
@@ -25,10 +26,10 @@ class MenuRenderer:
         self.font = get_font(24, MENU_FONT)
         self.selected_mode = None
         print("MenuRenderer initialised")
-        self.tensorboard_logger = TensorBoardLogger() 
+        tensorboard_logger = TensorBoardLogger() 
 
-    def draw_text(self, surface, text, font, size, colour, x, y):
-        font_obj = get_font(size, font)
+    def draw_text(self, surface, text, font, size, colour, x, y, bold=False):
+        font_obj = get_font(size, font, bold)
         text_surface = font_obj.render(text, True, colour)
         text_rect = text_surface.get_rect(center=(x, y))
         surface.blit(text_surface, text_rect)
@@ -89,15 +90,7 @@ class MenuRenderer:
             SCREEN_WIDTH // 2,
             base_y - 100
         )
-        self.draw_text(
-            self.screen,
-            "Created as part of my BSC Computer Science final year project",
-            MENU_FONT,
-            20,
-            WHITE,
-            SCREEN_WIDTH // 2,
-            base_y - 70
-        )
+        
         self.draw_text(self.screen, "Main Menu", MENU_FONT,
                     28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
 
@@ -132,12 +125,12 @@ class MenuRenderer:
         log_dir = "RUNTIME_LOGS/Tensorboard_logs"
         log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
 
-        if log_files_exist:
-            tensorboard_button_rect = self.create_button(
-                self.screen, "Tensorboard", MENU_FONT, button_font_size, BLUE, (0, 0, 150), (0, 0, 200),
-                center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
-            )
-
+        
+        tensorboard_button_rect = self.create_button(
+            self.screen, " Launch Tensorboard", MENU_FONT, button_font_size, BLUE, (0, 0, 150), (0, 0, 200),
+            center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
+        )
+        
         exit_button_rect = self.create_button(
             self.screen, "Exit", MENU_FONT, button_font_size, RED, (
                 150, 0, 0), (200, 0, 0),
@@ -146,10 +139,8 @@ class MenuRenderer:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                 # Access the singleton instance
-                self.tensorboard_logger.stop_tensorboard() 
-                sys.exit()
+                
+                self.cleanup(QUIT=True)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if start_button_rect.collidepoint(event.pos):
@@ -177,16 +168,29 @@ class MenuRenderer:
                     credits.run()
 
                 elif tensorboard_button_rect.collidepoint(event.pos):
-                    TensorBoardLogger.run_tensorboard()
+                    log_dir = "RUNTIME_LOGS/Tensorboard_logs"
+                    log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+                    
+                    # Create the logger and check if it's None (TensorBoard disabled)
+                    tensorboard_logger = TensorBoardLogger()
+                    msg_duration = utils_config.FPS*3*4
+                    if tensorboard_logger is None:
+                        # TensorBoard is disabled in config
+                        self.show_message("TensorBoard is disabled in settings. Please enable it first.", duration=msg_duration, bold=True)
+                    else:
+                        if log_files_exist:
+                            tensorboard_logger.run_tensorboard()
+                        else:
+                            self.show_message("Hmmm. No TensorBoard logs found... Launching Tensorboard anyway", duration=msg_duration, bold=True)
+                            tensorboard_logger.run_tensorboard()
 
+                        
                 elif exit_button_rect.collidepoint(event.pos):
                     print("[INFO] Exiting game...")
-                    pygame.quit()
                     
-                    self.tensorboard_logger.stop_tensorboard() # Kill TensorBoard if running
-                    sys.exit()
+                    self.cleanup(QUIT=True)
 
-        pygame.display.flip()
+        pygame.display.update()
         return True
 
 
@@ -217,7 +221,7 @@ class MenuRenderer:
             else:
                 try:
                     # Load existing models for training
-                    return {"mode": "train", "load_existing": True, "models": load_choice["models"]}
+                    return self.render_menu()
                 except:
                     self.MenuRenderer()            
                 
@@ -259,15 +263,14 @@ class MenuRenderer:
             self.screen, "Back", MENU_FONT, 20, DARK_GREY, (120, 120, 120), (80, 80, 80),
             SCREEN_WIDTH // 2 - button_width // 2, SCREEN_HEIGHT // 2 + 100, button_width, 40)
 
-        pygame.display.flip()
+        pygame.display.update()
 
         # Wait for a selection
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    self.tensorboard_logger.stop_tensorboard()
-                    sys.exit()
+                    
+                    self.cleanup(QUIT=True)
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if train_button.collidepoint(event.pos):
@@ -307,16 +310,14 @@ class MenuRenderer:
             self.screen, "Back", MENU_FONT, 20, DARK_GREY, (120, 120, 120), (80, 80, 80),
             SCREEN_WIDTH // 2 - button_width // 2, SCREEN_HEIGHT // 2 + 100, button_width, 40)
 
-        pygame.display.flip()
+        pygame.display.update()
 
         # Wait for a selection
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    self.tensorboard_logger.stop_tensorboard()
-                    sys.exit()
-
+                    
+                    self.cleanup(QUIT=True)
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if load_button.collidepoint(event.pos):
                         selected_models = self.select_models_by_role()
@@ -428,12 +429,13 @@ class MenuRenderer:
 
 
         
-    def show_message(self, message, duration=1000):
+    def show_message(self, message, duration=1000, bold=False):
         """
         Shows a message on screen for a specified duration.
         """
         SCREEN_WIDTH = utils_config.SCREEN_WIDTH
         SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
+        
         
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))  # Semi-transparent black
@@ -441,9 +443,9 @@ class MenuRenderer:
         self.screen.blit(overlay, (0, 0))
         
         self.draw_text(self.screen, message, MENU_FONT, 24, WHITE,
-                    SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+                    SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, bold=bold)
         
-        pygame.display.flip()
+        pygame.display.update()
         
         # Wait for specified duration
         pygame.time.wait(duration)
@@ -514,13 +516,12 @@ class MenuRenderer:
                     (0, 120, 0) if continue_enabled else GREY,
                     SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 60, 200, 40)
 
-            pygame.display.flip()
+            pygame.display.update()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    self.tensorboard_logger.stop_tensorboard()
-                    sys.exit()
+                    
+                    self.cleanup(QUIT=True)
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
@@ -585,3 +586,15 @@ class MenuRenderer:
             role = "Unknown"
 
         return f"{role:<10} | {episode:<10} | {reward:<10}"
+
+
+    def cleanup(self, QUIT):
+        if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger = TensorBoardLogger()
+            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
+
+
+        if QUIT:
+            pygame.quit()
+            sys.exit()  # Ensure the system fully exits when quitting the game
+            print("[INFO] - MainMenu_Renderer ---- Game closed successfully.")

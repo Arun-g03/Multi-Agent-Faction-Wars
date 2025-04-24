@@ -21,7 +21,7 @@ logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
 pygame.init()
 
 
-
+Game_Title = 'Multi-agent competitive and cooperative strategy (MACCS) - Simulation'
 
 
 
@@ -36,8 +36,7 @@ class GameRenderer:
             camera=None):
         pygame.font.init()  # Initialise the font module
         self.screen = screen  # Use the screen passed as argument
-        pygame.display.set_caption(
-            'Multi-agent competitive and cooperative strategy (MACCS) - Simulation')
+        pygame.display.set_caption(Game_Title)
         # Use cached font for displaying faction IDs on bases
         self.font = get_font(24)
         self.attack_sprite_sheet = pygame.image.load(
@@ -320,13 +319,15 @@ class GameRenderer:
         ))
 
         # Time
-        elapsed_time = pygame.time.get_ticks() // 1000
+        start_time = getattr(self, 'start_time', pygame.time.get_ticks())
+        if not hasattr(self, 'start_time'):
+            self.start_time = start_time
+        elapsed_time = (pygame.time.get_ticks() - self.start_time) // 1000
         hours, minutes, seconds = elapsed_time // 3600, (elapsed_time % 3600) // 60, elapsed_time % 60
         lines.append(get_text_surface(
             f"Time: {hours:02d}:{minutes:02d}:{seconds:02d}",
             GAME_FONT, font_size, (255, 255, 255)
         ))
-
         # Resources
         lines.append(get_text_surface("Resources available:", GAME_FONT, font_size, (255, 255, 255)))
         lines.append(get_text_surface(
@@ -433,7 +434,11 @@ class GameRenderer:
                                     f"[HUD TARGET] Agent {agent.agent_id} Task -> Type: {task_type}, Target: {target}",
                                     level=logging.DEBUG)
 
-                            target_position = target.get("position")
+                            target_position = target.get("position", None)  # Get position, or None if not found
+
+                            # Handle None case
+                            if target_position is None:
+                                target_position = (0, 0)  # Default position if None
                             target_type = target.get("type")
                             target_x = target_y = None
 
@@ -516,8 +521,7 @@ class GameRenderer:
                     action = (
                         agent.role_actions[agent.current_action]
                         if 0 <= agent.current_action < len(agent.role_actions)
-                        else f"Idle ({agent.current_action})"
-                    )
+                        else "None")
 
                     self.render_tooltip(
                         f"ID: {agent.agent_id}\n"

@@ -12,7 +12,7 @@ import UTILITIES.utils_config as utils_config
 #   |____/ \___|\__|\__|_|_| |_|\__, |___/ |_|  |_|\___|_| |_|\__,_|
 #                               |___/
 
-
+SettingsTITLE = "Settings Menu"
 class SettingsMenuRenderer:
     """ Class for rendering the settings menu. """
     def __init__(self, screen):
@@ -25,7 +25,7 @@ class SettingsMenuRenderer:
         self.input_text = ""
         self.cursor_visible = True
         self.cursor_timer = 0
-
+        pygame.display.set_caption(SettingsTITLE)
         # Define category labels
         self.sidebar_items = [
             "debugging", "episode settings", "screen",
@@ -98,11 +98,13 @@ class SettingsMenuRenderer:
 
         
 
-    def draw_text(self, text, size, colour, x, y):
-        font_obj = get_font(size, SETTINGS_FONT)
+    def draw_text(self, text, size, colour, x, y, bold=False):
+        font_obj = get_font(size, SETTINGS_FONT, bold)
         text_surface = font_obj.render(text, True, colour)
         text_rect = text_surface.get_rect(topleft=(x, y))
         self.screen.blit(text_surface, text_rect)
+    
+    
 
     def create_button(
             self,
@@ -141,6 +143,7 @@ class SettingsMenuRenderer:
 
     def render(self):
         self.screen.fill(BLACK)
+        self.draw_text("SETTINGS", 36, WHITE, 20, 20, bold=True)  # Larger font size for the title
         self.cursor_timer += 1
         if self.cursor_timer >= 30:
             self.cursor_visible = not self.cursor_visible
@@ -151,11 +154,10 @@ class SettingsMenuRenderer:
             selected = (label == self.selected_category)
             color = GREY if selected else DARK_GREY
             btn = self.create_button(
-                label.upper(), SETTINGS_FONT, 20, color, (120, 120, 120), (180, 180, 180), 20, y, 200, 40)
+                label.upper(), SETTINGS_FONT, 20, color, (120, 120, 120), (180, 180, 180), 20, y, 210, 40)
             if pygame.mouse.get_pressed()[0] and btn.collidepoint(
                     pygame.mouse.get_pos()):
                 self.selected_category = label
-
         settings = self.settings_by_category.get(self.selected_category, [])
         step_buttons = []
         for i, setting in enumerate(settings):
@@ -208,17 +210,23 @@ class SettingsMenuRenderer:
         reset_all_btn = self.create_button(
             "Reset All", SETTINGS_FONT, 20, GREY, (180, 180, 180), (120, 120, 120),
             20, 500, 200, 50)
-        note_text = "Tip: You can click on a value to input in a custom number. Type and press Enter to confirm"
-        screen_width = self.screen.get_width()
-        self.draw_text(note_text, 24, GREY, 50, 560)
+       # Do this:
+        self.draw_text("Tip: You can click on a value to input in a custom number.", 
+                       24, 
+                       GREY, 
+                       50, 
+                       560)
+        self.draw_text("Type and press Enter to confirm", 
+                       24, 
+                       GREY, 
+                       50, 
+                       590)
 
-        pygame.display.flip()
-
+        pygame.display.update()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                TensorBoardLogger.stop_tensorboard()
-                sys.exit()
+                
+                self.cleanup(QUIT=True)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 for i, setting in enumerate(settings):
@@ -235,6 +243,15 @@ class SettingsMenuRenderer:
                 if back_btn.collidepoint(event.pos):
                     return False
                 if save_return_btn.collidepoint(event.pos):
+                # Apply any pending input before saving
+                    if self.input_mode and self.input_field:
+                        try:
+                            value = float(self.input_text) if '.' in self.input_text else int(self.input_text)
+                            self.input_field["value"] = value
+                        except ValueError:
+                            print(f"Invalid input for {self.input_field['key']}. Invalid input: {self.input_text}")
+                            pass  # Invalid input, keep the old value
+                    
                     self.saved = True
                     return False
                 if reset_all_btn.collidepoint(event.pos):
@@ -301,4 +318,13 @@ class SettingsMenuRenderer:
                 settings[setting["key"]] = setting["value"]
         return settings
 
+    def cleanup(self, QUIT):
+        if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger = TensorBoardLogger()
+            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
 
+
+        if QUIT:
+            pygame.quit()
+            sys.exit()  # Ensure the system fully exits when quitting the game
+            print("[INFO] - Settings_renderer.py ---- Game closed successfully.")

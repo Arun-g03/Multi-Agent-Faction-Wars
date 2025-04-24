@@ -353,7 +353,4 @@ class HQ_Network(nn.Module):
     def save_model(self, path):
         save_checkpoint(self, path)
 
-    def load_model(self, path):
-        load_checkpoint(self, path)
-
-
+    

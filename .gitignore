@@ -1,3 +1,5 @@
 __pycache__/
 RUNTIME_LOGS/
 RUNTIME_LOGS/LOGS/
+newenv/
+build/

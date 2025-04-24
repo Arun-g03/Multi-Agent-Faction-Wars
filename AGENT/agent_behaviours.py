@@ -104,8 +104,7 @@ class AgentBehaviour:
 
     def perform_task(self, state, resource_manager, agents):
         if state is None:
-            raise RuntimeError(
-                f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
+            raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
 
         faction_id = self.agent.faction.id
 
@@ -113,84 +112,91 @@ class AgentBehaviour:
         if self.agent.current_task:
             task_type = self.agent.current_task.get("type")
             task_target = self.agent.current_task.get("target")
-            if not self.is_task_valid(
-                    task_type,
-                    task_target,
-                    resource_manager,
-                    agents):
-                logger.log_msg(
-                    f"[TASK INVALIDATED] Agent {self.agent.agent_id} dropping invalid task: {self.agent.current_task}",
-                    level=logging.WARNING)
+            if not self.is_task_valid(task_type, task_target, resource_manager, agents):
+                logger.log_msg(f"[TASK INVALIDATED] Agent {self.agent.agent_id} {self.agent.role} dropping invalid task: {self.agent.current_task}", level=logging.WARNING)
                 self.agent.current_task = None
                 self.agent.update_task_state(utils_config.TaskState.NONE)
 
-        #  Agent has no task — act independently
+        # No task to perform — acting independently
         if not self.agent.current_task:
-            valid_indices = self.get_valid_action_indices(
-                resource_manager, agents)
-            action_index, log_prob, value = self.ai.choose_action(
-                state, valid_indices=valid_indices)
+            valid_indices = self.get_valid_action_indices(resource_manager, agents)
+            action_index, log_prob, value = self.ai.choose_action(state, valid_indices=valid_indices)
 
             self.agent.current_action = action_index
             self.agent.log_prob = log_prob
             self.agent.value = value
 
-            task_state = self.perform_action(
-                action_index, state, resource_manager, agents)
+            task_state = self.perform_action(action_index, state, resource_manager, agents)
             reward = self.assign_reward_for_independent_action(task_state)
 
             if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[SELF] Agent {self.agent.role} has no task. Acting independently with action index {action_index}.",
-                    level=logging.INFO)
+                logger.log_msg(f"[SELF] Agent {self.agent.role} has no task. Acting independently with action index {action_index}.", level=logging.INFO)
 
             return reward, task_state
 
-        #  Task is ongoing
-        if self.agent.current_task.get(
-                "state") != utils_config.TaskState.ONGOING:
+        # Task is ongoing, especially for move_to tasks
+        if self.agent.current_task.get("state") != utils_config.TaskState.ONGOING:
             self.agent.current_task["state"] = utils_config.TaskState.ONGOING
 
         if utils_config.ENABLE_LOGGING:
-            logger.log_msg(
-                f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}",
-                level=logging.INFO)
+            logger.log_msg(f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}", level=logging.INFO)
 
+        # If the task is a "move_to" task, ensure the agent moves towards the target position
+        if self.agent.current_task.get("type") == "move_to":
+            target_position = self.agent.current_task.get("target", {}).get("position")
+            current_position = (self.agent.x, self.agent.y)
+
+            # Check if the agent has reached the target position (within a threshold)
+            if self.calculate_distance(current_position, target_position) <= utils_config.Agent_Interact_Range:
+                self.agent.update_task_state(utils_config.TaskState.SUCCESS)
+
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[TASK COMPLETE] Agent {self.agent.agent_id} reached target at {target_position}. Task completed.",
+                        level=logging.INFO)
+
+                reward = self.assign_reward_for_task_action(
+                    task_state=utils_config.TaskState.SUCCESS,
+                    task_type="move_to",
+                    agent=self.agent,
+                    target_position=target_position,
+                    current_position=current_position
+                )
+
+                return reward, utils_config.TaskState.SUCCESS
+
+
+        # If the agent is still performing the task (e.g., moving toward the target)
         action_index, log_prob, value = self.ai.choose_action(state)
         self.agent.current_action = action_index
         self.agent.log_prob = log_prob
         self.agent.value = value
 
-        if any(x != x or x == float("inf") or x == float("-inf")
-               for x in state):
-            raise ValueError(
-                f"[🔥 INVALID STATE] Agent {self.agent.agent_id} has NaN/Inf in state.")
+        task_state = self.perform_action(action_index, state, resource_manager, agents)
 
-        task_state = self.perform_action(
-            action_index, state, resource_manager, agents)
-
-        # 🧠 Optional task-action consistency check
+        # Optional task-action consistency check
         task_type = self.agent.current_task.get("type", "unknown")
         expected_method = utils_config.TASK_METHODS_MAPPING.get(task_type)
         actual_method = utils_config.ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
-        if expected_method != actual_method and task_state in [
-                utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
-            logger.log_msg(
-                f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_method}' but expected '{expected_method}' for task '{task_type}'.",
-                level=logging.INFO)
+        if expected_method != actual_method and task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+            logger.log_msg(f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_method}' but expected '{expected_method}' for task '{task_type}'.", level=logging.INFO)
             task_state = utils_config.TaskState.ONGOING
 
         reward = self.assign_reward_for_task_action(
             task_state=task_state,
             task_type=task_type,
             agent=self.agent,
-            target_position=self.agent.current_task.get(
-                "target", {}).get("position", (0, 0)),
+            target_position=self.agent.current_task.get("target", {}).get("position", (0, 0)),
             current_position=(self.agent.x, self.agent.y)
         )
 
-        self.agent.current_task["state"] = task_state
+        # Only update task state when task is finished (e.g., reached the target)
+        if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+            self.agent.current_task["state"] = utils_config.TaskState.NONE # Make them idle again
+            logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
+            self.agent.current_task = None
 
+        # Storing transition to memory
         self.agent.ai.store_transition(
             state=state,
             action=self.agent.current_action,
@@ -198,22 +204,12 @@ class AgentBehaviour:
             reward=reward,
             local_value=self.agent.value,
             global_value=0,
-            done=(
-                task_state in [
-                    utils_config.TaskState.SUCCESS,
-                    utils_config.TaskState.FAILURE]))
-
-        # Final cleanup on task end
-        if task_state in [
-                utils_config.TaskState.SUCCESS,
-                utils_config.TaskState.FAILURE]:
-            logger.log_msg(
-                f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.",
-                level=logging.INFO)
-            self.agent.current_task = None
-            self.agent.update_task_state(utils_config.TaskState.NONE)
+            done=(task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
+        )
 
         return reward, task_state
+
+
 
     def get_valid_action_indices(self, resource_manager, agents):
         role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
@@ -266,34 +262,68 @@ class AgentBehaviour:
 
         if task_type == "gather":
             for res in resource_manager.resources:
-                if hasattr(
-                        res,
-                        "grid_x") and (
-                        res.grid_x,
-                        res.grid_y) == position and not res.is_depleted():
+                if hasattr(res, "grid_x") and (res.grid_x, res.grid_y) == position and not res.is_depleted():
                     return True
             return False
 
         if task_type == "eliminate":
             for agent in agents:
-                if getattr(agent, "agent_id", None) == target.get(
-                        "id") and agent.Health > 0:
+                if getattr(agent, "agent_id", None) == target.get("id") and agent.Health > 0:
                     return True
             return False
 
         if task_type == "explore":
-            # Consider explore tasks valid unless you want stricter rules
+            # Consider explore tasks valid unless stricter validation is required
             return True
+
+        if task_type == "move_to":
+            position = target.get("position")
+            
+            # Guard: position must be a valid (x, y) tuple
+            if not position or not isinstance(position, tuple) or len(position) != 2:
+                logger.log_msg(
+                    f"[INVALID] move_to task rejected due to missing/invalid position: {position}",
+                    level=logging.WARNING
+                )
+                return False
+
+            terrain = resource_manager.terrain
+            try:
+                grid_x = int(position[0])
+                grid_y = int(position[1])
+
+                if (
+                    0 <= grid_x < len(terrain.grid) and
+                    0 <= grid_y < len(terrain.grid[0]) and
+                    terrain.grid[grid_x][grid_y]["type"] == "land"
+                ):
+                    return True
+                else:
+                    logger.log_msg(
+                        f"[INVALID] move_to out of bounds or non-land: ({grid_x}, {grid_y})",
+                        level=logging.WARNING
+                    )
+                    return True ##########
+            except Exception as e:
+                logger.log_msg(
+                    f"[EXCEPTION] Validating move_to task failed: {e}",
+                    level=logging.ERROR
+                )
+                return False
+
+
 
         return False  # Default to invalid
 
+
     def assign_reward_for_independent_action(self, task_state):
         if task_state == utils_config.TaskState.SUCCESS:
-            reward = 5
+            reward = 1
+
         elif task_state == utils_config.TaskState.FAILURE:
             reward = -2
         elif task_state == utils_config.TaskState.ONGOING:
-            reward = 1
+            reward = 0
         else:
             reward = -1
         if utils_config.ENABLE_TENSORBOARD and task_state is not None:
@@ -336,14 +366,14 @@ class AgentBehaviour:
 
         # Penalise task failure
         elif task_state == utils_config.TaskState.FAILURE:
-            reward = -5  # Penalise failure
+            reward = -50  # Penalise failure
             # Heavier penalty for failure with more distance
             reward -= 2 * \
                 self.calculate_distance(current_position, target_position)
 
         # Reward for ongoing tasks (neutral or progress-based)
         elif task_state == utils_config.TaskState.ONGOING:
-            reward = 2  # Neutral reward
+            reward = 1  # Neutral reward
 
             # Reward for moving closer to the target
             distance_travelled = self.calculate_distance(

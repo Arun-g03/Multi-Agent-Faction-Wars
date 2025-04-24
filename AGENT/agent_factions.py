@@ -248,11 +248,9 @@ class Faction():
 
         self.update_tasks(agents)
 
-        if any(agent.current_task is None for agent in self.agents):
-            self.assign_high_level_tasks()
+        self.assign_high_level_tasks()
 
-    def add_agent(self, agent):
-        self.agents.append(agent)
+    
 
     def remove_agent(self, agent):
         """
@@ -594,32 +592,42 @@ class Faction():
             logger.log_msg(
                 f"[HQ] Faction {self.id} assigning high-level tasks...",
                 level=logging.INFO)
+            
+        
 
-        # 🧠 Step 2: Assign tasks to idle agents based on HQ strategy
+        # Step 2: Assign tasks to idle agents based on HQ strategy
         for agent in self.agents:
-            if agent.current_task:
-                continue  # Skip agents that already have a task
+            if agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+                # Clear completed tasks
+                if agent.current_task:
+                    self.complete_task(agent.current_task["id"], agent, agent.current_task_state)
+                agent.current_task = None
+                #agent.update_task_state(utils_config.TaskState.NONE)
 
+            if agent.current_task:
+                continue  # Still busy with a valid task
+
+            # Assign a new task
             task = self.assign_task(agent)
             if task:
                 agent.current_task = task
+                agent.update_task_state(utils_config.TaskState.ONGOING)
 
-                # Support multiple agents per task
+                # Track assigned tasks
                 task_id = task["id"]
                 if task_id not in self.assigned_tasks:
                     self.assigned_tasks[task_id] = []
                 self.assigned_tasks[task_id].append(agent.agent_id)
 
-                # Optional debug print
+                # Logging
                 if utils_config.ENABLE_LOGGING:
-                    if utils_config.ENABLE_LOGGING:
-                        logger.log_msg(
-                            f"[TASK ASSIGNED] {agent.agent_id} => {task['type']} at {task['target'].get('position')}",
-                            level=logging.INFO)
-                    if utils_config.ENABLE_LOGGING:
-                        logger.log_msg(
-                            f"[DEBUG] {agent.agent_id} has task: {agent.current_task}",
-                            level=logging.DEBUG)
+                    logger.log_msg(
+                        f"[TASK ASSIGNED] {agent.agent_id} => {task['type']} at {task['target'].get('position')}",
+                        level=logging.INFO)
+                    logger.log_msg(
+                        f"[DEBUG] {agent.agent_id} has task: {agent.current_task}",
+                        level=logging.DEBUG)
+
 
     """
 
@@ -637,6 +645,11 @@ class Faction():
     def assign_task(self, agent) -> Optional[dict]:
         role = getattr(agent, "role", None)
         strategy = self.current_strategy or "NO_PRIORITY"
+
+        threats = [
+                    t for t in self.global_state.get("threats", [])
+                    if t["id"].faction_id != self.id
+                ]
 
         if role not in ["gatherer", "peacekeeper"]:
             if utils_config.ENABLE_LOGGING:
@@ -680,34 +693,58 @@ class Faction():
             return self.assign_explore_task(agent)  # Last fallback
 
         elif role == "peacekeeper":
-            if strategy == "ATTACK_THREATS":
-                threats = [
-                    t for t in self.global_state.get("threats", [])
-                    if t["id"].faction_id != self.id
-                ]
-                if threats:
-                    threat = min(
-                        threats,
-                        key=lambda t: self.calculate_threat_weight(
-                            agent,
-                            t))
+            current = agent.current_task
 
-                    # Check if the agent already has an eliminate task for this
-                    # threat
-                    current = agent.current_task
-                    already_eliminating = current and current.get(
-                        "type") == "eliminate" and current.get("target", {}).get("id") == threat["id"]
+            # 🔥 Priority: ELIMINATE THREAT
+            if strategy == "ATTACK_THREATS" and threats:
+                threat = min(threats, key=lambda t: self.calculate_threat_weight(agent, t))
+                already_eliminating = (
+                    current and
+                    current.get("type") == "eliminate" and
+                    current.get("target", {}).get("id") == threat["id"]
+                )
 
-                    if not already_eliminating:
-                        if current:
-                            if utils_config.ENABLE_LOGGING:
-                                logger.log_msg(
-                                    f"[REASSIGN] Clearing task '{current['type']}' to reassign eliminate task.",
-                                    level=logging.INFO)
-                            agent.current_task = None  # Clear old task
+                if not already_eliminating:
+                    if current:
+                        logger.log_msg(
+                            f"[OVERRIDE] Peacekeeper {agent.agent_id} switching from task '{current['type']}' to eliminate threat {threat['id']}",
+                            level=logging.INFO
+                        )
+                        # 🧹 Clear current task (move_to or explore)
+                        agent.current_task = None
+                        agent.update_task_state(utils_config.TaskState.NONE)
 
-                        return self.assign_eliminate_task(
-                            agent, threat["id"], threat["type"], threat["location"])
+                    # 🧠 Assign eliminate task
+                    return self.assign_eliminate_task(agent, threat["id"], threat["type"], threat["location"])
+
+            # ⚔️ Strategy is DEFEND HQ
+            if strategy == "DEFEND_HQ":
+                hq_position = self.home_base["position"]
+                already_defending = current and current.get("type") == "move_to" and \
+                                    current.get("target", {}).get("position") == hq_position
+
+                if not already_defending:
+                    if current:
+                        logger.log_msg(
+                            f"[REASSIGN] Peacekeeper {agent.agent_id} switching from '{current['type']}' to DefendHQ",
+                            level=logging.INFO)
+                        agent.current_task = None
+                        agent.update_task_state(utils_config.TaskState.NONE)
+                    return self.assign_move_to_task(agent, hq_position, label="DefendHQ")
+
+            # 🌍 Fallback to explore
+            if strategy != "DEFEND_HQ" and not threats:
+                is_explore_move = current and current.get("type") == "move_to" and current.get("id", "").startswith("Explore-")
+                if is_explore_move and agent.current_task_state == utils_config.TaskState.ONGOING:
+                    return current
+                return self.assign_explore_task(agent)
+
+            return current  # fallback: keep existing task if nothing changes
+
+
+
+
+            
 
         else:
             if utils_config.ENABLE_LOGGING:
@@ -728,33 +765,39 @@ class Faction():
 
     """
 
-    def assign_move_to_task(
-            self,
-            agent,
-            position,
-            label=None) -> Optional[dict]:
+    def assign_move_to_task(self, agent, position, label=None) -> Optional[dict]:
         """
         Assigns a simple move_to task to the given agent toward a position.
+        Ensures the agent sticks to this task until it reaches the target.
         """
-        if not position or not isinstance(
-                position, tuple) or len(position) != 2:
+        if not position or not isinstance(position, tuple) or len(position) != 2:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[MOVE_TO] Invalid target position for agent {agent.agent_id}: {position}",
                     level=logging.WARNING)
             return None
 
-        task_id = label or f"MoveTo-{position[0]}-{position[1]}-{agent.agent_id}"
-        target = {"position": position}
-
-        task = utils_config.create_task(self, "move_to", target, task_id)
+        # Format task_id consistently like mining tasks
+        task_id = label or f"MoveTo-{position}"
+        target = {
+            "position": position,
+            "type": "Location"
+        }
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
-                f"[MOVE_TO] Assigned agent {agent.agent_id} to move to {position} (task: {task_id})",
+                f"Created task: {task_id} for agent {agent.agent_id}",
                 level=logging.INFO)
 
+        task = utils_config.create_task(self, "move_to", target, task_id)
+
+        # Mark the task as ongoing
+        agent.current_task = task
+        agent.update_task_state(utils_config.TaskState.ONGOING)
+
         return task
+
+
 
     def assign_eliminate_task(
             self,
@@ -808,21 +851,49 @@ class Faction():
 
     def assign_explore_task(self, agent) -> Optional[dict]:
         terrain = self.resource_manager.terrain
-        unexplored_cells = [
-            (x, y)
-            for x in range(len(terrain.grid))
-            for y in range(len(terrain.grid[0]))
-            if terrain.grid[x][y]["faction"] != self.id
-            and terrain.grid[x][y]["type"] == "land"
-            and len(self.assigned_tasks.get(f"Explore-{x}-{y}", [])) < 2
-        ]
+
+        self.calculate_territory(terrain)  # track current control
+        logger.log_msg(f"[EXPLORE] Faction {self.id} controls {self.territory_count} tiles.", level=logging.INFO)
+
+        unexplored_cells = []
+        for x in range(len(terrain.grid)):
+            for y in range(len(terrain.grid[0])):
+                cell = terrain.grid[x][y]
+                task_key = f"Explore-{x}-{y}"
+                assigned_count = len(self.assigned_tasks.get(task_key, []))
+
+                if (
+                    cell["faction"] != self.id
+                    and cell["type"] == "land"
+                    and assigned_count < 2
+                ):
+                    unexplored_cells.append((x, y))
+
+        logger.log_msg(f"[EXPLORE] Found {len(unexplored_cells)} unexplored cells for agent {agent.agent_id}", level=logging.INFO)
 
         if unexplored_cells:
             cell_x, cell_y = random.choice(unexplored_cells)
-            return self.assign_move_to_task(
-                agent, (cell_x, cell_y), label=f"Explore-{cell_x}-{cell_y}")
+            task_id = f"Explore-({cell_x}, {cell_y})"
+            target = {"position": (cell_x, cell_y), "type": "Explore"}
 
+            logger.log_msg(f"Created task: {task_id} for agent {agent.agent_id}", level=logging.INFO)
+
+            task = utils_config.create_task(self, "move_to", target, task_id)
+
+            agent.current_task = task
+            agent.update_task_state(utils_config.TaskState.ONGOING)
+
+            if task_id not in self.assigned_tasks:
+                self.assigned_tasks[task_id] = []
+            self.assigned_tasks[task_id].append(agent.agent_id)
+
+            return task
+
+        logger.log_msg(f"[EXPLORE] No valid unexplored cells left for agent {agent.agent_id}", level=logging.WARNING)
         return None
+
+
+
 
     """
 
@@ -906,16 +977,12 @@ class Faction():
                 continue
 
             # If task completed, clear it
-            if agent.current_task_state in [
-                    utils_config.TaskState.SUCCESS,
-                    utils_config.TaskState.FAILURE]:
+            if agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
                 if agent.current_task:
-                    self.complete_task(
-                        agent.current_task["id"],
-                        agent,
-                        agent.current_task_state)
+                    self.complete_task(agent.current_task["id"], agent, agent.current_task_state)
                     agent.current_task = None
                     agent.update_task_state(utils_config.TaskState.NONE)
+
 
     def calculate_territory(self, terrain):
         """Calculate the number of cells owned by this faction."""
@@ -1081,7 +1148,7 @@ class Faction():
                 if not already_defending:
                     agent.current_task = self.assign_move_to_task(
                         agent, hq_pos, label="DefendHQ")
-                    agent.update_task_state(utils_config.TaskState.PENDING)
+                    agent.update_task_state(utils_config.TaskState.ONGOING)
                     logger.log_msg(
                         f"[DEFEND ASSIGN] Peacekeeper {agent.agent_id} assigned to move to HQ.",
                         level=logging.INFO)

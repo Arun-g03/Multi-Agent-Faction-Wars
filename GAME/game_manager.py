@@ -16,6 +16,7 @@ from ENVIRONMENT.env_terrain import Terrain
 from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
 from GAME.camera import Camera
 from RENDER.Game_Renderer import GameRenderer
+from RENDER.MainMenu_Renderer import MenuRenderer
 import UTILITIES.utils_config as utils_config
 from typing import Union, Dict, Any, Optional
 
@@ -639,14 +640,8 @@ class GameManager:
                                     "Window closed - Exiting game.", level=logging.INFO)
 
                             # ✅ Flush and close the logger before quitting
-                            if utils_config.ENABLE_TENSORBOARD:
-                                try:
-                                    TensorBoardLogger.close()
-                                except Exception as e:
-                                    raise e
-                            pygame.quit()
-                            TensorBoardLogger.stop_tensorboard()
-                            sys.exit()
+                            self.cleanup(QUIT=True)
+                            
 
                     self.step()
                     self.current_step += 1
@@ -655,7 +650,7 @@ class GameManager:
                         if isinstance(res, AppleTree):
                             res.update()
 
-                    resource_counts = {
+                    self.resource_counts = {
                         "gold_lumps": sum(
                             1 for res in self.resource_manager.resources if isinstance(
                                 res, GoldLump)), "gold_quantity": sum(
@@ -674,14 +669,14 @@ class GameManager:
                         self.agents,
                         self.episode,
                         self.current_step,
-                        resource_counts
+                        self.resource_counts
                     )
 
                     for agent in self.agents:
                         if agent.ai.memory["rewards"]:
                             episode_reward += agent.ai.memory["rewards"][-1]
 
-                    pygame.display.flip()
+                    pygame.display.update()
 
                     events = self.event_manager.get_events()
                     for event in events:
@@ -925,31 +920,42 @@ class GameManager:
 
 
 
-
+                menu_renderer = MenuRenderer(screen=self.screen)  # Ensure screen is passed
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")
+                
                 if utils_config.ENABLE_LOGGING:
                     self.logger.log_msg(
                         f"End of {self.mode} Episode {self.episode}",
                         level=logging.INFO)
                 self.episode += 1
 
-            if self.mode == "train" and self.episode > utils_config.EPISODES_LIMIT:
-                print(
-                    f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
-                pygame.quit()
-                return self.render_menu()
+                # If training is done, return to the main menu
+                if self.mode == "train" and self.episode > utils_config.EPISODES_LIMIT:
+                    print(f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
+                    
+                    
+                    # Return to the menu
+                    menu_renderer.show_message(f"Training completed after {utils_config.EPISODES_LIMIT} episodes", duration=3000)
+                    
+                    menu_renderer.render_menu()  # Switch back to the menu
+                    running = False  # End the game loop after training completes
+                    return running
 
-            return True
+                return True
 
+
+            
         except SystemExit:
+            print("Whoops - game_manager.py: SystemExit")
             print("[INFO] Game closed successfully.")
         except Exception as e:
             print(f"An error occurred in {self.mode}: {e}")
             traceback.print_exc()
-            pygame.quit()
-            TensorBoardLogger.stop_tensorboard()
-            sys.exit()
+            
+            self.cleanup(QUIT=True)
+
+    
 
     def handle_event(self, event):
         """

@@ -45,28 +45,7 @@ class Camera:
 
         return screen_x, screen_y
 
-    def apply_rect(self, rect):
-        """
-        Apply the camera offset and zoom factor to a rectangle's position.
-        """
-        return pygame.Rect(
-            (rect.x - self.x) * self.zoom,
-            (rect.y - self.y) * self.zoom,
-            rect.width * self.zoom,
-            rect.height * self.zoom
-        )
-
-    def zoom_in(self):
-        """
-        Zoom in by increasing the zoom factor.
-        """
-        self.zoom = min(self.zoom * 1.1, 4.0)  # Max zoom of 400%
-
-    def zoom_out(self):
-        """
-        Zoom out by decreasing the zoom factor.
-        """
-        self.zoom = max(self.zoom / 1.1, 0.5)  # Min zoom of 50%
+    
 
     def zoom_around_mouse(self, zoom_in, mouse_x, mouse_y):
         """

@@ -136,7 +136,7 @@ class BaseAgent:
             self.current_task = None  # Initialise the current task with None
             # Initialise the current task state with
             # utils_config.TaskState.NONE
-            self.current_task_state = utils_config.TaskState.NONE
+            self.current_task_state = utils_config.TaskState.NONE #Initialise the current task state with utils_config.TaskState.NONE
 
             # Initialise other components
             # Temporary experience buffer (for training, works like memory)
@@ -690,17 +690,7 @@ class BaseAgent:
     #   |_| |_| |_|\__,_| .__/  |_|  \___/|_|\___||___/  \__\___/  |_|_| |_|\__,_|\___/_/\_\ | |_|  \___/|_|\___|  \__,_|\___|\__|_|\___/|_| |_|___/ |
     #                   |_|                                                                   \_\                                                 /_/
 
-    def role_to_index(self, role):
-        """
-        Map roles to integer indices. Warn and default to 0 if role is unknown.
-        """
-        role_mapping = {"gatherer": 0,
-                        "peacekeeper": 1}  # Add more roles as necessary
-        if role not in role_mapping:
-            print(
-                f"Warning: Unknown role '{role}' encountered. Defaulting to 0.")
-        # Default to 0 (e.g., gatherer) if unknown
-        return role_mapping.get(role, 0)
+    
 
     def report_experience_to_hq(self, state, action, reward, next_state, done):
         """

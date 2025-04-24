@@ -2,7 +2,7 @@ import pygame
 
 # Constants for the menu screen
 MENU_FONT = "Segoe UI"         # Clean, modern UI font for menus
-GAME_FONT = "Press Start 2P"   # Pixel-style retro font, great for in-game HUDs
+GAME_FONT = "Roboto"   # Pixel-style retro font, great for in-game HUDs
 CREDITS_FONT = "Georgia"       # Serif font for a formal, readable credit roll
 SETTINGS_FONT = "Verdana"      # Clean sans-serif, easy to read in settings screens
 

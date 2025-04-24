@@ -251,6 +251,9 @@ class TensorBoardLogger:
 
 
     def stop_tensorboard(self):
+        """
+        Stop the TensorBoard process and clean up event files smaller than 2KB.
+        """
         if not self.tensorboard_process:
             print("\033[91m[TensorBoard] Stop called on TensorBoard but it was not started anyway.\033[0m")
             return
@@ -259,8 +262,25 @@ class TensorBoardLogger:
             print("\033[91m[TensorBoard] Shutting down...\033[0m")
             self.tensorboard_process.terminate()
             self.tensorboard_process.wait(timeout=3)
+
+            # Clean up event files smaller than 2KB
+            self.cleanup_event_files()
         else:
             print("\033[91m[TensorBoard] TensorBoard is not running.\033[0m")
+
+    def cleanup_event_files(self, log_dir="RUNTIME_LOGS/Tensorboard_logs"):
+        """
+        Clean up event files smaller than 2KB.
+        """
+        event_files = [f for f in os.listdir(log_dir) if f.startswith("events.out.")]
+        for file in event_files:
+            file_path = os.path.join(log_dir, file)
+            try:
+                if os.path.getsize(file_path) < 2048:  # Check if the file is smaller than 2KB
+                    os.remove(file_path)
+                    print(f"[TensorBoard] Deleted small event file: {file_path}")
+            except Exception as e:
+                print(f"[TensorBoard ERROR] Failed to delete {file_path}: {e}")
 
 
 class MatplotlibPlotter:
