@@ -122,6 +122,8 @@ class GameManager:
         self.models_loaded_once = False # Ensure models are loaded only once at the start
         self.exit_after_episode = False # Set to True if you want to exit the sim loop and return to menu after an episode
 
+
+        
     
         
 
@@ -221,7 +223,7 @@ class GameManager:
 
                     hq_state = agent.faction.aggregate_faction_state()
                     self.logger.log_msg(f"agent postion: {agent.x} {agent.y}")
-                    agent.update(self.resource_manager, self.agents, hq_state, step=self.current_step)
+                    agent.update(self.resource_manager, self.agents, hq_state, step=self.current_step, episode=self.episode)
 
                 except Exception as e:
                     print(f"An error occurred for agent {agent.role}: {e}")
@@ -238,6 +240,40 @@ class GameManager:
             # Let HQs assign strategies/tasks
             for faction in self.faction_manager.factions:
                 faction.update(self.resource_manager, self.agents, self.current_step)
+            plotter = MatplotlibPlotter()
+            
+
+            for agent in self.agents:
+                if agent.current_action is not None:
+                    role = agent.role
+                    action_index = agent.current_action
+
+                    one_hot = np.zeros((1, len(utils_config.ROLE_ACTIONS_MAP[role])), dtype=int)
+                    one_hot[0, action_index] = 1
+
+                    plotter.add_episode_matrix(
+                        name=f"{role}_actions",
+                        matrix=one_hot,
+                        step=self.current_step,
+                        episode=self.episode
+                    )
+
+
+                    task_type = agent.current_task.get("type", "none")
+
+                    task_index = utils_config.TASK_TYPE_MAPPING.get(task_type, 0)  # fallback to 'none' if missing
+                    num_task_types = len(utils_config.TASK_TYPE_MAPPING)
+
+                    one_hot = np.zeros((1, num_task_types), dtype=int)
+                    one_hot[0, task_index] = 1
+
+                    MatplotlibPlotter().add_episode_matrix(
+                        name=f"{agent.role}_task_distribution",
+                        matrix=one_hot,
+                        step=self.current_step,
+                        episode=self.episode
+                        )
+
 
             # Step forward
             self.current_step += 1
@@ -582,6 +618,7 @@ class GameManager:
                     communication_system=communication_system,
                     event_manager=event_manager,
                     network_type=network_type,
+                    
                 )
 
                 faction.next_agent_id += 1  # Increment the counter
@@ -740,7 +777,7 @@ class GameManager:
                     for role, reward in role_rewards.items():
                         print(f"Faction {faction.id} {role} reward: {reward}")
 
-                # 🔁 Train agents at the end of the episode
+                #  Train agents at the end of the episode
                 if self.mode == "train":
                     if utils_config.ENABLE_LOGGING:
                         self.logger.log_msg(
@@ -828,7 +865,7 @@ class GameManager:
 
                         self.best_scores_per_role[role] = top5
 
-                    # 🔁 Clone best agents per role into bottom 50% (softly)
+                    # Clone best agents per role into bottom 50% (softly)
                     for role in role_rewards:
                         agents_of_role = [a for a in self.agents if a.role == role]
                         clone_best_agents(agents_of_role)
@@ -836,11 +873,6 @@ class GameManager:
                     # Finally: clear memory for all agents
                     for agent in self.agents:
                         agent.ai.clear_memory()
-
-
-
-
-
 
 
                     for faction in self.faction_manager.factions:
@@ -924,6 +956,11 @@ class GameManager:
                 menu_renderer = MenuRenderer(screen=self.screen)  # Ensure screen is passed
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")
+
+                MatplotlibPlotter().flush_episode_heatmaps(
+                    tensorboard_logger=TensorBoardLogger()
+                )
+
                 
                 if utils_config.ENABLE_LOGGING:
                     self.logger.log_msg(

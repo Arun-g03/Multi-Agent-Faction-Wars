@@ -276,7 +276,7 @@ class HQ_Network(nn.Module):
         nearest_resource = g["nearest_resource"]["location"]
         nearest_threat = g["nearest_threat"]["location"]
         local_vector = [
-            nearest_resource[0] / 100.0,  # Normalize to map size if known
+            nearest_resource[0] / 100.0,  # Normalise to map size if known
             nearest_resource[1] / 100.0,
             nearest_threat[0] / 100.0,
             nearest_threat[1] / 100.0,
@@ -321,7 +321,7 @@ class HQ_Network(nn.Module):
             returns.insert(0, G)
         returns = torch.tensor(returns, dtype=torch.float32, device=device)
 
-        # Normalize returns
+        # Normalise returns
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
         # Forward pass with full input

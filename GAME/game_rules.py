@@ -17,7 +17,7 @@ RESOURCE_GATHER_RATE = {
 }
 
 FACTION_GOAL = {
-    'gold_collection': 100,
+    'gold_collection': 300,
     'food_collection': 500
 }
 

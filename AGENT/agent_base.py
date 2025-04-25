@@ -93,7 +93,6 @@ class BaseAgent:
             network_type_int = utils_config.NETWORK_TYPE_MAPPING.get(
                 network_type, 1)  # Default to "none" if not found
             
-            self.current_step = 0
 
             # Agent-specific initialisation
             self.x: float = x
@@ -104,6 +103,8 @@ class BaseAgent:
             self.resource_manager = resource_manager
             self.role_actions = role_actions[role]
             self.agent_id = utils_config.AgentIDStruc(faction.id, agent_id)
+            self.current_episode = 0
+            self.current_step = 0
 
             # Ensure a valid state size is always used
             self.state_size = state_size if state_size is not None else utils_config.DEF_AGENT_STATE_SIZE
@@ -130,7 +131,9 @@ class BaseAgent:
                 state_size=state_size,
                 action_size=len(self.role_actions),
                 role_actions=role_actions,
-                event_manager=event_manager
+                event_manager=event_manager,
+                current_step=self.current_step,
+                current_episode=self.current_episode
             )
 
             self.current_task = None  # Initialise the current task with None
@@ -320,11 +323,11 @@ class BaseAgent:
 #    \___|_| |_|\___/|___/\___|_| |_| |_.__/ \__, |  \__|_| |_|\___| |_| |_|\___|\__,_|_|  \__,_|_| |_| |_|\___|\__| \_/\_/ \___/|_|  |_|\_\
 #                                            |___/
 
-    def perform_task(self, state, resource_manager, agents):
+    def perform_task(self, state, resource_manager, agents, current_step=None, current_episode=None):
         """
         Execute the current task using the behavior component.
         """
-        return self.behavior.perform_task(state, resource_manager, agents)
+        return self.behavior.perform_task(state, resource_manager, agents, current_step, current_episode)
 
     def update_task_state(self, task_state):
         """
@@ -337,7 +340,7 @@ class BaseAgent:
                 f"{self.role} task state updated to {task_state}.",
                 level=logging.DEBUG)
 
-    def update(self, resource_manager, agents, hq_state, step=None):
+    def update(self, resource_manager, agents, hq_state, step=None, episode=None):
         """
         Update the agent's state. This includes:
         - Performing assigned tasks.
@@ -346,6 +349,7 @@ class BaseAgent:
 
         """
         self.current_step = step
+        self.current_episode = episode
         self._perception_cache = None
         try:
             # Log the current task before performing it
@@ -409,7 +413,9 @@ class BaseAgent:
 
             # Execute the current task or decide on a new action
             reward, task_state = self.perform_task(
-                state, resource_manager, agents)
+                state, resource_manager, agents, 
+                current_episode=self.current_episode, 
+                current_step=self.current_step)
             # Update the task state based on execution
             self.update_task_state(task_state)
 
@@ -646,7 +652,7 @@ class BaseAgent:
         core_state = [
             pos_x,   # X position
             pos_y,   # Y position
-            self.Health / 100, # Normalized health
+            self.Health / 100, # Normalised health
             nearest_threat["location"][0] / utils_config.WORLD_WIDTH if nearest_threat else -1, # Nearest threat X position
             nearest_threat["location"][1] / utils_config.WORLD_HEIGHT if nearest_threat else -1, # Nearest threat Y position 
             nearest_resource.x / utils_config.WORLD_WIDTH if nearest_resource else -1, # Nearest resource X position
@@ -661,7 +667,7 @@ class BaseAgent:
                 one_hot_task[task_type_index] = 1
 
         # === Task-Specific Info ===
-        # Normalized task target position
+        # Normalised task target position
         task_target = self.current_task.get("target", {}).get("position", (-1, -1)) if self.current_task else (-1, -1)
 
         if utils_config.SUB_TILE_PRECISION:
@@ -676,14 +682,14 @@ class BaseAgent:
             task_target_y = grid_target_y / grid_height if grid_target_y >= 0 else -1
 
 
-        # Normalized action index (or -1 if unset)
+        # Normalised action index (or -1 if unset)
         current_action = getattr(self, "current_action", -1)
         if current_action is None or not isinstance(current_action, int) or current_action < 0:
             current_action_norm = -1
         else:
             current_action_norm = current_action / len(self.role_actions)
 
-        # === Distance to Target (Normalized) ===
+        # === Distance to Target (Normalised) ===
         # Determine current position and safe target
         if utils_config.SUB_TILE_PRECISION:
             current_pos = (self.x, self.y)
@@ -699,7 +705,7 @@ class BaseAgent:
             if isinstance(target_data, dict) and "position" in target_data:
                 safe_target = target_data["position"]
 
-        # Calculate normalized distance
+        # Calculate normalised distance
         if (
             isinstance(safe_target, tuple)
             and len(safe_target) == 2

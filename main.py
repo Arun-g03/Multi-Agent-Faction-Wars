@@ -1,10 +1,6 @@
-from SHARED.core_imports import *
-from GAME.game_manager import GameManager
-from RENDER.Game_Renderer import GameRenderer
-from RENDER.MainMenu_Renderer import MenuRenderer
-import UTILITIES.utils_config as utils_config
 
-
+import subprocess
+import sys
 # Run the Start_up script to check/install dependencies before anything else
 startup_script = "UTILITIES\Startup_installer.py"
 
@@ -15,6 +11,11 @@ except subprocess.CalledProcessError:
 
 # Continue with main program after startup script dependency check
 
+from SHARED.core_imports import *
+from GAME.game_manager import GameManager
+from RENDER.Game_Renderer import GameRenderer
+from RENDER.MainMenu_Renderer import MenuRenderer
+import UTILITIES.utils_config as utils_config
 
 
 class MainGame:

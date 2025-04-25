@@ -22,7 +22,9 @@ class AgentBehaviour:
             state_size,
             action_size,
             role_actions,
-            event_manager):
+            event_manager,
+            current_step,
+            current_episode):
         """
         Initialise the unified behavior class for agents.
         :param agent: The agent instance.
@@ -30,6 +32,8 @@ class AgentBehaviour:
         :param action_size: Number of actions available to the agent.
         :param role_actions: Dictionary mapping roles to their valid actions.
         """
+        self.current_episode = current_episode
+        self.current_step = current_step
         self.agent = agent
         # This is where the model (PPO/DQN) is now accessible
         self.ai = self.agent.ai
@@ -43,6 +47,8 @@ class AgentBehaviour:
             logger.log_msg(
                 f"initialised behavior for {self.agent.role} with actions: {self.role_actions}.",
                 level=logging.DEBUG)
+        if utils_config.ENABLE_TENSORBOARD:
+            self.tensorboard_logger=TensorBoardLogger()
 
 
 #      _                _              _                  _        _        _
@@ -101,8 +107,9 @@ class AgentBehaviour:
 #   | _|\ V / _` | | || / _` |  _/ -_) |  _| ' \/ -_) / _ \ || |  _/ _/ _ \ '  \/ -_) / _ \  _| |  _| ' \/ -_) |  _/ _` (_-< / /
 #   |___|\_/\__,_|_|\_,_\__,_|\__\___|  \__|_||_\___| \___/\_,_|\__\__\___/_|_|_\___| \___/_|    \__|_||_\___|  \__\__,_/__/_\_\
 #
-
-    def perform_task(self, state, resource_manager, agents):
+    def perform_task(self, state, resource_manager, agents, current_step, current_episode):
+        self.current_step = current_step
+        self.current_episode = current_episode
         if state is None:
             raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
 
@@ -127,6 +134,7 @@ class AgentBehaviour:
             task_state = self.perform_action(action_index, state, resource_manager, agents)
             action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][action_index]
 
+            
             reward = self.assign_reward(
                 agent=self.agent,
                 task_type="independent",
@@ -180,6 +188,10 @@ class AgentBehaviour:
         actual_action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
         expected_method = utils_config.TASK_METHODS_MAPPING.get(task_type)
 
+    
+
+
+
         if expected_method != actual_action and task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
             logger.log_msg(f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_action}' but expected '{expected_method}' for task '{task_type}'.", level=logging.INFO)
             task_state = utils_config.TaskState.ONGOING
@@ -200,7 +212,7 @@ class AgentBehaviour:
             self.agent.current_task = None
 
         self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
-        
+    
         # === Behavior Debug Block ===
         if utils_config.ENABLE_LOGGING:
             logger.log_msg("="*60, level=logging.INFO)
@@ -217,8 +229,14 @@ class AgentBehaviour:
             logger.log_msg(f"Log Prob      : {self.agent.log_prob if hasattr(self.agent, 'log_prob') else 'None'}", level=logging.INFO)
             logger.log_msg(f"Value Est.    : {self.agent.value if hasattr(self.agent, 'value') else 'None'}", level=logging.INFO)
             logger.log_msg(f"Done?         : {task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE] if task_state else 'None'}", level=logging.INFO)
-            logger.log_msg("="*60, level=logging.INFO)        
+            logger.log_msg("="*60, level=logging.INFO) 
+
+
+
         
+
+       
+    
         return reward, task_state
 
 
@@ -330,9 +348,9 @@ class AgentBehaviour:
         reward = 0.0
         dist = self.calculate_distance(current_pos, target_pos)
 
-        # === Task Completion (Normalized Success) ===
+        # === Task Completion (Normalised Success) ===
         if task_state == utils_config.TaskState.SUCCESS:
-            reward += 1.0  # Base normalized reward
+            reward += 1.0  # Base normalised reward
             reward += max(0.0, 0.5 - 0.1 * dist)  # Efficiency bonus
 
             # Task-specific bonus
@@ -341,7 +359,7 @@ class AgentBehaviour:
             elif task_type == "eliminate":
                 reward += 0.5
 
-        # === Task Failure (Normalized Penalty) ===
+        # === Task Failure (Normalised Penalty) ===
         elif task_state == utils_config.TaskState.FAILURE:
             reward -= 1.0
             reward -= 0.05 * dist  # Soft penalty based on distance
@@ -369,7 +387,7 @@ class AgentBehaviour:
                 utils_config.TaskState.INVALID: -0.3
             }.get(task_state, -0.1)
 
-        # === Log Normalized Reward ===
+        # === Log Normalised Reward ===
         if utils_config.ENABLE_TENSORBOARD and task_state is not None:
             try:
                 episode = getattr(agent.faction, "episode", 0)
