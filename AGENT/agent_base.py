@@ -520,7 +520,8 @@ class BaseAgent:
 
     def detect_resources(self, resource_manager, threshold=utils_config.Agent_field_of_view, current_step=None):
         """
-        Optimized detection using squared distance, caching, and step throttling.
+        Optimised detection using squared distance, caching, and step throttling.
+        Handles both grid-based and sub-tile precision modes.
         """
         Throttle_steps = 1
         current_step = getattr(self, "current_step", 0)
@@ -529,18 +530,23 @@ class BaseAgent:
 
         self.last_resource_check_step = current_step
 
-        agent_grid_x = self.x // utils_config.CELL_SIZE
-        agent_grid_y = self.y // utils_config.CELL_SIZE
         threshold_sq = threshold ** 2
-
         detected_resources = []
 
         for resource in resource_manager.resources:
             if resource.is_depleted():
                 continue
 
-            dx = resource.grid_x - agent_grid_x
-            dy = resource.grid_y - agent_grid_y
+            if utils_config.SUB_TILE_PRECISION:
+                # Use precise x/y distance
+                dx = (resource.grid_x * utils_config.CELL_SIZE + resource.subtile_offset_x) - self.x
+                dy = (resource.grid_y * utils_config.CELL_SIZE + resource.subtile_offset_y) - self.y
+            else:
+                # Use grid cell snapping
+                agent_grid_x = self.x // utils_config.CELL_SIZE
+                agent_grid_y = self.y // utils_config.CELL_SIZE
+                dx = resource.grid_x - agent_grid_x
+                dy = resource.grid_y - agent_grid_y
 
             if dx * dx + dy * dy <= threshold_sq:
                 detected_resources.append(resource)
@@ -549,30 +555,45 @@ class BaseAgent:
         return detected_resources
 
 
+
     def detect_threats(self, all_agents, enemy_hq, current_step=None):
-        """Detect threats (enemy agents or HQs) within local view — with throttling and caching."""
-        # Determine current step
+        """
+        Detect threats (enemy agents or HQs) within local view — supports grid and sub-tile precision modes.
+        """
         current_step = current_step or getattr(self, "current_step", 0)
-        throttle_steps = 1 # Throttle the threat detection to once per step
+        throttle_steps = 1
 
         if hasattr(self, "last_threat_check_step") and current_step - self.last_threat_check_step < throttle_steps:
             return getattr(self, "cached_detected_threats", [])
 
         self.last_threat_check_step = current_step
-
         threats = []
+
+        # View radius is always in pixels
         perception_radius_px = self.local_view * utils_config.CELL_SIZE
         radius_sq = perception_radius_px ** 2
 
-        # Detect enemy agents
+        # === Detect enemy agents ===
         for agent in all_agents:
             if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, utils_config.AgentIDStruc):
                 continue
             if agent.agent_id == self.agent_id or agent.agent_id.faction_id == self.faction.id:
                 continue
 
-            dx = agent.x - self.x
-            dy = agent.y - self.y
+            # Distance logic — grid or precise
+            if utils_config.SUB_TILE_PRECISION:
+                dx = agent.x - self.x
+                dy = agent.y - self.y
+            else:
+                self_gx = self.x // utils_config.CELL_SIZE
+                self_gy = self.y // utils_config.CELL_SIZE
+                other_gx = agent.x // utils_config.CELL_SIZE
+                other_gy = agent.y // utils_config.CELL_SIZE
+                dx = other_gx - self_gx
+                dy = other_gy - self_gy
+                dx *= utils_config.CELL_SIZE
+                dy *= utils_config.CELL_SIZE
+
             if dx * dx + dy * dy > radius_sq:
                 continue
 
@@ -587,12 +608,24 @@ class BaseAgent:
                 logger.log_msg(
                     f"Agent {self.agent_id} detected threat: AgentID {agent.agent_id}, "
                     f"Faction {agent.agent_id.faction_id}, at location ({agent.x}, {agent.y}).",
-                    level=logging.DEBUG)
+                    level=logging.DEBUG
+                )
 
-        # Detect enemy HQ
+        # === Detect enemy HQ ===
         if "position" in enemy_hq and enemy_hq.get("faction_id") is not None:
-            dx = enemy_hq["position"][0] - self.x
-            dy = enemy_hq["position"][1] - self.y
+            hq_x, hq_y = enemy_hq["position"]
+
+            if utils_config.SUB_TILE_PRECISION:
+                dx = hq_x - self.x
+                dy = hq_y - self.y
+            else:
+                self_gx = self.x // utils_config.CELL_SIZE
+                self_gy = self.y // utils_config.CELL_SIZE
+                hq_gx = hq_x // utils_config.CELL_SIZE
+                hq_gy = hq_y // utils_config.CELL_SIZE
+                dx = (hq_gx - self_gx) * utils_config.CELL_SIZE
+                dy = (hq_gy - self_gy) * utils_config.CELL_SIZE
+
             if dx * dx + dy * dy <= radius_sq:
                 threats.append({
                     "id": utils_config.AgentIDStruc(faction_id=enemy_hq["faction_id"], agent_id="HQ"),
@@ -604,9 +637,9 @@ class BaseAgent:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Agent {self.agent_id} detected enemy HQ at location {enemy_hq['position']}.",
-                        level=logging.DEBUG)
+                        level=logging.DEBUG
+                    )
 
-        # Cache and return
         self.cached_detected_threats = threats
         return threats
 
@@ -670,16 +703,9 @@ class BaseAgent:
         # Normalised task target position
         task_target = self.current_task.get("target", {}).get("position", (-1, -1)) if self.current_task else (-1, -1)
 
-        if utils_config.SUB_TILE_PRECISION:
-            task_target_x = task_target[0] / utils_config.WORLD_WIDTH
-            task_target_y = task_target[1] / utils_config.WORLD_HEIGHT
-        else:
-            grid_target_x = int(task_target[0]) if task_target[0] >= 0 else -1
-            grid_target_y = int(task_target[1]) if task_target[1] >= 0 else -1
-            grid_width = utils_config.WORLD_WIDTH // utils_config.CELL_SIZE
-            grid_height = utils_config.WORLD_HEIGHT // utils_config.CELL_SIZE
-            task_target_x = grid_target_x / grid_width if grid_target_x >= 0 else -1
-            task_target_y = grid_target_y / grid_height if grid_target_y >= 0 else -1
+        task_target_x = task_target[0] / utils_config.WORLD_SCALE_X if task_target[0] >= 0 else -1
+        task_target_y = task_target[1] / utils_config.WORLD_SCALE_Y if task_target[1] >= 0 else -1
+
 
 
         # Normalised action index (or -1 if unset)

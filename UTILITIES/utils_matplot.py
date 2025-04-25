@@ -27,41 +27,57 @@ class MatplotlibPlotter:
         return cls._instance
 
     def _plot_to_tensor(self, fig):
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png')
-        buf.seek(0)
-        image = Image.open(buf).convert("RGB")
-        transform = transforms.ToTensor()
-        image_tensor = transform(image)
-        buf.close()
-        plt.close(fig)
-        return image_tensor
+        if fig is None:
+            print("[Plotter] WARNING: Received None figure.")
+            return None
 
+        try:
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png')
+            buf.seek(0)
+
+            image = Image.open(buf).convert("RGB")
+            transform = transforms.ToTensor()
+            image_tensor = transform(image)
+
+            buf.close()
+            plt.close(fig)
+            return image_tensor
+
+        except Exception as e:
+            print(f"[Plotter] Failed to convert figure to tensor: {e}")
+            return None
+     
     def update_image_plot(self, name, fig=None, tensorboard_logger=None, step=0):
-        save_dir = self.image_dir
-        if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
-            save_dir = tensorboard_logger.run_dir
-        os.makedirs(save_dir, exist_ok=True)
-        image_path = os.path.join(save_dir, f"{name}.png")
-
         if fig is None:
             fig = plt.gcf()
+
+        save_dir = self.image_dir
+        if tensorboard_logger and hasattr(tensorboard_logger, "run_dir") and utils_config.ENABLE_TENSORBOARD:
+            save_dir = tensorboard_logger.run_dir
+
+        os.makedirs(save_dir, exist_ok=True)
+        image_path = os.path.join(save_dir, f"{name}.png")
         fig.savefig(image_path)
         print(f"[Plotter] Saved plot to {image_path}")
 
-        if tensorboard_logger:
+        if tensorboard_logger and utils_config.ENABLE_TENSORBOARD:
             image_tensor = self._plot_to_tensor(fig)
-            tensorboard_logger.log_image(name, image_tensor, step)
-            print(f"[Plotter] Sent '{name}' to TensorBoard.")
+            if image_tensor is not None:
+                tensorboard_logger.log_image(name, image_tensor, step)
+                print(f"[Plotter] Sent '{name}' to TensorBoard.")
+            else:
+                print(f"[Plotter] Skipped sending '{name}' to TensorBoard (image_tensor is None).")
 
+            
     def plot_heatmap(self, data, name="heatmap", title=None,
                      tensorboard_logger=None, step=0, episode=None,
                      save_data=True, save_as="npy"):
-        fig, ax = plt.subplots(figsize=(10, 2.5))  # Wider and flatter
+        fig, ax = plt.subplots(figsize=(12, 6))  # Wider and flatter
 
         if isinstance(data, pd.DataFrame):
             sns.heatmap(data, annot=True, fmt="d", cmap="viridis", ax=ax, cbar=True)
-            ax.set_xticklabels(data.columns, rotation=45, ha='right')
+            ax.set_xticklabels(data.columns, rotation=25, ha='right')
         else:
             sns.heatmap(data, annot=True, fmt="d", cmap="viridis", ax=ax, cbar=True)
 
@@ -93,6 +109,78 @@ class MatplotlibPlotter:
             except Exception as e:
                 print(f"[Plotter] Failed to save heatmap data: {e}")
 
+
+    
+    def plot_tile_grid(
+        self,
+        data,
+        name="tile_grid",
+        title=None,
+        tensorboard_logger=None,
+        step=0,
+        episode=None,
+        save_data=True,
+        save_as="npy"
+    ):
+        """
+        Plot a tile grid with text annotations: name + count.
+        """
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # Data should be a flat 1-row DataFrame or 1D array
+        if isinstance(data, pd.DataFrame):
+            labels = data.columns
+            counts = data.values.flatten()
+        else:
+            labels = [str(i) for i in range(len(data))]
+            counts = np.array(data).flatten()
+
+        n = len(labels)
+        grid_size = int(np.ceil(np.sqrt(n)))
+
+        # Create grid
+        xs, ys = np.meshgrid(np.arange(grid_size), np.arange(grid_size))
+        xs, ys = xs.flatten(), ys.flatten()
+
+        for i in range(n):
+            ax.text(xs[i], ys[i], f"{labels[i]}\n{counts[i]}", 
+                    ha='center', va='center', 
+                    bbox=dict(facecolor='skyblue', edgecolor='black', boxstyle='round,pad=0.5'))
+
+        ax.set_xlim(-0.5, grid_size - 0.5)
+        ax.set_ylim(-0.5, grid_size - 0.5)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.invert_yaxis()
+
+        title = title or name.replace("_", " ").title()
+        if episode is not None:
+            title += f" (Episode {episode})"
+        ax.set_title(title)
+
+        file_name = f"{name}_ep{episode}" if episode is not None else name
+        save_dir = self.image_dir
+        if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
+            save_dir = tensorboard_logger.run_dir
+        os.makedirs(save_dir, exist_ok=True)
+
+        self.update_image_plot(name=file_name, fig=fig, tensorboard_logger=tensorboard_logger, step=step)
+
+        if save_data:
+            try:
+                data_path = os.path.join(save_dir, f"{file_name}.{save_as}")
+                if save_as == "npy":
+                    np.save(data_path, data)
+                elif save_as == "csv":
+                    pd.DataFrame([counts], columns=labels).to_csv(data_path, index=False)
+                print(f"[Plotter] Saved data to {data_path}")
+            except Exception as e:
+                print(f"[Plotter] Failed to save tile grid data: {e}")
+
+
+    
+    
+    
     def add_episode_matrix(self, name, matrix, step=0, episode=None):
         self.episode_data[name].append((np.array(matrix), step, episode))
 
@@ -106,36 +194,48 @@ class MatplotlibPlotter:
                 stacked = np.vstack(matrices)
                 summary = np.sum(stacked, axis=0, keepdims=True)
 
-                action_labels = []
-                try:
-                    role_name = name.replace("_actions", "").replace("_task_distribution", "")
-                    
-                    if "task_distribution" in name:
-                        title = f"{role_name.title()} Task Summary"
-                    else:
-                        title = f"{role_name.title()} Action Summary"
+                # Infer role and label type
+                role_name = name.replace("_actions", "").replace("_task_distribution", "")
+                if "task_distribution" in name:
+                    label_source = list(utils_config.TASK_TYPE_MAPPING.keys())
+                    title = f"{role_name.title()} Task Summary"
+                else:
+                    label_source = utils_config.ROLE_ACTIONS_MAP.get(role_name, [str(i) for i in range(summary.shape[1])])
+                    title = f"{role_name.title()} Action Summary"
 
-                    action_labels = label_source[:summary.shape[1]]
-
-                except:
-                    action_labels = [str(i) for i in range(summary.shape[1])]
-
+                action_labels = label_source[:summary.shape[1]]
                 df = pd.DataFrame(summary, columns=action_labels)
 
+                # === Heatmap ===
                 self.plot_heatmap(
                     data=df,
                     name=name,
-                    title=f"{role.title()} Action Summary",
+                    title=title,
                     tensorboard_logger=tensorboard_logger,
                     step=step,
                     episode=episode,
                     save_data=save_data,
                     save_as=save_as
                 )
+
+                # === Tile Grid ===
+                self.plot_tile_grid(
+                    data=df,
+                    name=f"{name}_tiles",
+                    title=title + " (Tile View)",
+                    tensorboard_logger=tensorboard_logger,
+                    step=step,
+                    episode=episode,
+                    save_data=save_data,
+                    save_as=save_as
+                )
+
             except Exception as e:
-                print(f"[Plotter] Failed to plot {name}: {e}")
+                print(f"[Plotter] Failed to summarize {name}: {e}")
 
         self.episode_data.clear()
+
+
 
     def plot_saved_heatmaps(self, run_dir=None, pattern="*_heatmap_ep*.npy", resend_to_tensorboard=True):
         run_dir = run_dir or self.image_dir

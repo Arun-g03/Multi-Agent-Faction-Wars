@@ -1,6 +1,6 @@
 pygame
 noise
-numpy>=1.26.4
+numpy=1.26.4
 scipy>=1.12.0
 scikit-learn>=1.4.1
 pandas>=2.2.1

@@ -295,24 +295,20 @@ class AppleTree:
         """
         Render the apple tree, aligning the stump with the grid cell and shifting it to the left by half its width.
         """
-        # Calculate the screen position based on the camera's position and zoom
-        screen_x = (self.x - camera.x) * camera.zoom
-        screen_y = (self.y - camera.y) * camera.zoom
+        # Calculate the screen position based on the camera
+        screen_x, screen_y = camera.apply((self.x, self.y))
 
-        # Calculate the final size of the tree, incorporating
-        # utils_config.Tree_Scale_Img
-        final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR *
-                         camera.zoom * utils_config.Tree_Scale_Img)
-        tree_image_scaled = pygame.transform.scale(
-            self.image, (final_size, final_size))
+        # Calculate the final size of the tree
+        final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR * camera.zoom * utils_config.Tree_Scale_Img)
+        tree_image_scaled = pygame.transform.scale(self.image, (final_size, final_size))
 
-        # Offset the image so the bottom (stump) aligns with the cell and shift
-        # left by half its width
-        offset_x = final_size // 2  # Half the width
-        offset_y = final_size - utils_config.CELL_SIZE * \
-            camera.zoom  # Ensure alignment with the cell
-        screen.blit(tree_image_scaled, (screen_x -
-                    offset_x, screen_y - offset_y))
+        # Offset to align stump
+        offset_x = final_size // 2
+        offset_y = final_size - (utils_config.CELL_SIZE * camera.zoom)
+
+        # Draw tree image at corrected position
+        screen.blit(tree_image_scaled, (screen_x - offset_x, screen_y - offset_y))
+
 
 
 #     ____       _     _   _                             ____ _
@@ -410,22 +406,24 @@ class GoldLump:
         """
         Render the gold lump, centering it within the grid cell.
         """
-        # Calculate the screen position based on the camera's position and zoom
-        screen_x = (self.x - camera.x) * camera.zoom
-        screen_y = (self.y - camera.y) * camera.zoom
+        # Calculate the screen position using the camera
+        screen_x, screen_y = camera.apply((self.x, self.y))
 
-        # Calculate the final size based on utils_config.CELL_SIZE,
-        # utils_config.SCALING_FACTOR, and camera zoom
-        final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR *
-                         camera.zoom * utils_config.GoldLump_Scale_Img)
-        gold_image_scaled = pygame.transform.scale(
-            self.image, (final_size, final_size))
+        # Calculate the final size
+        final_size = int(
+            utils_config.CELL_SIZE *
+            utils_config.SCALING_FACTOR *
+            camera.zoom *
+            utils_config.GoldLump_Scale_Img
+        )
+        gold_image_scaled = pygame.transform.scale(self.image, (final_size, final_size))
 
-        # Offset the image to center it within the grid cell
+        # Offset to center the image in the cell
         offset_x = final_size // 2
         offset_y = final_size // 2
-        screen.blit(gold_image_scaled, (screen_x -
-                    offset_x, screen_y - offset_y))
+
+        screen.blit(gold_image_scaled, (screen_x - offset_x, screen_y - offset_y))
+
 
 
 # class Boulder:

@@ -252,18 +252,21 @@ class MenuRenderer:
             if load_choice is False:
                 # Start fresh training
                 # Create a new TensorBoard run for this fresh training session
-                tensorboard_logger = TensorBoardLogger()
-                if tensorboard_logger:
-                    TensorBoardLogger.reset()
+                
+                if utils_config.ENABLE_TENSORBOARD:
+                    TensorBoardLogger.reset()  # Reset first
+                    tensorboard_logger = TensorBoardLogger()
+                    tensorboard_logger.run_tensorboard()
                     print(f"[INFO] Created new TensorBoard run for fresh training")
                 
                 return {"mode": "train", "load_existing": False}
             else:
                 try:
                     # Create a new TensorBoard run for this continued training session
-                    tensorboard_logger = TensorBoardLogger()
-                    if tensorboard_logger:
-                        TensorBoardLogger.reset()
+                    if utils_config.ENABLE_TENSORBOARD:
+                        TensorBoardLogger.reset()  # Reset first
+                        tensorboard_logger = TensorBoardLogger()
+                        tensorboard_logger.run_tensorboard()
                         print(f"[INFO] Created new TensorBoard run for continued training")
                     
                     # Load existing models for training

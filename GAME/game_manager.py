@@ -240,39 +240,68 @@ class GameManager:
             # Let HQs assign strategies/tasks
             for faction in self.faction_manager.factions:
                 faction.update(self.resource_manager, self.agents, self.current_step)
-            plotter = MatplotlibPlotter()
             
+            
+
+            
+            plotter = MatplotlibPlotter()
+            tensorboard_logger = TensorBoardLogger()
 
             for agent in self.agents:
                 if agent.current_action is not None:
                     role = agent.role
                     action_index = agent.current_action
 
-                    one_hot = np.zeros((1, len(utils_config.ROLE_ACTIONS_MAP[role])), dtype=int)
-                    one_hot[0, action_index] = 1
+                    # ==== ACTIONS ====
+                    one_hot_action = np.zeros((1, len(utils_config.ROLE_ACTIONS_MAP[role])), dtype=int)
+                    one_hot_action[0, action_index] = 1
 
+                    # Add to plotter buffer
                     plotter.add_episode_matrix(
                         name=f"{role}_actions",
-                        matrix=one_hot,
+                        matrix=one_hot_action,
                         step=self.current_step,
                         episode=self.episode
                     )
 
+                    # Log to TensorBoard (histogram view)
+                    tensorboard_logger.log_distribution(
+                        name=f"{role}_action/{utils_config.ROLE_ACTIONS_MAP[role][action_index]}",
+                        values=np.array([1]),  # Must be numpy
+                        step=self.current_step
+                    )
 
-                    task_type = agent.current_task.get("type", "none")
+                    
 
-                    task_index = utils_config.TASK_TYPE_MAPPING.get(task_type, 0)  # fallback to 'none' if missing
+                    # ==== TASKS ====
+                    task_type = agent.current_task.get("type", "none") if agent.current_task else "none"
+                    task_index = utils_config.TASK_TYPE_MAPPING.get(task_type, 0)
                     num_task_types = len(utils_config.TASK_TYPE_MAPPING)
 
-                    one_hot = np.zeros((1, num_task_types), dtype=int)
-                    one_hot[0, task_index] = 1
+                    one_hot_task = np.zeros((1, num_task_types), dtype=int)
+                    one_hot_task[0, task_index] = 1
 
-                    MatplotlibPlotter().add_episode_matrix(
-                        name=f"{agent.role}_task_distribution",
-                        matrix=one_hot,
+                    # Add to plotter buffer
+                    plotter.add_episode_matrix(
+                        name=f"{role}_task_distribution",
+                        matrix=one_hot_task,
                         step=self.current_step,
                         episode=self.episode
-                        )
+                        
+                    )
+
+                    # Log to TensorBoard (histogram view)
+                    tensorboard_logger.log_distribution(
+                        name=f"{role}_task/{task_type}",
+                        values=np.array([1]),
+                        step=self.current_step
+                    )
+
+                    
+
+
+
+
 
 
             # Step forward
@@ -674,12 +703,19 @@ class GameManager:
                         if event.type == pygame.QUIT:
                             print("[INFO] Window closed. Exiting game...")
                             if utils_config.ENABLE_LOGGING:
-                                self.logger.log_msg(
-                                    "Window closed - Exiting game.", level=logging.INFO)
-
-                            # Flush and close the logger before quitting
+                                self.logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
                             self.cleanup(QUIT=True)
-                            
+
+                        elif event.type == pygame.KEYDOWN:
+                            if event.key in (pygame.K_PLUS, pygame.K_EQUALS):
+                                mouse_x, mouse_y = pygame.mouse.get_pos()
+                                self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
+                            elif event.key == pygame.K_MINUS:
+                                mouse_x, mouse_y = pygame.mouse.get_pos()
+                                self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
+
+
+                                                
 
                     self.step()
                     self.current_step += 1
@@ -1034,11 +1070,7 @@ class GameManager:
             self.camera.move(0, -self.camera.speed)
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             self.camera.move(0, self.camera.speed)
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        if keys[pygame.K_PLUS] or keys[pygame.K_EQUALS]:  # Zoom in
-            self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
-        if keys[pygame.K_MINUS]:  # Zoom out
-            self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
+       
 
     def cleanup(self, QUIT):
         if utils_config.ENABLE_TENSORBOARD:

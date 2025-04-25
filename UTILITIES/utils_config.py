@@ -44,7 +44,7 @@ ENABLE_TENSORBOARD = True
 
 EPISODES_LIMIT = 10 # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 4000
+STEPS_PER_EPISODE = 400
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -71,7 +71,7 @@ ModelMetrics_Path = "logs/"
 #
 
 # Pygame Settings
-FPS = 120  # Frames per second # Customise as needed!
+FPS = 20  # Frames per second # Customise as needed!
 
 # Screen Dimensions
 
@@ -81,7 +81,6 @@ ASPECT_RATIO = 0.6  # Customise as needed!
 SCREEN_WIDTH = 1920 * ASPECT_RATIO
 SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 
-SUB_TILE_PRECISION=False
 
 # FPS cap and screen dimenions
 # Change these to change the game window size
@@ -96,17 +95,29 @@ SUB_TILE_PRECISION=False
 
 # The size of each cell in the grid
 CELL_SIZE = 20
-# World Dimensions
-# Size of the in-game world
+
+# Number of cells in the world
 num_cells_width = 30  # Number of cells horizontally
 num_cells_height = 30  # Number of cells vertically
 
-# Size of each cell (in pixels)
+# Precision setting
+SUB_TILE_PRECISION = False
 
-
-# Calculate the world dimensions in pixels
+# First, calculate the world dimensions (in pixels)
 WORLD_WIDTH = num_cells_width * CELL_SIZE
 WORLD_HEIGHT = num_cells_height * CELL_SIZE
+
+# Then, calculate scaling based on precision
+GRID_WIDTH = num_cells_width
+GRID_HEIGHT = num_cells_height
+
+if SUB_TILE_PRECISION:
+    WORLD_SCALE_X = WORLD_WIDTH
+    WORLD_SCALE_Y = WORLD_HEIGHT
+else:
+    WORLD_SCALE_X = GRID_WIDTH
+    WORLD_SCALE_Y = GRID_HEIGHT
+
 
 
 # Perlin Noise Settings
@@ -335,7 +346,7 @@ State features mapping structure for the agent.
 # Agent Render Scale Factor
 AGENT_SCALE_FACTOR = 0.08  # Agent render scale factor # Recommend keep default
 
-Agent_field_of_view = 10  # Agent field of view # Customise as needed!
+Agent_field_of_view = 5  # Agent field of view # Customise as needed!
 Agent_Interact_Range = 2  # Agent interact range, Anything inside will be interactable
 
 

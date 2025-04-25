@@ -70,7 +70,8 @@ class Camera:
         self.y = world_mouse_y - mouse_y / self.zoom
 
         # Ensure the camera stays within the bounds of the world
-        self.x = max(0, min(utils_config.WORLD_WIDTH -
-                     self.screen_width / self.zoom, self.x))
-        self.y = max(0, min(utils_config.WORLD_HEIGHT -
-                     utils_config.SCREEN_HEIGHT / self.zoom, self.y))
+        self.x = max(0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
+        self.y = max(0, min(self.WORLD_HEIGHT - self.SCREEN_HEIGHT / self.zoom, self.y))
+
+
+

@@ -1068,7 +1068,7 @@ class Faction():
                 new_balance = current_balance - Agent_cost
                 self.gold_balance = new_balance
                 self.recruit_agent("peacekeeper")
-                print(f"{self.id} bought a Peacekeeper")
+                print(f"Faction {self.id} bought a Peacekeeper")
             else:
                 logger.log_msg(
                     f"[HQ EXECUTE] Not enough gold to recruit peacekeeper.",
@@ -1084,7 +1084,7 @@ class Faction():
                 new_balance = current_balance - Agent_cost
                 self.gold_balance = new_balance
                 self.recruit_agent("gatherer")
-                print(f"{self.id} bought a Gatherer")
+                print(f"Faction {self.id} bought a Gatherer")
             else:
                 logger.log_msg(
                     f"[HQ EXECUTE] Not enough gold to recruit gatherer.",
@@ -1281,10 +1281,19 @@ class Faction():
         Spawns a new agent instance of the given role using GameManager's spawn_agent method.
         """
         try:
-            from AGENT.agent_base import Peacekeeper, Gatherer
-
             spawn_x, spawn_y = self.home_base["position"]
-            agent_class = Peacekeeper if role == "peacekeeper" else Gatherer
+
+            # Determine agent class dynamically
+            from AGENT.agent_base import Peacekeeper, Gatherer
+            role_map = {
+                "peacekeeper": Peacekeeper,
+                "gatherer": Gatherer
+            }
+
+            if role not in role_map:
+                raise ValueError(f"Unknown agent role: {role}")
+
+            agent_class = role_map[role]
 
             agent = self.game_manager.spawn_agent(
                 base_x=spawn_x,
@@ -1295,26 +1304,27 @@ class Faction():
                 role_actions=utils_config.ROLE_ACTIONS_MAP,
                 communication_system=self.communication_system,
                 event_manager=self.game_manager.event_manager,
-                network_type=self.network_type  # "PPOModel", "DQNModel", etc.
+                network_type=self.network_type
             )
 
-            if agent:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[SPAWN] Created {role} for Faction {self.id} at ({agent.x}, {agent.y}).",
-                        level=logging.INFO)
-                return agent
-            else:
-                raise RuntimeError(
-                    "spawn_agent returned None (no valid location found).")
+            if not agent:
+                raise RuntimeError("spawn_agent returned None (no valid location found).")
 
-        except Exception as e:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
-                    f"[SPAWN ERROR] Failed to create agent: {str(e)}\n{traceback.format_exc()}",
-                    level=logging.ERROR)
-            raise ValueError(
-                f"Failed to create {role} agent for Faction {self.id}: {e}")
+                    f"[SPAWN] Created {role} for Faction {self.id} at ({agent.x}, {agent.y}).",
+                    level=logging.INFO
+                )
+
+            return agent
+
+        except Exception as e:
+            logger.log_msg(
+                f"[SPAWN ERROR] Failed to create agent: {str(e)}\n{traceback.format_exc()}",
+                level=logging.ERROR
+            )
+            raise
+
 
     def is_under_attack(self) -> bool:
         """

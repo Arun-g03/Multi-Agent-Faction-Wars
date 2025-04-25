@@ -70,7 +70,8 @@ class MainGame:
                     is_menu = menu_renderer.render_menu()
 
                     # Only act once the menu has completed
-                    if not is_menu and hasattr(menu_renderer, "pending_game_config"):
+                    if not is_menu and isinstance(getattr(menu_renderer, "pending_game_config", None), dict):
+
                         config = menu_renderer.pending_game_config
                         try:
                             game_manager = self.start_game(
@@ -79,11 +80,10 @@ class MainGame:
                                 load_existing=config.get("load_existing", False),
                                 models_to_load=config.get("models", {})
                             )
-                        except (TypeError, AttributeError):
-                            print("[ERROR] Invalid menu configuration")
+                        except:
                             is_menu = True
                             menu_renderer.render_menu()
-                            continue
+                            continue                            
 
                         if game_manager is None:
                             print("[ERROR] GameManager is None. Exiting.")

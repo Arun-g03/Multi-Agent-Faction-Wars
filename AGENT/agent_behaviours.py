@@ -750,7 +750,7 @@ class AgentBehaviour:
         interact_radius = utils_config.Agent_Interact_Range * utils_config.CELL_SIZE
         grid_radius = utils_config.Agent_Interact_Range
 
-        # 🔍 Detect valid gold lumps within range
+        # Detect valid gold lumps within range
         gold_resources = [
             res for res in self.agent.detect_resources(
                 self.agent.resource_manager,
@@ -758,20 +758,12 @@ class AgentBehaviour:
                 res,
                 GoldLump) and not res.is_depleted()]
 
-        # 🎯 Visual debug: draw search range and target (if any)
-        if utils_config.ENABLE_LOGGING:
-            screen = self.agent.event_manager.renderer.screen
-            center = (int(self.agent.x), int(self.agent.y))
-            pygame.draw.circle(screen, (255, 215, 0), center,
-                               interact_radius, 2)  # Gold = search ring
-
+        # Visual debug: draw search range and target (if any)
+        
         if gold_resources:
             gold_lump = gold_resources[0]
 
-            if utils_config.ENABLE_LOGGING:
-                pygame.draw.circle(screen, (255, 0, 0), (int(
-                    gold_lump.x), int(gold_lump.y)), 5)  # Red dot = target
-
+            
             # In range → mine
             if self.agent.is_near(gold_lump, interact_radius):
                 gold_lump.mine()
@@ -783,14 +775,14 @@ class AgentBehaviour:
                         f"Gold balance: {self.agent.faction.gold_balance}.", level=logging.INFO)
                 return utils_config.TaskState.SUCCESS
 
-            # ❌ Not close enough
+            # Not close enough
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} saw gold at ({gold_lump.x}, {gold_lump.y}) but is out of range. Mining failed.",
                     level=logging.INFO)
             return utils_config.TaskState.FAILURE
 
-        # ❌ No gold detected
+        # No gold detected
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} found no gold within range to mine.",
