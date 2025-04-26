@@ -22,6 +22,8 @@ from typing import Union, Dict, Any, Optional
 
 
 
+if utils_config.ENABLE_TENSORBOARD:
+    tensorboard_logger = TensorBoardLogger()
 
 
 
@@ -245,59 +247,77 @@ class GameManager:
 
             
             plotter = MatplotlibPlotter()
-            tensorboard_logger = TensorBoardLogger()
+            
 
-            for agent in self.agents:
-                if agent.current_action is not None:
-                    role = agent.role
-                    action_index = agent.current_action
+            # Log things to TensorBoard
+            if utils_config.ENABLE_TENSORBOARD:
+                for agent in self.agents:
+                    if agent.current_action is not None:
+                        role = agent.role
+                        action_index = agent.current_action
 
-                    # ==== ACTIONS ====
-                    one_hot_action = np.zeros((1, len(utils_config.ROLE_ACTIONS_MAP[role])), dtype=int)
-                    one_hot_action[0, action_index] = 1
+                        # ==== ACTIONS ====
+                        one_hot_action = np.zeros((1, len(utils_config.ROLE_ACTIONS_MAP[role])), dtype=int)
+                        one_hot_action[0, action_index] = 1
 
-                    # Add to plotter buffer
-                    plotter.add_episode_matrix(
-                        name=f"{role}_actions",
-                        matrix=one_hot_action,
-                        step=self.current_step,
-                        episode=self.episode
-                    )
+                        # Add to plotter buffer
+                        plotter.add_episode_matrix(
+                            name=f"{role}_actions",
+                            matrix=one_hot_action,
+                            step=self.current_step,
+                            episode=self.episode
+                        )
 
-                    # Log to TensorBoard (histogram view)
-                    tensorboard_logger.log_distribution(
-                        name=f"{role}_action/{utils_config.ROLE_ACTIONS_MAP[role][action_index]}",
-                        values=np.array([1]),  # Must be numpy
-                        step=self.current_step
-                    )
+                        # Log to TensorBoard (histogram view)
+                        tensorboard_logger.log_distribution(
+                            name=f"{role}_action/{utils_config.ROLE_ACTIONS_MAP[role][action_index]}",
+                            values=np.array([1]),  # Must be numpy
+                            step=self.current_step
+                        )
 
-                    
-
-                    # ==== TASKS ====
-                    task_type = agent.current_task.get("type", "none") if agent.current_task else "none"
-                    task_index = utils_config.TASK_TYPE_MAPPING.get(task_type, 0)
-                    num_task_types = len(utils_config.TASK_TYPE_MAPPING)
-
-                    one_hot_task = np.zeros((1, num_task_types), dtype=int)
-                    one_hot_task[0, task_index] = 1
-
-                    # Add to plotter buffer
-                    plotter.add_episode_matrix(
-                        name=f"{role}_task_distribution",
-                        matrix=one_hot_task,
-                        step=self.current_step,
-                        episode=self.episode
                         
-                    )
 
-                    # Log to TensorBoard (histogram view)
-                    tensorboard_logger.log_distribution(
-                        name=f"{role}_task/{task_type}",
-                        values=np.array([1]),
-                        step=self.current_step
-                    )
+                        # ==== TASKS ====
+                        task_type = agent.current_task.get("type", "none") if agent.current_task else "none"
+                        task_index = utils_config.TASK_TYPE_MAPPING.get(task_type, 0)
+                        num_task_types = len(utils_config.TASK_TYPE_MAPPING)
 
-                    
+                        one_hot_task = np.zeros((1, num_task_types), dtype=int)
+                        one_hot_task[0, task_index] = 1
+
+                        # Add to plotter buffer
+                        plotter.add_episode_matrix(
+                            name=f"{role}_task_distribution",
+                            matrix=one_hot_task,
+                            step=self.current_step,
+                            episode=self.episode
+                            
+                        )
+
+                        # Log to TensorBoard (histogram view)
+                        tensorboard_logger.log_distribution(
+                            name=f"{role}_task/{task_type}",
+                            values=np.array([1]),
+                            step=self.current_step
+                        )
+
+                        
+                    # ==== NEW: Log agent models once ====
+                    if not hasattr(agent, "has_logged_model"):
+                        agent.has_logged_model = False
+
+                    if not agent.has_logged_model and self.current_step == 0:
+                        try:
+                            real_state = agent.get_state(agent.resource_manager, self.agents, agent.faction, agent.faction.global_state)
+                            state_tensor = torch.tensor(real_state, dtype=torch.float32).unsqueeze(0).to(Training_device)
+                            
+                            # 💥 Critical fix: Log the .ai model, not the PPOModel wrapper
+                            tensorboard_logger.log_model(agent.ai, state_tensor, name=f"Agent_{agent.agent_id}_Model")
+                            
+                            agent.has_logged_model = True  # ✅ Mark it so we don't log again
+                        except Exception as e:
+                            print(f"[TensorBoard] Failed to log model graph for agent {agent.agent_id}: {e}")
+
 
 
 
@@ -769,7 +789,7 @@ class GameManager:
 
                 # TensorBoard: Episode summary
                 if utils_config.ENABLE_TENSORBOARD:
-                    TensorBoardLogger().log_scalar(
+                    tensorboard_logger.log_scalar(
                         "Episode/Steps_Taken", self.current_step, self.episode)
 
                 for faction in self.faction_manager.factions:
@@ -789,18 +809,18 @@ class GameManager:
 
                     # Log overall faction reward
                     if utils_config.ENABLE_TENSORBOARD:
-                        TensorBoardLogger().log_scalar(
+                        tensorboard_logger.log_scalar(
                             f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
-                        TensorBoardLogger().log_scalar(
+                        tensorboard_logger.log_scalar(
                             f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
-                        TensorBoardLogger().log_scalar(
+                        tensorboard_logger.log_scalar(
                             f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
-                        TensorBoardLogger().log_scalar(
+                        tensorboard_logger.log_scalar(
                             f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
 
                         # Log reward by role
                         for role, reward in role_rewards.items():
-                            TensorBoardLogger().log_scalar(
+                            tensorboard_logger.log_scalar(
                                 f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
 
                     print(f"Faction {faction.id} total reward: {total_reward}")
@@ -992,10 +1012,33 @@ class GameManager:
                 menu_renderer = MenuRenderer(screen=self.screen)  # Ensure screen is passed
                 # Wrap up the episode
                 print(f"End of {self.mode} Episode {self.episode}")
+            
+                
+                # Log HQ strategy distribution at the end
+                if utils_config.ENABLE_TENSORBOARD:
+                    #Gather and create all matplot plots
+                    MatplotlibPlotter().flush_episode_heatmaps(
+                        tensorboard_logger=tensorboard_logger
+                    )
 
-                MatplotlibPlotter().flush_episode_heatmaps(
-                    tensorboard_logger=TensorBoardLogger()
-                )
+
+
+
+                    for faction in self.faction_manager.factions:
+                        if hasattr(faction, "strategy_history") and faction.strategy_history:
+                            try:
+                                strategy_to_idx = {s: idx for idx, s in enumerate(utils_config.HQ_STRATEGY_OPTIONS)}
+                                indices = [strategy_to_idx.get(s, -1) for s in faction.strategy_history if s in strategy_to_idx]
+
+                                if indices:
+                                    tensorboard_logger.log_distribution(
+                                        name=f"Faction_{faction.id}/HQ_Strategy_Distribution_Final",
+                                        values=indices,
+                                        step=self.episode  # or self.current_step, but self.episode is cleaner
+                                    )
+                            except Exception as e:
+                                print(f"[TensorBoard] Failed to log final HQ strategy distribution for Faction {faction.id}: {e}")
+
 
                 
                 if utils_config.ENABLE_LOGGING:
@@ -1074,7 +1117,7 @@ class GameManager:
 
     def cleanup(self, QUIT):
         if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger = TensorBoardLogger()
+            
             tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
 
         

@@ -11,7 +11,7 @@ import os
 from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
 import UTILITIES.utils_config as utils_config
-from UTILITIES.utils_tensorboard import TensorBoardLogger
+
 
 
 class MatplotlibPlotter:
@@ -111,74 +111,6 @@ class MatplotlibPlotter:
 
 
     
-    def plot_tile_grid(
-        self,
-        data,
-        name="tile_grid",
-        title=None,
-        tensorboard_logger=None,
-        step=0,
-        episode=None,
-        save_data=True,
-        save_as="npy"
-    ):
-        """
-        Plot a tile grid with text annotations: name + count.
-        """
-        fig, ax = plt.subplots(figsize=(8, 6))
-
-        # Data should be a flat 1-row DataFrame or 1D array
-        if isinstance(data, pd.DataFrame):
-            labels = data.columns
-            counts = data.values.flatten()
-        else:
-            labels = [str(i) for i in range(len(data))]
-            counts = np.array(data).flatten()
-
-        n = len(labels)
-        grid_size = int(np.ceil(np.sqrt(n)))
-
-        # Create grid
-        xs, ys = np.meshgrid(np.arange(grid_size), np.arange(grid_size))
-        xs, ys = xs.flatten(), ys.flatten()
-
-        for i in range(n):
-            ax.text(xs[i], ys[i], f"{labels[i]}\n{counts[i]}", 
-                    ha='center', va='center', 
-                    bbox=dict(facecolor='skyblue', edgecolor='black', boxstyle='round,pad=0.5'))
-
-        ax.set_xlim(-0.5, grid_size - 0.5)
-        ax.set_ylim(-0.5, grid_size - 0.5)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.invert_yaxis()
-
-        title = title or name.replace("_", " ").title()
-        if episode is not None:
-            title += f" (Episode {episode})"
-        ax.set_title(title)
-
-        file_name = f"{name}_ep{episode}" if episode is not None else name
-        save_dir = self.image_dir
-        if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
-            save_dir = tensorboard_logger.run_dir
-        os.makedirs(save_dir, exist_ok=True)
-
-        self.update_image_plot(name=file_name, fig=fig, tensorboard_logger=tensorboard_logger, step=step)
-
-        if save_data:
-            try:
-                data_path = os.path.join(save_dir, f"{file_name}.{save_as}")
-                if save_as == "npy":
-                    np.save(data_path, data)
-                elif save_as == "csv":
-                    pd.DataFrame([counts], columns=labels).to_csv(data_path, index=False)
-                print(f"[Plotter] Saved data to {data_path}")
-            except Exception as e:
-                print(f"[Plotter] Failed to save tile grid data: {e}")
-
-
-    
     
     
     def add_episode_matrix(self, name, matrix, step=0, episode=None):
@@ -218,17 +150,7 @@ class MatplotlibPlotter:
                     save_as=save_as
                 )
 
-                # === Tile Grid ===
-                self.plot_tile_grid(
-                    data=df,
-                    name=f"{name}_tiles",
-                    title=title + " (Tile View)",
-                    tensorboard_logger=tensorboard_logger,
-                    step=step,
-                    episode=episode,
-                    save_data=save_data,
-                    save_as=save_as
-                )
+                
 
             except Exception as e:
                 print(f"[Plotter] Failed to summarize {name}: {e}")

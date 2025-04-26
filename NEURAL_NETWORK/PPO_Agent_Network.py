@@ -6,8 +6,12 @@ from NEURAL_NETWORK.Common import  Training_device, save_checkpoint, load_checkp
 
 import UTILITIES.utils_config as utils_config
 
+if utils_config.ENABLE_LOGGING:
+    logger = Logger(log_file="PPO_Agent_Network.txt", log_level=logging.DEBUG)
 
-logger = Logger(log_file="PPO_Agent_Network.txt", log_level=logging.DEBUG)
+if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger = TensorBoardLogger()
+
 
 #    ____  ____   ___    __  __           _      _
 #   |  _ \|  _ \ / _ \  |  \/  | ___   __| | ___| |
@@ -44,9 +48,20 @@ class PPOModel(nn.Module):
 
         
 
-        # Initialise other components of the agent
-        self.ai = Agent_Critic(state_size, action_size)
-        self.optimizer = optim.Adam(self.ai.parameters(), lr=learning_rate)
+        # Define the neural network architecture
+
+        self.shared_fc = nn.Sequential(
+            nn.Linear(state_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU()
+        )
+        self.actor = nn.Linear(128, action_size)
+        self.critic = nn.Linear(128, 1)
+
+        # Optimizer for the WHOLE PPOModel (not ai anymore)
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+
         self.total_updates = 0  # Track training updates across episodes
 
         self.lambda_ = lambda_
@@ -70,9 +85,21 @@ class PPOModel(nn.Module):
                 f"Agent_Network initialised successfully using PPO model (state_size={state_size}, "
                 f"action_size={action_size}, gamma={gamma}, clip_epsilon={clip_epsilon}, "
                 f"entropy_coeff={entropy_coeff}).", level=logging.INFO)
+        
         self.to(self.device)
 
-    
+        
+
+        
+
+
+
+
+    def forward(self, state):
+        shared = self.shared_fc(state)
+        logits = self.actor(shared)
+        value = self.critic(shared)
+        return logits, value
 
     def choose_action(self, state, valid_indices=None):
         if state is None:
@@ -87,7 +114,8 @@ class PPOModel(nn.Module):
                 f" AgentID: {self.AgentID}__State: {state}",
                 level=logging.DEBUG)
 
-        logits, value = self.ai.forward(state_tensor)
+        # 🛠️ KEY: Now call your OWN forward() directly
+        logits, value = self.forward(state_tensor)
 
         if valid_indices is not None:
             mask = torch.full_like(logits, float('-inf'))
@@ -109,10 +137,8 @@ class PPOModel(nn.Module):
                 f"Invalid mode: {self.training_mode}. Choose either 'train' or 'evaluate'.")
 
         if self.training_mode == "train":
-            # Sample from distribution during training
             action = dist.sample()
         else:
-            # Use deterministic action during evaluation
             action = torch.argmax(probs, dim=-1)
 
         if utils_config.ENABLE_LOGGING:
@@ -121,7 +147,8 @@ class PPOModel(nn.Module):
                 level=logging.DEBUG)
 
         return action.item(), dist.log_prob(action), value.item()
-    
+
+        
 
     
 
@@ -232,7 +259,7 @@ class PPOModel(nn.Module):
                         return_ = returns[batch_idx]
 
                         # Forward pass
-                        logits, new_values = self.ai(state)
+                        logits, new_values = self.forward(state)
                         probs = torch.softmax(logits, dim=-1)
                         dist = torch.distributions.Categorical(probs)
                         new_log_probs = dist.log_prob(action)
@@ -247,7 +274,7 @@ class PPOModel(nn.Module):
 
                         self.optimizer.zero_grad()
                         loss.backward()
-                        torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
+                        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=0.5)
                         self.optimizer.step()
                         self.total_updates += 1
 
@@ -268,7 +295,7 @@ class PPOModel(nn.Module):
                         return_ = returns[idx:idx+1]
 
                         # Forward pass through the model
-                        logits, new_values = self.ai(state)
+                        logits, new_values = self.forward(state)
 
                         # Check for NaN or Inf values in the logits or probabilities
                         if torch.isnan(logits).any() or torch.isinf(logits).any():
@@ -301,7 +328,7 @@ class PPOModel(nn.Module):
                         loss.backward()
 
                         # Clip gradients
-                        torch.nn.utils.clip_grad_norm_(self.ai.parameters(), max_norm=0.5)
+                        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=0.5)
 
                         self.total_updates += 1
                         self.optimizer.step()
@@ -314,6 +341,39 @@ class PPOModel(nn.Module):
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg("[TRAIN COMPLETE] PPO update applied.", level=logging.INFO)
+                
+                if utils_config.ENABLE_TENSORBOARD:
+                    try:
+                        hparams = {
+                            "learning_rate": self.optimizer.param_groups[0]["lr"],
+                            "gamma": self.gamma,
+                            "clip_epsilon": self.clip_epsilon,
+                            "entropy_coeff": self.entropy_coeff,
+                            "lambda_gae": self.lambda_
+                        }
+
+                        # 🛠 Calculate final reward directly from memory
+                        if len(self.memory["rewards"]) > 0:
+                            average_reward = sum(self.memory["rewards"]) / len(self.memory["rewards"])
+                        else:
+                            average_reward = 0.0  # Fallback if somehow no rewards
+
+                        final_metrics = {
+                            "final_reward": average_reward
+                        }
+
+                        tensorboard_logger.log_hparams(hparams, final_metrics)
+
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(
+                                f"[HPARAMS LOGGED] {hparams}, final_reward={average_reward:.2f}",
+                                level=logging.INFO
+                            )
+                    except Exception as e:
+                        print(f"[ERROR] Failed to log hparams: {e}")
+
+
+
 
             
 
@@ -398,36 +458,3 @@ class PPOModel(nn.Module):
         load_checkpoint(self, path)
 
     
-
-#       _    ____ _____ _   _ _____    ____ ____  ___ _____ ___ ____
-#      / \  / ___| ____| \ | |_   _|  / ___|  _ \|_ _|_   _|_ _/ ___|
-#     / _ \| |  _|  _| |  \| | | |   | |   | |_) || |  | |  | | |
-#    / ___ \ |_| | |___| |\  | | |   | |___|  _ < | |  | |  | | |___
-#   /_/   \_\____|_____|_| \_| |_|    \____|_| \_\___| |_| |___\____|
-#
-
-
-class Agent_Critic(nn.Module):
-    def __init__(self, input_size=100, action_size=10, device=Training_device):
-        super(Agent_Critic, self).__init__()
-        # Initialise the device to use (CPU or GPU)
-        self.device = device
-        # Dynamically determine input size
-        self.input_size = input_size
-
-        self.shared_fc = nn.Sequential(
-            nn.Linear(self.input_size, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU()
-        )
-        self.actor = nn.Linear(128, action_size)
-        self.critic = nn.Linear(128, 1)
-
-    def forward(self, state):
-        assert state.size(1) == self.input_size, \
-            f"Input size mismatch: Expected {self.input_size}, got {state.size(1)}"
-        shared = self.shared_fc(state)
-        logits = self.actor(shared)
-        value = self.critic(shared)
-        return logits, value

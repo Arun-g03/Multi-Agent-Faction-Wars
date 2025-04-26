@@ -3,12 +3,12 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-from UTILITIES.utils_tensorboard import TensorBoardLogger
 from RENDER.Common import MENU_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY, DARK_GREEN, get_font
 from RENDER.Settings_Renderer import SettingsMenuRenderer
 from RENDER.Credits_Renderer import CreditsRenderer
 
-
+if utils_config.ENABLE_TENSORBOARD:
+    tensorboard_logger = TensorBoardLogger()
 
 #    __  __    _    ___ _   _   __  __ _____ _   _ _   _
 #   |  \/  |  / \  |_ _| \ | | |  \/  | ____| \ | | | | |
@@ -25,7 +25,8 @@ class MenuRenderer:
         self.screen = screen
         self.font = get_font(24, MENU_FONT)
         self.selected_mode = None
-        print("MenuRenderer initialised")
+
+        
         
 
     def draw_text(self, surface, text, font, size, colour, x, y, bold=False):
@@ -188,7 +189,7 @@ class MenuRenderer:
                         log_files_exist = False
                     
                     # Get the current TensorBoard logger
-                    tensorboard_logger = TensorBoardLogger()
+                    
                     msg_duration = utils_config.FPS*3*4
                     
                     if tensorboard_logger is None:
@@ -254,8 +255,7 @@ class MenuRenderer:
                 # Create a new TensorBoard run for this fresh training session
                 
                 if utils_config.ENABLE_TENSORBOARD:
-                    TensorBoardLogger.reset()  # Reset first
-                    tensorboard_logger = TensorBoardLogger()
+                    tensorboard_logger.reset()  # Reset first
                     tensorboard_logger.run_tensorboard()
                     print(f"[INFO] Created new TensorBoard run for fresh training")
                 
@@ -265,7 +265,7 @@ class MenuRenderer:
                     # Create a new TensorBoard run for this continued training session
                     if utils_config.ENABLE_TENSORBOARD:
                         TensorBoardLogger.reset()  # Reset first
-                        tensorboard_logger = TensorBoardLogger()
+                        
                         tensorboard_logger.run_tensorboard()
                         print(f"[INFO] Created new TensorBoard run for continued training")
                     
@@ -282,7 +282,7 @@ class MenuRenderer:
                 return self.game_setup_menu()  # Return to mode selection
                 
             # Create a new TensorBoard run for this evaluation session
-            tensorboard_logger = TensorBoardLogger()
+            
             if tensorboard_logger:
                 TensorBoardLogger.reset()
                 print(f"[INFO] Created new TensorBoard run for evaluation")
@@ -646,7 +646,6 @@ class MenuRenderer:
 
     def cleanup(self, QUIT):
         if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger = TensorBoardLogger()
             tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
 
 

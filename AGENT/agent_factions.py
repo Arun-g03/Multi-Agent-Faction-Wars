@@ -46,6 +46,8 @@ class Faction():
             self.assigned_tasks = {}   # Track assigned tasks
             self.unvisited_cells = set()
             self.reports = []
+            self.strategy_history = []  # Track strategies chosen
+
             self.create_task = utils_config.create_task
             self.mode = mode
 
@@ -1034,8 +1036,10 @@ class Faction():
                 f"[HQ STRATEGY] No HQ network found. Falling back to NO_PRIORITY.",
                 level=logging.WARNING)
 
-        self.current_strategy = strategy  # SET current strategy
+        self.current_strategy = strategy
+        self.strategy_history.append(strategy)  # ✅ Track it
         return strategy
+
 
     def perform_HQ_Strategy(self, action):
         """

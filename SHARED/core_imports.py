@@ -44,8 +44,8 @@ import time
 
 # === Utilities ===
 
-from UTILITIES.utils_logger import Logger as Logger
-from UTILITIES.utils_tensorboard import TensorBoardLogger as TensorBoardLogger
-from UTILITIES.utils_matplot import MatplotlibPlotter as MatplotlibPlotter
+from UTILITIES.utils_logger import Logger
+from UTILITIES.utils_tensorboard import TensorBoardLogger
+from UTILITIES.utils_matplot import MatplotlibPlotter
 
 from UTILITIES.utils_helpers import profile_function, find_closest_actor, generate_random_colour

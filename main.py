@@ -16,6 +16,9 @@ from GAME.game_manager import GameManager
 from RENDER.Game_Renderer import GameRenderer
 from RENDER.MainMenu_Renderer import MenuRenderer
 import UTILITIES.utils_config as utils_config
+if utils_config.ENABLE_TENSORBOARD:
+    tensorboard_logger = TensorBoardLogger()
+    tensorboard_logger.get_default_run_name()
 
 
 class MainGame:
@@ -58,7 +61,6 @@ class MainGame:
                         print("\033[91m[INFO] Window closed. Exiting game..\033[0m")
                         if utils_config.ENABLE_TENSORBOARD:
                             try:
-                                tensorboard_logger = TensorBoardLogger()
                                 tensorboard_logger.stop_tensorboard()  # Stop TensorBoard if running
                             except Exception as e:
                                 print(f"[ERROR] Failed to stop TensorBoard: {e}")
@@ -146,7 +148,7 @@ class MainGame:
                                 print("Whoops - SystemExit - Main.py")
                                 print("[INFO] Game closed successfully.")
                                 if utils_config.ENABLE_TENSORBOARD:
-                                    tensorboard_logger = TensorBoardLogger()
+                                    
                                     tensorboard_logger.stop_tensorboard()  # Stop TensorBoard if running
                                 pygame.quit()
                                 sys.exit()
@@ -220,7 +222,7 @@ class MainGame:
 
     def cleanup(self, QUIT):
         if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger = TensorBoardLogger()
+            
             tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
 
         

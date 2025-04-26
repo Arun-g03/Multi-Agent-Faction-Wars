@@ -97,6 +97,7 @@ class BaseAgent:
             # Agent-specific initialisation
             self.x: float = x
             self.y: float = y
+            self.position = (x, y)
             self.role = role
             self.faction = faction
             self.terrain = terrain
@@ -285,10 +286,7 @@ class BaseAgent:
 
     def is_near(self, target, threshold=utils_config.Agent_Interact_Range):
         """
-        Check if the agent is near a specified target within a given threshold (in grid units).
-        :param target: The target object with `x` and `y` attributes, or a tuple (x, y).
-        :param threshold: The maximum distance considered "near". Default is 10.
-        :return: True if the agent is within the threshold distance of the target, False otherwise.
+        Check if the agent is near a specified target within a given threshold (grid or pixel based).
         """
         if isinstance(target, tuple):
             target_x, target_y = target
@@ -296,17 +294,16 @@ class BaseAgent:
             target_x, target_y = target.x, target.y
 
         if utils_config.SUB_TILE_PRECISION:
-            # Calculate Euclidean distance using pixel precision
-            distance = ((self.x - target_x) ** 2 + (self.y - target_y) ** 2) ** 0.5
+            agent_x, agent_y = self.x, self.y
         else:
-            # Calculate grid-based distance
-            agent_cell_x = int(self.x // utils_config.CELL_SIZE)
-            agent_cell_y = int(self.y // utils_config.CELL_SIZE)
-            target_cell_x = int(target_x // utils_config.CELL_SIZE)
-            target_cell_y = int(target_y // utils_config.CELL_SIZE)
-            distance = abs(agent_cell_x - target_cell_x) + abs(agent_cell_y - target_cell_y)
+            agent_x = int(self.x // utils_config.CELL_SIZE)
+            agent_y = int(self.y // utils_config.CELL_SIZE)
+            target_x = int(target_x // utils_config.CELL_SIZE)
+            target_y = int(target_y // utils_config.CELL_SIZE)
 
+        distance = ((agent_x - target_x) ** 2 + (agent_y - target_y) ** 2) ** 0.5
         return distance <= threshold
+
 
 
 

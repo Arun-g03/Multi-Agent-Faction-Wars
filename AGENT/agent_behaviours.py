@@ -11,9 +11,9 @@ from NEURAL_NETWORK.HQ_Network import HQ_Network
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
 
 
-
 logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)
-
+if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger=TensorBoardLogger()
 
 class AgentBehaviour:
     def __init__(
@@ -47,8 +47,7 @@ class AgentBehaviour:
             logger.log_msg(
                 f"initialised behavior for {self.agent.role} with actions: {self.role_actions}.",
                 level=logging.DEBUG)
-        if utils_config.ENABLE_TENSORBOARD:
-            self.tensorboard_logger=TensorBoardLogger()
+        
 
 
 #      _                _              _                  _        _        _
@@ -110,6 +109,7 @@ class AgentBehaviour:
     def perform_task(self, state, resource_manager, agents, current_step, current_episode):
         self.current_step = current_step
         self.current_episode = current_episode
+
         if state is None:
             raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
 
@@ -134,7 +134,6 @@ class AgentBehaviour:
             task_state = self.perform_action(action_index, state, resource_manager, agents)
             action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][action_index]
 
-            
             reward = self.assign_reward(
                 agent=self.agent,
                 task_type="independent",
@@ -158,40 +157,54 @@ class AgentBehaviour:
         target_position = self.agent.current_task.get("target", {}).get("position", (0, 0))
         current_position = (self.agent.x, self.agent.y)
 
-        # === Special handling for move_to completion ===
-        if task_type == "move_to" and self.calculate_distance(current_position, target_position) <= utils_config.Agent_Interact_Range:
-            self.agent.update_task_state(utils_config.TaskState.SUCCESS)
-            action_name = "move"  # or last action if known
+        # === Call Task Handler ===
+        expected_method = utils_config.TASK_METHODS_MAPPING.get(task_type)
 
+        if expected_method:
+            task_handler = getattr(self, expected_method, None)
+            if task_handler:
+                task_state = task_handler(state, resource_manager, agents)
+            else:
+                task_state = utils_config.TaskState.FAILURE
+        else:
+            task_state = utils_config.TaskState.FAILURE
+
+        # === Handle completed task immediately ===
+        if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
             reward = self.assign_reward(
                 agent=self.agent,
                 task_type=task_type,
-                task_state=utils_config.TaskState.SUCCESS,
-                action=action_name,
+                task_state=task_state,
+                action="task_completed",
                 target_pos=target_position,
                 current_pos=current_position,
                 is_independent=False
             )
 
             self.agent.current_task["state"] = utils_config.TaskState.NONE
+            logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
             self.agent.current_task = None
-            return reward, utils_config.TaskState.SUCCESS
 
-        # === Continue task execution ===
+            log_prob = self.agent.log_prob
+            if log_prob is None:
+                log_prob = torch.tensor([0.0], device=self.agent.ai.device)  # 👈 wrapped
+
+            self.agent.ai.store_transition(state, 0, log_prob, reward, self.agent.value if self.agent.value is not None else 0.0, 0.0, True)
+
+
+
+            return reward, task_state
+
+        # === Continue acting normally (if task still ongoing) ===
         action_index, log_prob, value = self.ai.choose_action(state)
         self.agent.current_action = action_index
         self.agent.log_prob = log_prob
         self.agent.value = value
 
         task_state = self.perform_action(action_index, state, resource_manager, agents)
+        actual_action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][action_index]
 
-        actual_action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][self.agent.current_action]
-        expected_method = utils_config.TASK_METHODS_MAPPING.get(task_type)
-
-    
-
-
-
+        # === Gating check: action mismatch with expected method ===
         if expected_method != actual_action and task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
             logger.log_msg(f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_action}' but expected '{expected_method}' for task '{task_type}'.", level=logging.INFO)
             task_state = utils_config.TaskState.ONGOING
@@ -212,8 +225,8 @@ class AgentBehaviour:
             self.agent.current_task = None
 
         self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
-    
-        # === Behavior Debug Block ===
+
+        # === Optional: Behavior Debug Block ===
         if utils_config.ENABLE_LOGGING:
             logger.log_msg("="*60, level=logging.INFO)
             logger.log_msg(f"Agent Decision Summary", level=logging.INFO)
@@ -229,14 +242,8 @@ class AgentBehaviour:
             logger.log_msg(f"Log Prob      : {self.agent.log_prob if hasattr(self.agent, 'log_prob') else 'None'}", level=logging.INFO)
             logger.log_msg(f"Value Est.    : {self.agent.value if hasattr(self.agent, 'value') else 'None'}", level=logging.INFO)
             logger.log_msg(f"Done?         : {task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE] if task_state else 'None'}", level=logging.INFO)
-            logger.log_msg("="*60, level=logging.INFO) 
+            logger.log_msg("="*60, level=logging.INFO)
 
-
-
-        
-
-       
-    
         return reward, task_state
 
 
@@ -393,7 +400,7 @@ class AgentBehaviour:
                 episode = getattr(agent.faction, "episode", 0)
                 faction_id = agent.faction.id
                 suffix = "independent" if is_independent else f"{task_type}_{task_state.name}"
-                TensorBoardLogger().log_scalar(f"Faction_{faction_id}/Task_{suffix}", reward, episode)
+                tensorboard_logger.log_scalar(f"Faction_{faction_id}/Task_{suffix}", reward, episode)
             except Exception as e:
                 logger.log_msg(f"[TensorBoard] Failed to log reward: {e}", level=logging.WARNING)
 
@@ -453,36 +460,36 @@ class AgentBehaviour:
             return distance_to_current > distance_to_previous
         return False
 
-    def handle_eliminate_task(self, target, agents):
+    def handle_eliminate_task(self, state, resource_manager, agents):
         """
         Handle the eliminate task logic dynamically.
+        Agent must eliminate a target. No forced movement.
         """
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
-                f"Agent {self.agent.role} received eliminate task for target: {target}.",
+                f"Agent {self.agent.role} executing eliminate task.",
                 level=logging.INFO)
 
-        if not target or "position" not in target:
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"Invalid eliminate task target: {target}.",
-                    level=logging.WARNING)
+        task = self.agent.current_task
+        if not task or "target" not in task:
+            logger.log_msg(
+                f"Invalid eliminate task: {task}.",
+                level=logging.WARNING)
             return utils_config.TaskState.FAILURE
 
-        target_position = target["position"]
+        target_data = task["target"]
+        target_position = target_data.get("position", (0, 0))
 
-        # Check proximity to the target
+        # Check if agent is near enough to eliminate
         if self.agent.is_near(target_position):
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"{self.agent.role} is in range to eliminate target. Executing eliminate_threat.",
-                    level=logging.INFO)
+            logger.log_msg(
+                f"{self.agent.role} is in range to eliminate target at {target_position}.",
+                level=logging.INFO)
             return self.eliminate_threat(agents)
 
-        # Move closer to the target dynamically
-        dx = target_position[0] - self.agent.x
-        dy = target_position[1] - self.agent.y
-        return self.move_to_target(dx, dy)
+        # Otherwise, ongoing
+        return utils_config.TaskState.ONGOING
+
 
     def handle_gather_task(self, state, resource_manager, agents):
         """
@@ -552,7 +559,8 @@ class AgentBehaviour:
             f"{self.agent.role} found resource at {target_position} but cannot interact with it.")
         return utils_config.TaskState.FAILURE
 
-    def handle_explore_task(self):
+    def handle_explore_task(self, state, resource_manager, agents):
+
         """
         Handle exploration by dynamically moving to unexplored areas.
         """
@@ -582,21 +590,30 @@ class AgentBehaviour:
                 level=logging.WARNING)
         return utils_config.TaskState.FAILURE
 
-    def handle_move_to_task(self):
-        """
-        Simple movement toward a target position.
-        """
+    def handle_move_to_task(self, state, resource_manager, agents):
+
         task = self.agent.current_task
         if not task or "target" not in task or "position" not in task["target"]:
             return utils_config.TaskState.FAILURE
 
-        target_pos = task["target"]["position"]
-        if self.agent.is_near(target_pos):
+        target_x, target_y = task["target"]["position"]
+
+        agent_cell_x = int(self.agent.x // utils_config.CELL_SIZE)
+        agent_cell_y = int(self.agent.y // utils_config.CELL_SIZE)
+
+        dx = abs(agent_cell_x - target_x)
+        dy = abs(agent_cell_y - target_y)
+
+        if dx == 0 and dy == 0:
+            print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
             return utils_config.TaskState.SUCCESS
 
-        dx = target_pos[0] - self.agent.x
-        dy = target_pos[1] - self.agent.y
-        return self.move_to_target(dx, dy)
+        
+        return utils_config.TaskState.ONGOING
+
+
+
+
 
     def move_to_target(self, dx, dy):
         """
@@ -771,8 +788,11 @@ class AgentBehaviour:
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
-                        f"{self.agent.role} mined gold at ({gold_lump.x}, {gold_lump.y}). "
+                        f"{self.agent.role} at {self.agent.position} mined gold at ({gold_lump.x}, {gold_lump.y}). "
                         f"Gold balance: {self.agent.faction.gold_balance}.", level=logging.INFO)
+                    logger.log_msg(f"\033[92m{self.agent.role} mined gold: \n",
+                            f"Agent pos=screen: {self.agent.position} world:({int(self.agent.position[0]/utils_config.CELL_SIZE)} {int(self.agent.position[1]/utils_config.CELL_SIZE)})\n",
+                            f"Gold pos=screen:({gold_lump.x}, {gold_lump.y}) world:({int(gold_lump.x/utils_config.CELL_SIZE)}, {int(gold_lump.y/utils_config.CELL_SIZE)})\033[0m\n",level=logging.INFO)                
                 return utils_config.TaskState.SUCCESS
 
             # Not close enough

@@ -4,9 +4,10 @@ from SHARED.core_imports import *
 import UTILITIES.utils_config as utils_config
 
 
+tensorboard_logger = TensorBoardLogger()
 
 class ResourceManager:
-    def __init__(self, terrain):
+    def __init__(self, terrain, tensorboard_logger=None):
         """
         Manage resources in the environment, such as apple trees and gold lumps.
         """
@@ -15,6 +16,9 @@ class ResourceManager:
         self.gold_count = 0
         self.apple_tree_count = 0
         self.generate_resources()
+        
+            
+        
 
         """The current episode"""
 
@@ -148,9 +152,9 @@ class ResourceManager:
         print(
             f"Generated {self.apple_tree_count} apple trees and {self.gold_count} gold lumps.")
         if utils_config.ENABLE_TENSORBOARD:
-            TensorBoardLogger().log_scalar("Resources/AppleTrees_Added",
+            tensorboard_logger.log_scalar("Resources/AppleTrees_Added",
                                            self.apple_tree_count, episode)
-            TensorBoardLogger().log_scalar(
+            tensorboard_logger.log_scalar(
                 "Resources/GoldLumps_Added", self.gold_count, episode)
 
     #    _   _           _       _          __    _                    _  __       _            _      _           ___
@@ -200,6 +204,8 @@ class AppleTree:
         self.y = y
         self.grid_x = grid_x
         self.grid_y = grid_y
+        self.position = (x, y)
+        self.grid_position = (grid_x, grid_y)
         self.terrain = terrain
         self.resource_manager = resource_manager
         self.max_quantity = quantity  # Store max quantity
@@ -237,10 +243,7 @@ class AppleTree:
         if self.quantity > 0:
             gathered = min(amount, self.quantity)
             self.quantity -= gathered
-            print(
-                "\033[92m" +
-                f"Apple Tree at ({self.grid_x}, {self.grid_y}) foraged. Remaining: {self.quantity}" +
-                "\033[0m")
+            
             if self.is_depleted():
                 print(
                     "\033[92m" +
@@ -358,8 +361,7 @@ class GoldLump:
         """Mine gold from the lump and credit it using the provided callback."""
         if self.quantity > 0:
             self.quantity -= 1
-            print(
-                f"\033[32mGold Lump at ({self.grid_x}, {self.grid_y}) mined. Remaining: {self.quantity}\033[0m")
+            
             if credit_callback:
                 credit_callback(1)  # Credit the mined gold to the faction
 
