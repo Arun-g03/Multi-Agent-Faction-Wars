@@ -40,7 +40,7 @@ class AgentBehaviour:
         self.event_manager = event_manager
         # Get valid actions for the agent's role
         self.role_actions = utils_config.ROLE_ACTIONS_MAP[agent.role]
-        self.current_task = None  # Initialise the current task
+        
 
         self.target = None
         if utils_config.ENABLE_LOGGING:
@@ -183,7 +183,7 @@ class AgentBehaviour:
 
             self.agent.current_task["state"] = utils_config.TaskState.NONE
             logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
-            self.agent.current_task = None
+            
 
             log_prob = self.agent.log_prob
             if log_prob is None:
@@ -222,7 +222,7 @@ class AgentBehaviour:
         if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
             self.agent.current_task["state"] = utils_config.TaskState.NONE
             logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
-            self.agent.current_task = None
+            
 
         self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
 
@@ -790,10 +790,8 @@ class AgentBehaviour:
                     logger.log_msg(
                         f"{self.agent.role} at {self.agent.position} mined gold at ({gold_lump.x}, {gold_lump.y}). "
                         f"Gold balance: {self.agent.faction.gold_balance}.", level=logging.INFO)
-                    logger.log_msg(f"\033[92m{self.agent.role} mined gold: \n",
-                            f"Agent pos=screen: {self.agent.position} world:({int(self.agent.position[0]/utils_config.CELL_SIZE)} {int(self.agent.position[1]/utils_config.CELL_SIZE)})\n",
-                            f"Gold pos=screen:({gold_lump.x}, {gold_lump.y}) world:({int(gold_lump.x/utils_config.CELL_SIZE)}, {int(gold_lump.y/utils_config.CELL_SIZE)})\033[0m\n",level=logging.INFO)                
-                return utils_config.TaskState.SUCCESS
+                               
+                    return utils_config.TaskState.SUCCESS
 
             # Not close enough
             if utils_config.ENABLE_LOGGING:

@@ -186,6 +186,7 @@ class GameRenderer:
         for faction in factions:
             if faction.home_base["position"]:
                 x, y = faction.home_base["position"]
+                
                 size = faction.home_base["size"]
                 colour = faction.home_base["colour"]
 
@@ -294,8 +295,9 @@ class GameRenderer:
                         f"Gold: {faction.gold_balance}\n"
                         f"Food: {faction.food_balance}\n"
                         f"Peacekeepers: {peacekeeper_count}\n"
-                        f"Gatherers: {gatherer_count}\n\n"
-                        f"Current Strategy: {faction.current_strategy}"
+                        f"Gatherers: {gatherer_count}\n"
+                        f"Current Strategy: {faction.current_strategy}\n"
+                        f"HQ Location: {x, y}"
                     )
                     self.render_tooltip(overlay_text)
 

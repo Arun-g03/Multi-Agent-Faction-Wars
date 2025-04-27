@@ -139,7 +139,7 @@ class Faction():
                 self.optimizer = torch.optim.Adam(
                     self.network.parameters(), lr=1e-3)
 
-            self.strategy_update_interval = 300
+            self.strategy_update_interval = 100
             self.needs_strategy_retest = True
             self.current_step = 0
 
@@ -576,52 +576,46 @@ class Faction():
 
     def assign_high_level_tasks(self):
         """
-        HQ network chooses a strategy according to HQ_STRATEGY_OPTIONS
-        HQ_STRATEGY_OPTIONS = [
-            "DEFEND_HQ",
-            "ATTACK_THREATS",
-            "COLLECT_GOLD",
-            "COLLECT_FOOD",
-            "RECRUIT_GATHERER",
-            "RECRUIT_PEACEKEEPER",
-            "NO_PRIORITY",
-        ]
-
-
-        HQ chooses a strategic action, executes it, and assigns tasks to idle agents accordingly.
+        HQ network assigns new high-level tasks to idle agents based on strategy.
         """
         if utils_config.ENABLE_LOGGING:
-            logger.log_msg(
-                f"[HQ] Faction {self.id} assigning high-level tasks...",
-                level=logging.INFO)
-            
-        
+            logger.log_msg(f"[HQ] Faction {self.id} assigning high-level tasks...", level=logging.INFO)
 
-        # Step 2: Assign tasks to idle agents based on HQ strategy
         for agent in self.agents:
-            if agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
-                # Clear completed tasks
-                if agent.current_task:
-                    self.complete_task(agent.current_task["id"], agent, agent.current_task_state)
-                agent.current_task = None
-                #agent.update_task_state(utils_config.TaskState.NONE)
+            # === 1. Check if agent is idle ===
+            agent_idle = False
 
+            if agent.current_task is None:
+                agent_idle = True
+
+            elif agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+                agent_idle = True
+
+            elif agent.current_task.get("type", "none") == "none":
+                agent_idle = True
+
+            # === 2. Clear completed tasks if needed ===
+            if agent_idle:
+                if agent.current_task:
+                    self.complete_task(agent.current_task.get("id"), agent, agent.current_task_state)
+                agent.current_task = None
+                agent.update_task_state(utils_config.TaskState.NONE)
+
+            # === 3. Skip agents still busy ===
             if agent.current_task:
                 continue  # Still busy with a valid task
 
-            # Assign a new task
+            # === 4. Assign a new task ===
             task = self.assign_task(agent)
             if task:
                 agent.current_task = task
                 agent.update_task_state(utils_config.TaskState.ONGOING)
 
-                # Track assigned tasks
                 task_id = task["id"]
                 if task_id not in self.assigned_tasks:
                     self.assigned_tasks[task_id] = []
                 self.assigned_tasks[task_id].append(agent.agent_id)
 
-                # Logging
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"[TASK ASSIGNED] {agent.agent_id} => {task['type']} at {task['target'].get('position')}",
@@ -648,10 +642,13 @@ class Faction():
         role = getattr(agent, "role", None)
         strategy = self.current_strategy or "NO_PRIORITY"
 
+        # Determine threats
         threats = [
-                    t for t in self.global_state.get("threats", [])
-                    if t["id"].faction_id != self.id
-                ]
+            t for t in self.global_state.get("threats", [])
+            if t["id"].faction_id != self.id
+        ]
+        has_threats = len(threats) > 0
+
 
         if role not in ["gatherer", "peacekeeper"]:
             if utils_config.ENABLE_LOGGING:
@@ -662,86 +659,95 @@ class Faction():
 
         if role == "gatherer":
             current = agent.current_task
-            current_type = current["type"] if current else None
+            current_type = current["type"] if current else "none"
 
-            is_resource_task = current_type == "gather"
+            if isinstance(current_type, str):
+                current_type_id = utils_config.TASK_TYPE_MAPPING.get(current_type, utils_config.TASK_TYPE_MAPPING["none"])
+            else:
+                current_type_id = current_type
 
-            # If already gathering, don't override
+            is_resource_task = (current_type_id == utils_config.TASK_TYPE_MAPPING["gather"])
+
             if is_resource_task:
                 return current
 
-            # Otherwise clear task and assign new one
             if current:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[REASSIGN] Gatherer {agent.agent_id} dropping task '{current_type}' for resource assignment.",
-                        level=logging.INFO)
                 agent.current_task = None
+                agent.update_task_state(utils_config.TaskState.NONE)
 
-            if strategy == "COLLECT_GOLD":
-                return self.assign_mining_task(agent)
+            # === Main logic for gatherers ===
+            if strategy in ["COLLECT_GOLD", "COLLECT_FOOD"]:
+                # Directly assign based on strategy
+                if strategy == "COLLECT_GOLD":
+                    return self.assign_mining_task(agent)
+                else:
+                    return self.assign_forage_task(agent)
 
-            elif strategy == "COLLECT_FOOD":
-                return self.assign_forage_task(agent)
+            elif strategy == "ATTACK_THREATS":
+                # If war happening, gatherers still focus on food/gold
+                options = list(filter(None, [
+                    self.assign_forage_task(agent),
+                    self.assign_mining_task(agent)
+                ]))
+                if options:
+                    return random.choice(options)
 
-            # Fallback: pick best available
-            options = list(filter(None, [
-                self.assign_forage_task(agent),
-                self.assign_mining_task(agent)
-            ]))
-            if options:
-                return random.choice(options)
+            # Default to exploration
+            return self.assign_explore_task(agent)
 
-            return self.assign_explore_task(agent)  # Last fallback
 
         elif role == "peacekeeper":
             current = agent.current_task
+            current_type = current["type"] if current else "none"
 
-            # 🔥 Priority: ELIMINATE THREAT
-            if strategy == "ATTACK_THREATS" and threats:
+            if isinstance(current_type, str):
+                current_type_id = utils_config.TASK_TYPE_MAPPING.get(current_type, utils_config.TASK_TYPE_MAPPING["none"])
+            else:
+                current_type_id = current_type
+
+            if strategy == "ATTACK_THREATS" and has_threats:
                 threat = min(threats, key=lambda t: self.calculate_threat_weight(agent, t))
                 already_eliminating = (
-                    current and
-                    current.get("type") == "eliminate" and
-                    current.get("target", {}).get("id") == threat["id"]
+                    current_type_id == utils_config.TASK_TYPE_MAPPING["eliminate"]
                 )
 
                 if not already_eliminating:
                     if current:
-                        logger.log_msg(
-                            f"[OVERRIDE] Peacekeeper {agent.agent_id} switching from task '{current['type']}' to eliminate threat {threat['id']}",
-                            level=logging.INFO
-                        )
-                        # 🧹 Clear current task (move_to or explore)
                         agent.current_task = None
                         agent.update_task_state(utils_config.TaskState.NONE)
-
-                    # 🧠 Assign eliminate task
                     return self.assign_eliminate_task(agent, threat["id"], threat["type"], threat["location"])
 
-            # ⚔️ Strategy is DEFEND HQ
-            if strategy == "DEFEND_HQ":
+            elif strategy == "DEFEND_HQ":
                 hq_position = self.home_base["position"]
-                already_defending = current and current.get("type") == "move_to" and \
-                                    current.get("target", {}).get("position") == hq_position
+                if not utils_config.SUB_TILE_PRECISION:
+                    # If we are using grid precision, convert pixel HQ to grid
+                    hq_position = (
+                        int(hq_position[0] // utils_config.CELL_SIZE),
+                        int(hq_position[1] // utils_config.CELL_SIZE)
+                    )
+                already_defending = (
+                    current_type_id == utils_config.TASK_TYPE_MAPPING["move_to"] and
+                    current and current.get("target", {}).get("position") == hq_position
+                )
 
                 if not already_defending:
                     if current:
-                        logger.log_msg(
-                            f"[REASSIGN] Peacekeeper {agent.agent_id} switching from '{current['type']}' to DefendHQ",
-                            level=logging.INFO)
                         agent.current_task = None
                         agent.update_task_state(utils_config.TaskState.NONE)
                     return self.assign_move_to_task(agent, hq_position, label="DefendHQ")
 
-            # 🌍 Fallback to explore
-            if strategy != "DEFEND_HQ" and not threats:
-                is_explore_move = current and current.get("type") == "move_to" and current.get("id", "").startswith("Explore-")
+            elif strategy in ["COLLECT_GOLD", "COLLECT_FOOD", "NO_PRIORITY"]:
+                # Peacekeepers fallback to exploration
+                is_explore_move = (
+                    current_type_id == utils_config.TASK_TYPE_MAPPING["move_to"] and
+                    current and current.get("id", "").startswith("Explore-")
+                )
                 if is_explore_move and agent.current_task_state == utils_config.TaskState.ONGOING:
                     return current
                 return self.assign_explore_task(agent)
 
-            return current  # fallback: keep existing task if nothing changes
+            return current  # fallback
+
 
 
 

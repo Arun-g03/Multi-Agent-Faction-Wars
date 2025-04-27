@@ -37,7 +37,7 @@ class TensorBoardLogger:
         if instance_key not in cls._instances:
             print(f"[TensorBoard] Creating new TensorBoardLogger instance for key: {instance_key}")
             print("[TensorBoard] Instantiated from:")
-            traceback.print_stack(limit=5)  # 🔥 print the last 5 calls only (or adjust as needed)
+            traceback.print_stack(limit=5)  # print the last 5 calls only (or adjust as needed)
 
             instance = super().__new__(cls)
             instance._init_writer(log_dir, run_name)

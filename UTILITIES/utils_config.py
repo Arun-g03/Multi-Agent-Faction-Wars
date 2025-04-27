@@ -44,7 +44,7 @@ ENABLE_TENSORBOARD = True
 
 EPISODES_LIMIT = 10 # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 400
+STEPS_PER_EPISODE = 4000
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -354,7 +354,7 @@ Agent_Interact_Range = 2  # Agent interact range, Anything inside will be intera
 Peacekeeper_PNG = 'RENDER\IMAGES\peacekeeper.png'  # Path to peacekeeper image
 Gatherer_PNG = 'RENDER\IMAGES\gatherer.png'  # Path to gatherer image
 
-Gold_Cost_for_Agent = 10  # Gold cost for an agent
+Gold_Cost_for_Agent = 50  # Gold cost for an agent
 
 
 DEF_AGENT_STATE_SIZE = 11 + len(TASK_TYPE_MAPPING)
@@ -373,7 +373,7 @@ Changing this values WILL break functionality unless updated across system :( ""
 #
 
 # HQ
-HQ_SPAWN_RADIUS = 10  # Radius around HQ to spawn other HQs
+HQ_SPAWN_RADIUS = 2  # Radius around HQ to spawn other HQs
 HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
 Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 
