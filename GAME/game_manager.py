@@ -679,12 +679,7 @@ class GameManager:
         print(f"Failed to spawn agent after {max_attempts} attempts.")
         return None
 
-    def get_agent_state(self, agent, hq_state):  # Returns the state of the agent
-        return agent.get_state(
-            self.resource_manager,
-            self.agents,
-            agent.faction,
-            hq_state)
+    
 
 
 #    ____                 __                     _   __

@@ -987,21 +987,7 @@ class AgentBehaviour:
                 level=logging.INFO)
         return utils_config.TaskState.FAILURE
 
-    def get_agent_by_location(self, location, agents):
-        """
-        Find an agent by its location.
-        """
-        if not agents or not isinstance(agents, list):
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"'agents' is invalid or missing. Cannot find agent by location.",
-                    level=logging.WARNING)
-            return None
-
-        for agent in agents:
-            if (agent.x, agent.y) == location:
-                return agent
-        return None
+    
 
     def clean_resolved_threats(self):
         """

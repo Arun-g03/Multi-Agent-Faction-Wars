@@ -136,68 +136,9 @@ class HQ_Network(nn.Module):
         """Clear the HQ memory."""
         self.hq_memory = []
 
-    def has_memory(self):
-        """Check if the HQ memory is not empty."""
-        return len(self.hq_memory) > 0
+    
 
-    def convert_state_to_tensor(self, aggregated_state):
-        """
-        Converts faction state data into tensor format for neural network processing.
-        Uses batch operations to improve speed.
-        """
-
-        #  Convert all values in a single operation
-        state_features = torch.tensor([
-            aggregated_state.get("HQ_health", 100) / 100,
-            aggregated_state.get("gold_balance", 0) / 100,
-            aggregated_state.get("food_balance", 0) / 100,
-            aggregated_state.get("resource_count", 0) / 10,
-            aggregated_state.get("threat_count", 0) / 5,
-            aggregated_state.get("friendly_agent_count", 0) / 10,
-            aggregated_state.get("enemy_agent_count", 0) / 10,
-            aggregated_state.get("agent_density", 0) / 10,
-            aggregated_state.get("total_agents", 0) / 20,
-        ], dtype=torch.float32)
-
-        #  Process nearest threat and resource locations
-        nearest_threat = aggregated_state.get(
-            "nearest_threat", {"location": (-1, -1)})
-        nearest_resource = aggregated_state.get(
-            "nearest_resource", {"location": (-1, -1)})
-
-        threat_features = torch.tensor([
-            nearest_threat["location"][0] / 100,
-            nearest_threat["location"][1] / 100,
-        ], dtype=torch.float32)
-
-        resource_features = torch.tensor([
-            nearest_resource["location"][0] / 100,
-            nearest_resource["location"][1] / 100,
-        ], dtype=torch.float32)
-
-        #  Process agent states efficiently
-        MAX_AGENTS = 5
-        expected_agent_size = 18 * MAX_AGENTS
-
-        agent_states = aggregated_state.get("agent_states", [])
-        limited_agents = agent_states[:MAX_AGENTS]
-        flattened_agent_states = [
-            feature for agent in limited_agents for feature in agent]
-
-        #  Ensure fixed size
-        if len(flattened_agent_states) < expected_agent_size:
-            flattened_agent_states += [0] * \
-                (expected_agent_size - len(flattened_agent_states))
-
-        agent_states_tensor = torch.tensor(
-            flattened_agent_states, dtype=torch.float32)
-
-        #  Move everything to device in one operation (FASTER)
-        full_feature_vector = torch.cat(
-            [state_features, threat_features, resource_features, agent_states_tensor])
-
-        return full_feature_vector.to(self.device).view(1, -1)
-
+    
     def predict_strategy(self, global_state: dict) -> str:
         """
         Given the current global state, returns the best strategy label.

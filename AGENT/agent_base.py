@@ -764,30 +764,6 @@ class BaseAgent:
         self.detection_range_squared = detection_range * detection_range
 
 
-    def is_within_detection_range(self, target_position):
-        """
-        Determines if a given target is within the agent's field of view,
-        respecting sub-tile precision.
-        """
-        if not target_position:
-            return False  # Prevents errors if position is missing
-
-        if utils_config.SUB_TILE_PRECISION:
-            dx = self.x - target_position[0]
-            dy = self.y - target_position[1]
-        else:
-            # Convert to grid space
-            agent_cell_x = int(self.x // utils_config.CELL_SIZE)
-            agent_cell_y = int(self.y // utils_config.CELL_SIZE)
-            target_cell_x = int(target_position[0])
-            target_cell_y = int(target_position[1])
-            dx = agent_cell_x - target_cell_x
-            dy = agent_cell_y - target_cell_y
-
-        squared_distance = dx * dx + dy * dy
-        return squared_distance <= self.detection_range_squared
-
-
     #                                      _             _          _           _              __         _                   _   _               __
     #    _ __ ___   __ _ _ __    _ __ ___ | | ___  ___  | |_ ___   (_)_ __   __| | _____  __  / / __ ___ | | ___    __ _  ___| |_(_) ___  _ __  __\ \
     #   | '_ ` _ \ / _` | '_ \  | '__/ _ \| |/ _ \/ __| | __/ _ \  | | '_ \ / _` |/ _ \ \/ / | | '__/ _ \| |/ _ \  / _` |/ __| __| |/ _ \| '_ \/ __| |

@@ -11,11 +11,6 @@ import UTILITIES.utils_config as utils_config
 
 
 
-RESOURCE_GATHER_RATE = {
-    'apple_tree': 5,
-    'gold_lump': 2
-}
-
 FACTION_GOAL = {
     'gold_collection': 300,
     'food_collection': 500
@@ -54,16 +49,3 @@ def check_victory(factions):
     return None  # No winner yet
 
 
-def resolve_conflict(agent1, agent2):
-    """
-    Resolve conflicts between two agents.
-    Placeholder for custom conflict resolution logic.
-    """
-    if agent1.role == "peacekeeper" and agent2.role == "peacekeeper":
-        # Both agents take damage
-        agent1.Health -= 10
-        agent2.Health -= 10
-    else:
-        # Simplified: One agent loses health randomly
-        loser = random.choice([agent1, agent2])
-        loser.Health -= 20
