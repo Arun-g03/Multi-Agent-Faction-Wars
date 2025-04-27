@@ -12,8 +12,7 @@ from ENVIRONMENT.env_resources import AppleTree, GoldLump
 
 
 logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)
-if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger=TensorBoardLogger()
+
 
 class AgentBehaviour:
     def __init__(
@@ -171,6 +170,13 @@ class AgentBehaviour:
 
         # === Handle completed task immediately ===
         if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+
+            agent_id = self.agent.agent_id
+            task_id = self.agent.current_task["id"]
+
+            # Update tracking
+            if task_id in self.agent.faction.assigned_tasks:
+                self.agent.faction.assigned_tasks[task_id][agent_id] = task_state
             reward = self.assign_reward(
                 agent=self.agent,
                 task_type=task_type,
@@ -220,6 +226,12 @@ class AgentBehaviour:
         )
 
         if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+            agent_id = self.agent.agent_id
+            task_id = self.agent.current_task["id"]
+
+            # Update tracking
+            if task_id in self.agent.faction.assigned_tasks:
+                self.agent.faction.assigned_tasks[task_id][agent_id] = task_state
             self.agent.current_task["state"] = utils_config.TaskState.NONE
             logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
             
@@ -605,7 +617,7 @@ class AgentBehaviour:
         dy = abs(agent_cell_y - target_y)
 
         if dx == 0 and dy == 0:
-            print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
+            #print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
             return utils_config.TaskState.SUCCESS
 
         

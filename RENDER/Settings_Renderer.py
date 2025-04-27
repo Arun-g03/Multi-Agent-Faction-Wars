@@ -5,8 +5,7 @@ from SHARED.core_imports import *
 from RENDER.Common import SETTINGS_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_GREY, get_font
 import UTILITIES.utils_config as utils_config
 
-if utils_config.ENABLE_TENSORBOARD:
-    tensorboard_logger = TensorBoardLogger()
+
 
 #    ____       _   _   _                   __  __
 #   / ___|  ___| |_| |_(_)_ __   __ _ ___  |  \/  | ___ _ __  _   _

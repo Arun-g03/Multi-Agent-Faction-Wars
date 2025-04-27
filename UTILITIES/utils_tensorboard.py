@@ -35,10 +35,6 @@ class TensorBoardLogger:
 
         instance_key = f"{log_dir}_{run_name}"
         if instance_key not in cls._instances:
-            print(f"[TensorBoard] Creating new TensorBoardLogger instance for key: {instance_key}")
-            print("[TensorBoard] Instantiated from:")
-            traceback.print_stack(limit=5)  # print the last 5 calls only (or adjust as needed)
-
             instance = super().__new__(cls)
             instance._init_writer(log_dir, run_name)
             cls._instances[instance_key] = instance
@@ -200,15 +196,16 @@ class TensorBoardLogger:
             print("\033[91m[TensorBoard] TensorBoard was already stopped.\033[0m")
 
     def cleanup_event_files(self, log_dir="RUNTIME_LOGS/Tensorboard_logs"):
-        event_files = [f for f in os.listdir(log_dir) if f.startswith("events.out.")]
-        for file in event_files:
-            try:
-                file_path = os.path.join(log_dir, file)
-                if os.path.getsize(file_path) < 2048:
-                    os.remove(file_path)
-                    print(f"[TensorBoard] Deleted small event file: {file_path}")
-            except Exception as e:
-                print(f"[TensorBoard ERROR] Failed to delete {file_path}: {e}")
+        for root, dirs, files in os.walk(log_dir):
+            event_files = [f for f in files if f.startswith("events.out.")]
+            for file in event_files:
+                try:
+                    file_path = os.path.join(root, file)
+                    if os.path.getsize(file_path) < 5120:  # 5KB = 5 * 1024
+                        os.remove(file_path)
+                        print(f"[TensorBoard] Deleted small event file: {file_path}")
+                except Exception as e:
+                    print(f"[TensorBoard ERROR] Failed to delete {file_path}: {e}")
 
     def log_strategy_distribution(self, tensorboard_logger, step):
         if not self.strategy_history:

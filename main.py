@@ -17,8 +17,7 @@ from RENDER.Game_Renderer import GameRenderer
 from RENDER.MainMenu_Renderer import MenuRenderer
 import UTILITIES.utils_config as utils_config
 if utils_config.ENABLE_TENSORBOARD:
-    tensorboard_logger = TensorBoardLogger()
-    tensorboard_logger.get_default_run_name()
+    from SHARED.core_imports import tensorboard_logger
 
 
 class MainGame:

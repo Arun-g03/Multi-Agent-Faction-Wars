@@ -7,8 +7,6 @@ from RENDER.Common import MENU_FONT, WHITE, BLACK, BLUE, GREEN, RED, GREY, DARK_
 from RENDER.Settings_Renderer import SettingsMenuRenderer
 from RENDER.Credits_Renderer import CreditsRenderer
 
-if utils_config.ENABLE_TENSORBOARD:
-    tensorboard_logger = TensorBoardLogger()
 
 #    __  __    _    ___ _   _   __  __ _____ _   _ _   _
 #   |  \/  |  / \  |_ _| \ | | |  \/  | ____| \ | | | | |
@@ -71,162 +69,165 @@ class MenuRenderer:
         return button_rect
 
     def render_menu(self):
-        self.screen.fill(BLACK)
-        SCREEN_WIDTH = utils_config.SCREEN_WIDTH
-        SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
+        try:
+            self.screen.fill(BLACK)
+            SCREEN_WIDTH = utils_config.SCREEN_WIDTH
+            SCREEN_HEIGHT = utils_config.SCREEN_HEIGHT
 
-        button_width = 250
-        button_height = 40
-        button_font_size = 22
-        button_spacing = 20
+            button_width = 250
+            button_height = 40
+            button_font_size = 22
+            button_spacing = 20
 
-        center_x = SCREEN_WIDTH // 2 - button_width // 2
-        base_y = 250
-        self.draw_text(
-            self.screen,
-            "Welcome to the Multi-agent competitive and cooperative strategy (MACCS) Simulation",
-            MENU_FONT,
-            28,
-            WHITE,
-            SCREEN_WIDTH // 2,
-            base_y - 100
-        )
-        
-        self.draw_text(self.screen, "Main Menu", MENU_FONT,
-                    28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
+            center_x = SCREEN_WIDTH // 2 - button_width // 2
+            base_y = 250
+            self.draw_text(
+                self.screen,
+                "Welcome to the Multi-agent competitive and cooperative strategy (MACCS) Simulation",
+                MENU_FONT,
+                28,
+                WHITE,
+                SCREEN_WIDTH // 2,
+                base_y - 100
+            )
+            
+            self.draw_text(self.screen, "Main Menu", MENU_FONT,
+                        28, WHITE, SCREEN_WIDTH // 2, base_y - 40)
 
-        # Start Simulation button
-        start_button_rect = self.create_button(
-            self.screen,
-            "Start Simulation",
-            MENU_FONT,
-            button_font_size,
-            DARK_GREEN,
-            (0, 200, 0),
-            (0, 100, 0),
-            center_x,
-            base_y,
-            button_width,
-            button_height
-        )
+            # Start Simulation button
+            start_button_rect = self.create_button(
+                self.screen,
+                "Start Simulation",
+                MENU_FONT,
+                button_font_size,
+                DARK_GREEN,
+                (0, 200, 0),
+                (0, 100, 0),
+                center_x,
+                base_y,
+                button_width,
+                button_height
+            )
 
-        settings_button_rect = self.create_button(
-            self.screen, "Settings", MENU_FONT, button_font_size, GREY, (
-                180, 180, 180), (100, 100, 100),
-            center_x, base_y + (button_height + button_spacing) * 1, button_width, button_height
-        )
+            settings_button_rect = self.create_button(
+                self.screen, "Settings", MENU_FONT, button_font_size, GREY, (
+                    180, 180, 180), (100, 100, 100),
+                center_x, base_y + (button_height + button_spacing) * 1, button_width, button_height
+            )
 
-        credits_button_rect = self.create_button(
-            self.screen, "Credits", MENU_FONT, button_font_size, DARK_GREY, (
-                160, 160, 160), (90, 90, 90),
-            center_x, base_y + (button_height + button_spacing) * 2, button_width, button_height
-        )
+            credits_button_rect = self.create_button(
+                self.screen, "Credits", MENU_FONT, button_font_size, DARK_GREY, (
+                    160, 160, 160), (90, 90, 90),
+                center_x, base_y + (button_height + button_spacing) * 2, button_width, button_height
+            )
 
-        # Check if log files exist
-        log_dir = "RUNTIME_LOGS/Tensorboard_logs"
-        if os.path.exists(log_dir):
-            log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
-        else:
-            log_files_exist = False        
-        
+            # Check if log files exist
+            log_dir = "RUNTIME_LOGS/Tensorboard_logs"
+            if os.path.exists(log_dir):
+                log_files_exist = any(os.path.isfile(os.path.join(log_dir, f)) for f in os.listdir(log_dir) if f.startswith("events.out"))
+            else:
+                log_files_exist = False        
+            
 
-        
-        tensorboard_button_rect = self.create_button(
-            self.screen, " Launch Tensorboard", MENU_FONT, button_font_size, BLUE, (0, 0, 150), (0, 0, 200),
-            center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
-        )
-        
-        exit_button_rect = self.create_button(
-            self.screen, "Exit", MENU_FONT, button_font_size, RED, (
-                150, 0, 0), (200, 0, 0),
-            center_x, base_y + (button_height + button_spacing) * 4, button_width, button_height
-        )
+            
+            tensorboard_button_rect = self.create_button(
+                self.screen, " Launch Tensorboard", MENU_FONT, button_font_size, BLUE, (0, 0, 150), (0, 0, 200),
+                center_x, base_y + (button_height + button_spacing) * 3, button_width, button_height
+            )
+            
+            exit_button_rect = self.create_button(
+                self.screen, "Exit", MENU_FONT, button_font_size, RED, (
+                    150, 0, 0), (200, 0, 0),
+                center_x, base_y + (button_height + button_spacing) * 4, button_width, button_height
+            )
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                
-                self.cleanup(QUIT=True)
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if start_button_rect.collidepoint(event.pos):
-                    print("[INFO] Starting simulation setup...")
-                    simulation_config = self.game_setup_menu()
-                    if simulation_config:
-                        print("[INFO] Starting game with config:", simulation_config)
-                        self.pending_game_config = simulation_config
-                        return False  # exit menu, let main loop handle game launch
-
-                elif settings_button_rect.collidepoint(event.pos):
-                    settings_menu = SettingsMenuRenderer(self.screen)
-                    while settings_menu.render():
-                        pass
-
-                    if settings_menu.saved:
-                        updated = settings_menu.get_settings()
-                        for key, value in updated.items():
-                            if hasattr(utils_config, key):
-                                setattr(utils_config, key, value)
-                        print("[INFO] Updated settings:", updated)
-
-                elif credits_button_rect.collidepoint(event.pos):
-                    credits = CreditsRenderer(self.screen)
-                    credits.run()
-
-                elif tensorboard_button_rect.collidepoint(event.pos):
-                    log_dir = "RUNTIME_LOGS/Tensorboard_logs"
-                    
-                    # Check if the log directory exists
-                    if os.path.exists(log_dir):
-                        # Get all run directories
-                        run_dirs = [d for d in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, d))]
-                        
-                        # Check for log files in run directories
-                        log_files_exist = any(
-                            any(f.startswith("events.out") for f in os.listdir(os.path.join(log_dir, run_dir)))
-                            for run_dir in run_dirs if os.path.exists(os.path.join(log_dir, run_dir))
-                        )
-                    else:
-                        log_files_exist = False
-                    
-                    # Get the current TensorBoard logger
-                    
-                    msg_duration = utils_config.FPS*3*4
-                    
-                    if tensorboard_logger is None:
-                        # TensorBoard is disabled in config
-                        self.show_message("TensorBoard is disabled in settings. Please enable it first.", 
-                                        duration=msg_duration, bold=True)
-                    else:
-                        if log_files_exist:
-                            # Get all available runs with log files
-                            runs_with_logs = [
-                                d for d in run_dirs if 
-                                any(f.startswith("events.out") for f in os.listdir(os.path.join(log_dir, d)))
-                            ]
-                            
-                            if runs_with_logs:
-                                run_list = "\n    - " + "\n    - ".join(runs_with_logs)
-                                self.show_message(f"Launching TensorBoard with runs:\n{run_list}", 
-                                                duration=msg_duration, bold=True)
-                            else:
-                                self.show_message("Launching TensorBoard with available logs", 
-                                                duration=msg_duration, bold=True)
-                            
-                            tensorboard_logger.run_tensorboard()
-                        else:
-                            self.show_message("No TensorBoard logs found yet. Launching TensorBoard anyway.", 
-                                            duration=msg_duration, bold=True)
-                            tensorboard_logger.run_tensorboard()
-
-
-                        
-                elif exit_button_rect.collidepoint(event.pos):
-                    print("[INFO] Exiting game...")
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
                     
                     self.cleanup(QUIT=True)
 
-        pygame.display.update()
-        return True
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if start_button_rect.collidepoint(event.pos):
+                        print("[INFO] Starting simulation setup...")
+                        simulation_config = self.game_setup_menu()
+                        if simulation_config:
+                            print("[INFO] Starting game with config:", simulation_config)
+                            self.pending_game_config = simulation_config
+                            return False  # exit menu, let main loop handle game launch
+
+                    elif settings_button_rect.collidepoint(event.pos):
+                        settings_menu = SettingsMenuRenderer(self.screen)
+                        while settings_menu.render():
+                            pass
+
+                        if settings_menu.saved:
+                            updated = settings_menu.get_settings()
+                            for key, value in updated.items():
+                                if hasattr(utils_config, key):
+                                    setattr(utils_config, key, value)
+                            print("[INFO] Updated settings:", updated)
+
+                    elif credits_button_rect.collidepoint(event.pos):
+                        credits = CreditsRenderer(self.screen)
+                        credits.run()
+
+                    elif tensorboard_button_rect.collidepoint(event.pos):
+                        log_dir = "RUNTIME_LOGS/Tensorboard_logs"
+                        
+                        # Check if the log directory exists
+                        if os.path.exists(log_dir):
+                            # Get all run directories
+                            run_dirs = [d for d in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, d))]
+                            
+                            # Check for log files in run directories
+                            log_files_exist = any(
+                                any(f.startswith("events.out") for f in os.listdir(os.path.join(log_dir, run_dir)))
+                                for run_dir in run_dirs if os.path.exists(os.path.join(log_dir, run_dir))
+                            )
+                        else:
+                            log_files_exist = False
+                        
+                        # Get the current TensorBoard logger
+                        
+                        msg_duration = utils_config.FPS*3*4
+                        
+                        if tensorboard_logger is None:
+                            # TensorBoard is disabled in config
+                            self.show_message("TensorBoard is disabled in settings. Please enable it first.", 
+                                            duration=msg_duration, bold=True)
+                        else:
+                            if log_files_exist:
+                                # Get all available runs with log files
+                                runs_with_logs = [
+                                    d for d in run_dirs if 
+                                    any(f.startswith("events.out") for f in os.listdir(os.path.join(log_dir, d)))
+                                ]
+                                
+                                if runs_with_logs:
+                                    run_list = "\n    - " + "\n    - ".join(runs_with_logs)
+                                    self.show_message(f"Launching TensorBoard with runs:\n{run_list}", 
+                                                    duration=msg_duration, bold=True)
+                                else:
+                                    self.show_message("Launching TensorBoard with available logs", 
+                                                    duration=msg_duration, bold=True)
+                                
+                                tensorboard_logger.run_tensorboard()
+                            else:
+                                self.show_message("No TensorBoard logs found yet. Launching TensorBoard anyway.", 
+                                                duration=msg_duration, bold=True)
+                                tensorboard_logger.run_tensorboard()
+
+
+                            
+                    elif exit_button_rect.collidepoint(event.pos):
+                        print("[INFO] Exiting game...")
+                        
+                        self.cleanup(QUIT=True)
+
+            pygame.display.update()
+            return True
+        except:
+            pass
 
 
     def game_setup_menu(self):

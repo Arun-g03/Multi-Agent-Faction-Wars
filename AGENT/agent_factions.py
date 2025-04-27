@@ -43,7 +43,9 @@ class Faction():
             self.experience_buffer = []
             self.resources = []  # Initialise known resources
             self.threats = []  # Initialise known threats
-            self.assigned_tasks = {}   # Track assigned tasks
+            self.task_counter = 0
+            self.assigned_tasks = {}
+
             self.unvisited_cells = set()
             self.reports = []
             self.strategy_history = []  # Track strategies chosen
@@ -124,8 +126,7 @@ class Faction():
                     self.resource_manager, self.agents, self)
                 input_size = len(critic_state)
             else:
-                print(
-                    "No agents available for dynamic input size calculation. Using fallback input size.")
+                #print("No agents available for dynamic input size calculation. Using fallback input size.")
                 input_size = 14  # Default fallback size
 
             # Now self.hq_network and self.critic are properly initialised via
@@ -611,10 +612,18 @@ class Faction():
                 agent.current_task = task
                 agent.update_task_state(utils_config.TaskState.ONGOING)
 
-                task_id = task["id"]
-                if task_id not in self.assigned_tasks:
-                    self.assigned_tasks[task_id] = []
-                self.assigned_tasks[task_id].append(agent.agent_id)
+                self.task_counter += 1
+                task_counter_id = self.task_counter
+
+                self.assigned_tasks[task_counter_id] = {
+                    "type": task["type"],                     # task type: 'explore', 'mine', etc.
+                    "task_id": task["id"],                     # e.g., "Explore-(19,17)"
+                    "start_step": self.current_step,           # when assigned
+                    "end_step": None,                          # filled when completed
+                    "agents": {
+                        str(agent.agent_id): utils_config.TaskState.ONGOING
+                    }
+                }
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
@@ -867,9 +876,17 @@ class Faction():
         for x in range(len(terrain.grid)):
             for y in range(len(terrain.grid[0])):
                 cell = terrain.grid[x][y]
-                task_key = f"Explore-{x}-{y}"
-                assigned_count = len(self.assigned_tasks.get(task_key, []))
 
+                # Generate the expected task_id (string)
+                task_id = f"Explore-({x}, {y})"
+
+                # Search yur assigned_tasks
+                assigned_count = 0
+                for task_info in self.assigned_tasks.values():
+                    if task_info["task_id"] == task_id:
+                        assigned_count += len(task_info["agents"])
+
+                # Now check if can assign
                 if (
                     cell["faction"] != self.id
                     and cell["type"] == "land"
@@ -877,23 +894,37 @@ class Faction():
                 ):
                     unexplored_cells.append((x, y))
 
+
         logger.log_msg(f"[EXPLORE] Found {len(unexplored_cells)} unexplored cells for agent {agent.agent_id}", level=logging.INFO)
 
         if unexplored_cells:
             cell_x, cell_y = random.choice(unexplored_cells)
-            task_id = f"Explore-({cell_x}, {cell_y})"
+            task_string_id = f"Explore-({cell_x}, {cell_y})"
             target = {"position": (cell_x, cell_y), "type": "Explore"}
 
-            logger.log_msg(f"Created task: {task_id} for agent {agent.agent_id}", level=logging.INFO)
+            logger.log_msg(f"Created task: {task_string_id} for agent {agent.agent_id}", level=logging.INFO)
 
-            task = utils_config.create_task(self, "move_to", target, task_id)
+            # Create the task dictionary
+            task = utils_config.create_task(self, "move_to", target, task_string_id)
 
             agent.current_task = task
             agent.update_task_state(utils_config.TaskState.ONGOING)
 
-            if task_id not in self.assigned_tasks:
-                self.assigned_tasks[task_id] = []
-            self.assigned_tasks[task_id].append(agent.agent_id)
+            # ✅ New way: track it properly
+            if not hasattr(self, "task_counter"):
+                self.task_counter = 0
+            self.task_counter += 1
+            task_counter_id = self.task_counter
+
+            self.assigned_tasks[task_counter_id] = {
+                "type": "explore",
+                "task_id": task_string_id,
+                "start_step": self.current_step,
+                "end_step": None,
+                "agents": {
+                    str(agent.agent_id): utils_config.TaskState.ONGOING
+                }
+            }
 
             return task
 
@@ -953,30 +984,51 @@ class Faction():
 #                                                                                                            |_|
 
 
-    def complete_task(self, task_id, agent, task_state):
+    def complete_task(self, task_id_str, agent, task_state):
         """
-        Clean up task assignment after an agent completes or fails a task.
+        Mark an agent's task as completed or failed. Auto-fill end_step when task is fully finished.
         """
-        if task_id in self.assigned_tasks:
-            try:
-                self.assigned_tasks[task_id].remove(agent.agent_id)
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[TASK COMPLETE] Agent {agent.agent_id} removed from task {task_id} ({task_state.name})",
-                        level=logging.INFO)
 
-                if not self.assigned_tasks[task_id]:  # All agents finished
-                    del self.assigned_tasks[task_id]
+        agent_id_str = str(agent.agent_id)
+
+        # Search for the task_counter that matches this task_id
+        for task_counter_id, task_data in self.assigned_tasks.items():
+            if task_data["task_id"] == task_id_str:
+                if agent_id_str in task_data["agents"]:
+                    task_data["agents"][agent_id_str] = task_state
+
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
-                            f"[TASK CLEARED] Task {task_id} fully cleared.",
-                            level=logging.DEBUG)
+                            f"[TASK COMPLETE] {agent_id_str} marked as {task_state.name} in {task_id_str}.",
+                            level=logging.INFO
+                        )
 
-            except ValueError:
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[WARN] Agent {agent.agent_id} not in task {task_id} list.",
-                        level=logging.WARNING)
+                    # ✅ Check if ALL agents finished
+                    if all(
+                        state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]
+                        for state in task_data["agents"].values()
+                    ):
+                        if task_data["end_step"] is None:
+                            task_data["end_step"] = self.current_step
+                            logger.log_msg(
+                                f"[TASK COMPLETE] Task {task_id_str} fully completed at step {self.current_step}.",
+                                level=logging.INFO
+                            )
+                else:
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"[WARN] Agent {agent_id_str} not found in task {task_id_str} agent list.",
+                            level=logging.WARNING
+                        )
+                break
+        else:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[WARN] Task {task_id_str} not found in assigned_tasks!",
+                    level=logging.WARNING
+                )
+
+
 
     def update_tasks(self, agents):
         for agent in agents:
@@ -1256,11 +1308,8 @@ class Faction():
 
 
     def recruit_agent(self, role: str):
-        """
-        Recruits an agent of the given role if resources allow.
-        """
         try:
-            cost = utils_config.Gold_Cost_for_Agent  # Example recruitment cost per agent
+            cost = utils_config.Gold_Cost_for_Agent
 
             if self.gold_balance < cost:
                 if utils_config.ENABLE_LOGGING:
@@ -1269,22 +1318,30 @@ class Faction():
                         level=logging.WARNING)
                 return
 
-            # Deduct cost and create agent
+            # Deduct cost
             self.gold_balance -= cost
 
+            # Create agent
             new_agent = self.create_agent(role)
-            self.agents.append(new_agent)
+            if new_agent:
+                self.agents.append(new_agent)  # Add to faction
+                self.game_manager.agents.append(new_agent)  # <=== FIX: Add to global agent list!
 
-            if utils_config.ENABLE_LOGGING:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ RECRUIT] Faction {self.id} recruited new {role} — Gold: {self.gold_balance}, Total agents: {len(self.agents)}",
+                        level=logging.INFO)
+            else:
                 logger.log_msg(
-                    f"[HQ RECRUIT] Faction {self.id} recruited new {role} — Gold: {self.gold_balance}, Total agents: {len(self.agents)}",
-                    level=logging.INFO)
+                    f"[HQ RECRUIT] Spawn failed: No agent created.",
+                    level=logging.WARNING)
+
         except Exception as e:
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}",
-                    level=logging.ERROR)
-            raise ValueError(f"Failed to create {role} agent: {str(e)}")
+            logger.log_msg(
+                f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}",
+                level=logging.ERROR)
+            raise
+
 
     def create_agent(self, role: str):
         """
@@ -1293,7 +1350,6 @@ class Faction():
         try:
             spawn_x, spawn_y = self.home_base["position"]
 
-            # Determine agent class dynamically
             from AGENT.agent_base import Peacekeeper, Gatherer
             role_map = {
                 "peacekeeper": Peacekeeper,
@@ -1320,6 +1376,14 @@ class Faction():
             if not agent:
                 raise RuntimeError("spawn_agent returned None (no valid location found).")
 
+            # 🛠 Initialize critical fields
+            agent.current_action = None
+            agent.current_task = None
+            agent.current_task_state = utils_config.TaskState.NONE
+            agent.mode = "train"
+            agent.log_prob = None
+            agent.value = None
+
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[SPAWN] Created {role} for Faction {self.id} at ({agent.x}, {agent.y}).",
@@ -1334,6 +1398,7 @@ class Faction():
                 level=logging.ERROR
             )
             raise
+
 
 
     def is_under_attack(self) -> bool:

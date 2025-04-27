@@ -4,7 +4,7 @@ from SHARED.core_imports import *
 import UTILITIES.utils_config as utils_config
 
 
-tensorboard_logger = TensorBoardLogger()
+
 
 class ResourceManager:
     def __init__(self, terrain, tensorboard_logger=None):
@@ -245,10 +245,10 @@ class AppleTree:
             self.quantity -= gathered
             
             if self.is_depleted():
-                print(
+                """ print(
                     "\033[92m" +
                     f"Apple Tree at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain." +
-                    "\033[0m")
+                    "\033[0m") """
                 self.remove_from_terrain()
 
             return gathered
@@ -269,8 +269,8 @@ class AppleTree:
 
     def remove_from_terrain(self):
         """Remove the apple tree from the terrain and mark it as no longer available."""
-        print(
-            f"Attempting to remove Apple Tree at ({self.grid_x}, {self.grid_y}). Quantity: {self.quantity}")
+        # print(
+        #     f"Attempting to remove Apple Tree at ({self.grid_x}, {self.grid_y}). Quantity: {self.quantity}")
 
         # Ensure resource is actually depleted
         if self.quantity > 0:
@@ -286,10 +286,10 @@ class AppleTree:
         if self in self.resource_manager.resources:
             self.resource_manager.resources.remove(self)
             self.resource_manager.apple_tree_count -= 1
-            print(
-                "\033[92m" +
-                f"Resource successfully removed: Apple Tree at ({self.grid_x}, {self.grid_y})" +
-                "\033[0m")
+            # print(
+            #     "\033[92m" +
+            #     f"Resource successfully removed: Apple Tree at ({self.grid_x}, {self.grid_y})" +
+            #     "\033[0m")
         else:
             print(
                 f"Apple Tree at ({self.grid_x}, {self.grid_y}) not found in resource manager.")
@@ -366,8 +366,7 @@ class GoldLump:
                 credit_callback(1)  # Credit the mined gold to the faction
 
             if self.is_depleted():
-                print(
-                    f"Gold Lump at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain.")
+                #print(f"Gold Lump at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain.")
                 self.remove_from_terrain()
             return 1
         else:

@@ -9,8 +9,7 @@ import UTILITIES.utils_config as utils_config
 if utils_config.ENABLE_LOGGING:
     logger = Logger(log_file="PPO_Agent_Network.txt", log_level=logging.DEBUG)
 
-if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger = TensorBoardLogger()
+
 
 
 #    ____  ____   ___    __  __           _      _
@@ -362,7 +361,7 @@ class PPOModel(nn.Module):
                             "final_reward": average_reward
                         }
 
-                        tensorboard_logger.log_hparams(hparams, final_metrics)
+                        #tensorboard_logger.log_hparams(hparams, final_metrics)
 
                         if utils_config.ENABLE_LOGGING:
                             logger.log_msg(
