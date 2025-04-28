@@ -169,7 +169,7 @@ class HQ_Network(nn.Module):
             with torch.no_grad():
                 logits, _ = self.forward(state_tensor, role_tensor, local_tensor, global_tensor)
 
-            # 🔍 Log raw logits
+            #  Log raw logits
             logits_list = logits.squeeze(0).tolist()
             for i, value in enumerate(logits_list):
                 logger.log_msg(

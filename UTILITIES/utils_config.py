@@ -22,7 +22,7 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = False
+ENABLE_LOGGING = True
 """Enable logging for debugging"""
 
 ENABLE_TENSORBOARD = True
@@ -122,7 +122,7 @@ else:
 
 # Perlin Noise Settings
 # If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
-RandomiseTerrainBool = False  # Customise as needed!
+RandomiseTerrainBool = True  # Customise as needed!
 Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
 # combination with the current perlin noise settings
 

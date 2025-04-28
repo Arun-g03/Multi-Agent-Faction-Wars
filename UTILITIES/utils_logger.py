@@ -70,17 +70,20 @@ class Logger:
         """
         Log a message at a specified logging level.
         """
-        if not utils_config.ENABLE_LOGGING:
-            return
+        try:
+            if not utils_config.ENABLE_LOGGING:
+                raise Exception("Must enable logging through config before program start")
 
-        if level == logging.DEBUG:
-            self.logger.debug(message)
-        elif level == logging.INFO:
-            self.logger.info(message)
-        elif level == logging.WARNING:
-            self.logger.warning(message)
-        elif level == logging.ERROR:
-            self.logger.error(message)
-        elif level == logging.CRITICAL:
-            self.logger.critical(message)
+            if level == logging.DEBUG:
+                self.logger.debug(message)
+            elif level == logging.INFO:
+                self.logger.info(message)
+            elif level == logging.WARNING:
+                self.logger.warning(message)
+            elif level == logging.ERROR:
+                self.logger.error(message)
+            elif level == logging.CRITICAL:
+                self.logger.critical(message)
+        except Exception as e:
+            raise Exception(f"Logging error: {str(e)}")
 

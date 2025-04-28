@@ -910,7 +910,7 @@ class Faction():
             agent.current_task = task
             agent.update_task_state(utils_config.TaskState.ONGOING)
 
-            # ✅ New way: track it properly
+            #  New way: track it properly
             if not hasattr(self, "task_counter"):
                 self.task_counter = 0
             self.task_counter += 1
@@ -1003,7 +1003,7 @@ class Faction():
                             level=logging.INFO
                         )
 
-                    # ✅ Check if ALL agents finished
+                    #  Check if ALL agents finished
                     if all(
                         state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]
                         for state in task_data["agents"].values()
@@ -1095,7 +1095,7 @@ class Faction():
                 level=logging.WARNING)
 
         self.current_strategy = strategy
-        self.strategy_history.append(strategy)  # ✅ Track it
+        self.strategy_history.append(strategy)  #  Track it
         return strategy
 
 

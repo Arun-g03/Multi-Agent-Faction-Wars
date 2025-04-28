@@ -350,19 +350,19 @@ class GameRenderer:
                 GAME_FONT, font_size, (255, 255, 255)
             ))
 
-        # 🧮 Compute background size dynamically
+        # Compute background size dynamically
         padding = 10
         line_height = get_font(font_size).get_height() + 4
         max_width = max(line.get_width() for line in lines)
         total_height = len(lines) * line_height
 
-        # 🎨 Create dynamic HUD background
+        # Create dynamic HUD background
         hud_background = pygame.Surface((max_width + 2 * padding, total_height + 2 * padding))
         hud_background.set_alpha(128)
         hud_background.fill((0, 0, 0))
         screen.blit(hud_background, (10, 10))
 
-        # 🖼 Draw text lines
+        # Draw text lines
         for i, line in enumerate(lines):
             screen.blit(line, (10 + padding, 10 + padding + i * line_height))
 
@@ -427,7 +427,7 @@ class GameRenderer:
                         width=2)
 
 
-                    # 🎯 Highlight task target
+                    # Highlight task target
                     if isinstance(agent.current_task, dict):
                         task_type = agent.current_task.get("type", "unknown")
                         target = agent.current_task.get("target")
@@ -498,7 +498,7 @@ class GameRenderer:
                                         f"[ERROR] No valid target coordinates for Agent {agent.agent_id}",
                                         level=logging.ERROR)
 
-                    # 📝 Tooltip Info
+                    # Tooltip Info
                     if isinstance(agent.current_task, dict):
                         task_type = agent.current_task.get("type", "Unknown")
                         target = agent.current_task.get("target", {})
