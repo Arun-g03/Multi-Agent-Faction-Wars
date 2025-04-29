@@ -22,20 +22,6 @@ Metric data is logged either in real-time or at the end of each episode, dependi
 
 
 
-!!!tensorboard Command is incorrect-  path is wrong!!!
-To run TensorBoard:
-Use a second terminal/command prompt/PowerShell window and run:
-
-```
-tensorboard --logdir="Tensorboard_logs" --port=6006
-```
-
-Once started, access TensorBoard at:
-
-```
-http://localhost:6006
-```
-
 ### Customisation
 
 You can customise project settings in the utils_config.py file.
