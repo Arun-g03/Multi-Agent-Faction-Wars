@@ -12,8 +12,8 @@ import UTILITIES.utils_config as utils_config
 
 
 FACTION_GOAL = {
-    'gold_collection': 300,
-    'food_collection': 500
+    'gold_collection': 1000,
+    'food_collection': 1400
 }
 
 # Number of steps without meaningful activity to trigger a dynamic event

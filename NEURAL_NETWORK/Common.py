@@ -112,7 +112,7 @@ def clone_best_agents(agents, alpha=0.8, min_gap=5.0):
     if len(agents) < 2:
         return
 
-    # Ensure each agent has a running reward initialized
+    # Ensure each agent has a running reward initialised
     for agent in agents:
         rewards = agent.ai.memory.get("rewards", [])
         last_reward = rewards[-1] if rewards else 0

@@ -22,7 +22,7 @@ So i dont have to change the internal code every time I want to change something
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = True
+ENABLE_LOGGING = False
 """Enable logging for debugging"""
 
 ENABLE_TENSORBOARD = True
@@ -42,9 +42,9 @@ ENABLE_TENSORBOARD = True
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 10 # How many episodes or games to train for
+EPISODES_LIMIT = 10# How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 400
+STEPS_PER_EPISODE = 5000
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -97,8 +97,8 @@ SCREEN_HEIGHT = 1080 * ASPECT_RATIO
 CELL_SIZE = 20
 
 # Number of cells in the world
-num_cells_width = 30  # Number of cells horizontally
-num_cells_height = 30  # Number of cells vertically
+num_cells_width = 40  # Number of cells horizontally
+num_cells_height = 40  # Number of cells vertically
 
 # Precision setting
 SUB_TILE_PRECISION = False
@@ -122,7 +122,7 @@ else:
 
 # Perlin Noise Settings
 # If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
-RandomiseTerrainBool = True  # Customise as needed!
+RandomiseTerrainBool = False # Customise as needed!
 Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
 # combination with the current perlin noise settings
 
@@ -169,12 +169,15 @@ NOISE_LACUNARITY = 1.5
 WATER_COVERAGE = 0.3
 
 # Resource Parameters
-TREE_DENSITY = 0.09  # Density of apple trees on land # Customise as needed!
+TREE_DENSITY = 0.05# Density of apple trees on land # Customise as needed!  #DEFAULT 0.05
 # Time in seconds for an apple tree to regrow an apple # Customise as needed!
-APPLE_REGEN_TIME = 10
+APPLE_REGEN_TIME = 20 #DEFAULT 20
 # Probability of spawning a gold zone # Customise as needed!
-GOLD_ZONE_PROBABILITY = 0.1
-GOLD_SPAWN_DENSITY = 0.05  # Density of gold in gold zones # Customise as needed!
+GOLD_ZONE_PROBABILITY = 0.05 #Default 0.05
+GOLD_SPAWN_DENSITY = 0.03  # Density of gold in gold zones # Customise as needed!
+
+Apple_Base_quantity = 5  # Base quantity of apples on a tree # Customise as needed!
+GoldLump_base_quantity = 5  # Base quantity of gold in a gold zone # Customise as needed!
 
 # File paths for resource images
 # Okay as is
@@ -354,7 +357,7 @@ Agent_Interact_Range = 2  # Agent interact range, Anything inside will be intera
 Peacekeeper_PNG = 'RENDER\IMAGES\peacekeeper.png'  # Path to peacekeeper image
 Gatherer_PNG = 'RENDER\IMAGES\gatherer.png'  # Path to gatherer image
 
-Gold_Cost_for_Agent = 2  # Gold cost for an agent
+Gold_Cost_for_Agent = 10  # Gold cost for an agent
 
 
 DEF_AGENT_STATE_SIZE = 11 + len(TASK_TYPE_MAPPING)
@@ -378,12 +381,13 @@ HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
 Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 
 # Team Composition
-FACTON_COUNT = 2  # Number of factons # Customise as needed!
+FACTON_COUNT = 3 # Number of factons # Customise as needed!
 # Initial number of gatherers for a single faction # Customise as needed!
-INITAL_GATHERER_COUNT = 2
+INITAL_GATHERER_COUNT = 3
 # Initial number of peacekeepers for a single faction # Customise as needed!
-INITAL_PEACEKEEPER_COUNT = 2
+INITAL_PEACEKEEPER_COUNT = 1
 
+MAX_AGENTS = 10  # Maximum number of agents per faction
 
 #     ____
 #    / ___|__ _ _ __ ___   ___ _ __ __ _

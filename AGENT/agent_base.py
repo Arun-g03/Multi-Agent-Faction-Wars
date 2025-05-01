@@ -264,7 +264,7 @@ class BaseAgent:
 
                 if len(set(self.recent_positions)) <= 2:
                     logger.log_msg(
-                        f"Agent {self.agent_id} ({self.role}) is likely stuck. Penalizing.",
+                        f"Agent {self.agent_id} ({self.role}) is likely stuck. Penalising.",
                         level=logging.WARNING
                     )
                     self.Health -= 2

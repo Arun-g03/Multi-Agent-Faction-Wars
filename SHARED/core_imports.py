@@ -31,7 +31,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import noise
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, label
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 import seaborn as sns

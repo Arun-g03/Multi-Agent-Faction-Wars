@@ -209,7 +209,7 @@ class AppleTree:
         self.terrain = terrain
         self.resource_manager = resource_manager
         self.max_quantity = quantity  # Store max quantity
-        self.quantity = random.randint(1, 6)  # Number of apples
+        self.quantity = utils_config.Apple_Base_quantity  # Number of apples
         self.last_regen_time = time.time()  # Track last regeneration time
 
         # Load the sprite sheet
@@ -346,7 +346,7 @@ class GoldLump:
         self.grid_x = grid_x
         self.grid_y = grid_y
         self.terrain = terrain
-        self.quantity = random.randint(1, 20)  # Set quantity of gold
+        self.quantity = utils_config.GoldLump_base_quantity  # Set quantity of gold
         self.resource_manager = resource_manager
 
         # Load and scale the gold image

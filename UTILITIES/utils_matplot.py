@@ -8,6 +8,7 @@ import glob
 import pandas as pd
 import numpy as np
 import os
+import csv
 from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
 import UTILITIES.utils_config as utils_config
@@ -21,9 +22,11 @@ class MatplotlibPlotter:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         if not hasattr(cls._instance, "image_dir"):
-            cls._instance.image_dir = image_dir or "RUNTIME_LOGS/plots"
+            cls._instance.image_dir = image_dir
         if not hasattr(cls._instance, "episode_data"):
             cls._instance.episode_data = defaultdict(list)
+        if not hasattr(cls._instance, "plot_types"):
+            cls._instance.plot_types = {}  # new: name -> "scalar" or "heatmap"
         return cls._instance
 
     # === Core Utilities ===
@@ -68,17 +71,27 @@ class MatplotlibPlotter:
 
     # === Data Collection ===
 
-    def add_episode_matrix(self, name, matrix, step=0, episode=None, extra_data=None):
+    def add_episode_matrix(self, name, matrix, step=0, episode=None, extra_data=None, plot_type="heatmap", keys=None):
         """
-        Add matrix + optional metadata (extra_data) for this episode.
+        Add matrix + optional metadata (extra_data) and custom keys (for X-axis or other uses) for this episode.
         """
+        # If custom keys are provided, ensure they match the shape of the matrix
+        if keys is not None and len(keys) != matrix.shape[1]:
+            print(f"[ERROR] The number of keys does not match the number of columns in the matrix.")
+            return
+
         entry = {
             "matrix": np.array(matrix),
             "step": step,
             "episode": episode,
-            "extra_data": extra_data or {}
+            "extra_data": extra_data or {},
+            "keys": keys if keys is not None else []
         }
+
+        # Store the matrix and its metadata
         self.episode_data[name].append(entry)
+        self.plot_types[name] = plot_type  # track intended plot type
+
 
     def flush_episode_plots(self, tensorboard_logger=None, save_data=True, save_as="npy"):
         for name, entries in self.episode_data.items():
@@ -90,50 +103,79 @@ class MatplotlibPlotter:
                 stacked = np.vstack(matrices)
                 summary = np.sum(stacked, axis=0, keepdims=True)
 
-                # Infer plot type
-                role_name = name.replace("_actions", "").replace("_task_distribution", "")
-                if "task_distribution" in name:
-                    label_source = list(utils_config.TASK_TYPE_MAPPING.keys())
-                    title = f"{role_name.title()} Task Summary"
+                plot_type = self.plot_types.get(name, "heatmap")
+                keys = entries[0].get("keys", None)  # Get keys from the first entry (if present)
+
+                if plot_type == "scalar":
+                    self.plot_scalar_summary(
+                        value=summary[0][0],
+                        name=name,
+                        step=step,
+                        episode=episode,
+                        tensorboard_logger=tensorboard_logger
+                    )
                 else:
-                    label_source = utils_config.ROLE_ACTIONS_MAP.get(role_name, [str(i) for i in range(summary.shape[1])])
-                    title = f"{role_name.title()} Action Summary"
+                    role_name = name.replace("_actions", "").replace("_task_distribution", "")
+                    
+                    # Determine title and labels based on the plot name
+                    if "task_distribution" in name:
+                        label_source = list(utils_config.TASK_TYPE_MAPPING.keys())
+                        title = f"{role_name.title()} Task Summary"
+                    else:
+                        label_source = utils_config.ROLE_ACTIONS_MAP.get(role_name, [str(i) for i in range(summary.shape[1])])
+                        title = f"{role_name.title()} Action Summary"
 
-                action_labels = label_source[:summary.shape[1]]
-                df = pd.DataFrame(summary, columns=action_labels)
+                    action_labels = label_source[:summary.shape[1]]
+                    df = pd.DataFrame(summary, columns=action_labels)
 
-                self.plot_heatmap(
-                    data=df,
-                    name=name,
-                    title=title,
-                    tensorboard_logger=tensorboard_logger,
-                    step=step,
-                    episode=episode,
-                    save_data=save_data,
-                    save_as=save_as
-                )
+                    # Plot heatmap with custom keys for the x-axis (if available)
+                    self.plot_heatmap(
+                        data=df,
+                        name=name,
+                        title=title,
+                        tensorboard_logger=tensorboard_logger,
+                        step=step,
+                        episode=episode,
+                        save_data=save_data,
+                        save_as=save_as,
+                        xticks=keys  # Pass keys for X-axis labels if available
+                    )
 
             except Exception as e:
                 print(f"[Plotter] Failed to summarize {name}: {e}")
 
         self.episode_data.clear()
 
+
     # === Plot Types ===
 
     def plot_heatmap(self, data, name="heatmap", title=None,
-                     tensorboard_logger=None, step=0, episode=None,
-                     save_data=True, save_as="npy"):
+                 tensorboard_logger=None, step=0, episode=None,
+                 save_data=True, save_as="csv", xticks=None):
+        """
+        Plot a heatmap with custom X-axis labels (xticks).
+        """
         fig, ax = plt.subplots(figsize=(12, 6))
 
+        fmt = ".2f" if data.values.dtype.kind == "f" else "d"
+        
         if isinstance(data, pd.DataFrame):
-            sns.heatmap(data, annot=True, fmt="d", cmap="viridis", ax=ax, cbar=True)
-            ax.set_xticklabels(data.columns, rotation=25, ha='right')
+            sns.heatmap(data, annot=True, fmt=fmt, cmap="viridis", ax=ax, cbar=True)
+            # Set custom xticks if provided
+            if xticks:
+                ax.set_xticklabels(xticks, rotation=25, ha='right')
+            else:
+                ax.set_xticklabels(data.columns, rotation=25, ha='right')
         else:
-            sns.heatmap(data, annot=True, fmt="d", cmap="viridis", ax=ax, cbar=True)
+            sns.heatmap(data, annot=True, fmt=fmt, cmap="viridis", ax=ax, cbar=True)
+            # Set custom xticks if provided
+            if xticks:
+                ax.set_xticklabels(xticks, rotation=25, ha='right')
 
         ax.set_yticks([0])
         ax.set_yticklabels(["Summary"])
         ax.set_xlabel("Action")
+        
         title = title or name.replace("_", " ").title()
         if episode is not None:
             title += f" (Episode {episode})"
@@ -142,105 +184,230 @@ class MatplotlibPlotter:
         file_name = f"{name}_ep{episode}" if episode is not None else name
         save_dir = self.image_dir
         if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
-            save_dir = tensorboard_logger.run_dir
-        os.makedirs(save_dir, exist_ok=True)
+            save_dir = tensorboard_logger.run_dir  # Use the directory managed by TensorBoard
+        os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
 
         self.update_image_plot(name=file_name, fig=fig, tensorboard_logger=tensorboard_logger, step=step)
 
+        # Save data as CSV alongside the image plot
         if save_data:
             try:
-                data_path = os.path.join(save_dir, f"{file_name}.{save_as}")
-                if save_as == "npy":
-                    np.save(data_path, data)
-                elif save_as == "csv":
-                    pd.DataFrame(data).to_csv(data_path, index=False)
-                print(f"[Plotter] Saved data to {data_path}")
+                # Save CSV in the same directory as the plot
+                csv_filename = os.path.join(save_dir, f"{name}_Episode_{episode}.csv")
+                
+                # Assuming `data` is a DataFrame, you can save it directly as CSV
+                data.to_csv(csv_filename, index=False)
+                print(f"[Plotter] CSV data saved to {csv_filename}")
             except Exception as e:
-                print(f"[Plotter] Failed to save heatmap data: {e}")
-
-    def plot_task_timeline(self, task_records, name="task_timeline", tensorboard_logger=None, step=0):
-        """
-        Summarized task timeline: success, failure, ongoing counts and average completion time per task type.
-        """
-        if not task_records:
-            print("[Plotter] No task records provided.")
-            return
-
-        # Aggregation
-        task_summary = {}
-
-        for task_id, task_info in task_records.items():
-            task_label = task_info.get("task_id", "unknown")
-
-            if "Mine" in task_label:
-                category = "mine"
-            elif "Forage" in task_label:
-                category = "forage"
-            elif "Explore" in task_label:
-                category = "explore"
-            elif "DefendHQ" in task_label:
-                category = "defend"
-            else:
-                category = task_info.get("type", "unknown")  # fallback to base type
-
-            start = task_info.get("start_step", 0)
-            end = task_info.get("end_step", step)
-
-            if category not in task_summary:
-                task_summary[category] = {"success": 0, "failure": 0, "ongoing": 0, "durations": []}
-
-            for agent_id, result in task_info.get("agents", {}).items():
-                if result.name.lower() == "success":
-                    task_summary[category]["success"] += 1
-                    if end is not None:
-                        task_summary[category]["durations"].append(end - start)
-                elif result.name.lower() == "failure":
-                    task_summary[category]["failure"] += 1
-                else:
-                    task_summary[category]["ongoing"] += 1
-
-        # Prepare data for plot
-        types = list(task_summary.keys())
-        success_counts = [task_summary[t]["success"] for t in types]
-        failure_counts = [task_summary[t]["failure"] for t in types]
-        ongoing_counts = [task_summary[t]["ongoing"] for t in types]
-        avg_completion_times = [
-            np.mean(task_summary[t]["durations"]) if task_summary[t]["durations"] else 0
-            for t in types
-        ]
-
-        x = np.arange(len(types))
-        width = 0.25
-
-        fig, ax = plt.subplots(figsize=(14, 7))
-
-        # Bars for each category
-        rects1 = ax.bar(x - width, success_counts, width, label='Success', color='#4CAF50')  # green
-        rects2 = ax.bar(x, failure_counts, width, label='Failure', color='#F44336')  # red
-        rects3 = ax.bar(x + width, ongoing_counts, width, label='Ongoing', color='#FFC107')  # yellow-orange
+                print(f"[Plotter] Failed to write CSV for {name}: {e}")
 
 
-        # Labels and title
-        ax.set_ylabel('Count')
-        ax.set_title('Task Success vs Failure vs Ongoing Counts')
-        ax.set_xticks(x)
-        ax.set_xticklabels(types, rotation=30, ha='right')
-        ax.legend()
 
-        # Annotate average completion time above success bars
-        for idx, rect in enumerate(rects1):
-            height = rect.get_height()
-            if height > 0:  # Only annotate if non-zero
-                ax.annotate(f'{avg_completion_times[idx]:.1f}s',
-                            xy=(rect.get_x() + rect.get_width() / 2, height),
-                            xytext=(0, 3),
-                            textcoords="offset points",
-                            ha='center', va='bottom', fontsize=8, color='blue')
 
-        ax.grid(True, linestyle='--', alpha=0.5)
+    def plot_scalar(self, name, value, step=0, episode=None):
+        matrix = np.array([[value]])
+        self.add_episode_matrix(name, matrix, step=step, episode=episode, plot_type="scalar")
 
-        # Save and send to TensorBoard
+    def plot_scalar_summary(self, value, name, step, episode, tensorboard_logger=None):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.bar(["value"], [value])
+        ax.set_ylim(bottom=0)
+        ax.set_title(f"{name} (Episode {episode})")
+        ax.set_ylabel("Value")
+
         self.update_image_plot(name=name, fig=fig, tensorboard_logger=tensorboard_logger, step=step)
+
+    
+
+
+    
+    def plot_clustered_stacked_bar_chart(self, task_types, success_counts, failure_counts, ongoing_counts, episodes, tensorboard_logger=None, step=0, name=None):
+        """
+        Plots a clustered stacked bar chart to represent task success, failure, and ongoing counts over a single episode for each faction.
+        Each cluster represents one task type with bars for the outcomes: Success, Failure, and Ongoing.
+
+        Parameters:
+        - task_types: List of task types (e.g., 'gather', 'explore', etc.).
+        - success_counts: List of success counts for each task type in the episode.
+        - failure_counts: List of failure counts for each task type in the episode.
+        - ongoing_counts: List of ongoing counts for each task type in the episode.
+        - episodes: List of episode numbers.
+        - tensorboard_logger: TensorBoard logger instance (optional).
+        - step: Current step (for TensorBoard).
+        - name: Name of the plot (e.g., "Faction_1_Task_Timeline").
+        """
+
+        num_task_types = len(task_types)
+
+        # Prepare the x positions for each task type (each task type will have a single bar for each episode)
+        x = np.arange(num_task_types)  # X locations for the task types
+        width = 0.5  # Width of each bar
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        # Loop through each task and plot stacked bars for Success, Failure, and Ongoing
+        for i, task_type in enumerate(task_types):
+            ax.bar(x[i], success_counts[i], width, label="Success", color='#4CAF50')  # Green for success
+            ax.bar(x[i], failure_counts[i], width, label="Failure", color='#F44336', bottom=success_counts[i])  # Red for failure
+            ax.bar(x[i], ongoing_counts[i], width, label="Ongoing", color='#FFC107', bottom=np.array(success_counts[i]) + np.array(failure_counts[i]))  # Yellow for ongoing
+
+        # Labeling the x-axis and adding necessary plot details
+        ax.set_xticks(x)
+        ax.set_xticklabels(task_types, rotation=45, ha='right')
+        ax.set_xlabel("Task Type")
+        ax.set_ylabel("Count")
+        ax.set_title(f"Task Success vs Failure vs Ongoing Counts for {name} in Episode {episodes[0]}")
+
+        # Adjust the legend to display only color labels for Success, Failure, and Ongoing
+        handles, labels = ax.get_legend_handles_labels()
+        new_labels = ['Success', 'Failure', 'Ongoing']  # New legend labels
+        ax.legend(handles=handles[:3], labels=new_labels, title="Task Status", loc='upper left', ncol=3)
+
+        # Display grid for clarity
+        ax.grid(True, linestyle='--', alpha=0.7)
+
+        # Update and save the plot with the provided name
+        if name:
+            self.update_image_plot(name=name, fig=fig, tensorboard_logger=tensorboard_logger, step=step)
+
+        plt.tight_layout()
+
+        # Save data as CSV alongside the image plot
+        if name:
+            # Use tensorboard_logger's run_dir if available, else fallback to self.image_dir
+            save_dir = self.image_dir
+            if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
+                save_dir = tensorboard_logger.run_dir  # Use TensorBoard's directory if available
+            
+            os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
+
+            csv_filename = os.path.join(save_dir, f"{name}_Episode_{episodes[0]}.csv")
+
+            try:
+                with open(csv_filename, "w", newline="") as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(["Task Type", "Success", "Failure", "Ongoing"])
+                    for i in range(len(task_types)):
+                        writer.writerow([
+                            task_types[i],
+                            success_counts[i],
+                            failure_counts[i],
+                            ongoing_counts[i]
+                        ])
+                print(f"[Plotter] CSV data saved to {csv_filename}")
+            except Exception as e:
+                print(f"[Plotter] Failed to write CSV for {name}: {e}")
+
+
+    
+        
+
+
+
+
+            
+
+
+
+
+
+
+
+    def plot_scalar_over_time(self, names, values_list, episodes, tensorboard_logger=None):
+        """
+        Plots multiple lines on a single plot. Each line corresponds to a different name and value set.
+
+        Parameters:
+        - names: List of strings, each representing the label for a line.
+        - values_list: List of lists or arrays containing the values for each line.
+        - episodes: List of episodes (x-axis).
+        - tensorboard_logger: TensorBoard logger instance (optional).
+        """
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Plot each set of values with a corresponding name
+        for name, values in zip(names, values_list):
+            ax.plot(episodes, values, marker='o', label=name)
+
+            # Calculate the final average for this line
+            final_avg = sum(values) / len(values) if values else 0
+
+            # Add the final average as text on the plot
+            ax.text(
+                episodes[-1], final_avg, 
+                f"Avg: {final_avg:.2f}", 
+                color='black', 
+                backgroundcolor='grey',
+                fontsize=10,
+                verticalalignment='bottom', 
+                horizontalalignment='right'
+            )
+
+        # Clean the names for title and legend purposes (replace underscores with spaces)
+        clean_names = [name.replace("_", " ") for name in names]
+        
+        # Set the title and labels
+        ax.set_title(f"{names} over {episodes[-1]} episodes")
+        ax.set_xlabel("Episode")
+        ax.set_ylabel("Value")
+        ax.grid(True)
+        ax.legend(title="Metrics")
+        
+        # Update the plot with the cleaned name for the file
+        self.update_image_plot(name="_".join(clean_names) + "_trend", fig=fig, tensorboard_logger=tensorboard_logger, step=episodes[-1])
+
+        # Save scalar data as CSV
+        save_dir = self.image_dir
+        if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
+            save_dir = tensorboard_logger.run_dir  # Use TensorBoard's directory if available
+        
+        os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
+
+        csv_name = "_".join(clean_names) + "_trend.csv"
+        csv_path = os.path.join(save_dir, csv_name)
+
+        try:
+            with open(csv_path, "w", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["Episode"] + clean_names)
+                for i, ep in enumerate(episodes):
+                    # Check if any list in values_list is empty or shorter than expected for the current episode
+                    row = [ep]
+                    for j in range(len(names)):
+                        if len(values_list[j]) > i:
+                            row.append(values_list[j][i])
+                        else:
+                            row.append(0)  # Default value when there's no data for that episode (e.g., 0)
+                    
+                    writer.writerow(row)
+
+            print(f"[Plotter] Scalar trend data saved to {csv_path}")
+        except Exception as e:
+            print(f"[Plotter] Failed to write CSV for scalar trend: {e}")
+
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     # === Saved Plots Utility ===

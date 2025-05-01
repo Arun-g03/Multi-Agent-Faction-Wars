@@ -26,6 +26,38 @@ class Terrain:
             lacunarity=utils_config.NOISE_LACUNARITY)
         self.grid = self.smooth_noise_map(self.grid)
 
+
+    
+
+    def ensure_connected_land(self, grid, min_land_ratio=0.6):
+    
+        """
+        Ensures that most of the land is in a single connected component.
+        Disconnects small patches.
+        """
+        width, height = grid.shape
+        land_mask = np.array([[cell['type'] == 'land' for cell in row] for row in grid])
+
+        # Label connected components
+        labeled, num_features = label(land_mask)
+
+        # Count size of each component
+        counts = np.bincount(labeled.flatten())
+        if len(counts) <= 1:
+            return grid  # No land detected
+
+        # Identify largest component
+        largest_label = counts[1:].argmax() + 1
+
+        # Keep only the largest landmass
+        for i in range(width):
+            for j in range(height):
+                if labeled[i, j] != largest_label:
+                    grid[i][j]['type'] = 'water'
+        
+        return grid
+
+
     #                                    _                         _ _                     _
     #     __ _  ___ _ __   ___ _ __ __ _| |_ ___   _ __   ___ _ __| (_)_ __    _ __   ___ (_)___  ___
     #    / _` |/ _ \ '_ \ / _ \ '__/ _` | __/ _ \ | '_ \ / _ \ '__| | | '_ \  | '_ \ / _ \| / __|/ _ \
@@ -34,69 +66,72 @@ class Terrain:
     #    |___/                                    |_|
 
     def generate_noise_map(
-            self,
-            width,
-            height,
-            scale,
-            octaves,
-            persistence,
-            lacunarity,
-            random=utils_config.RandomiseTerrainBool):
+        self,
+        width,
+        height,
+        scale,
+        octaves,
+        persistence,
+        lacunarity,
+        random=utils_config.RandomiseTerrainBool
+    ):
         """
         Generate Perlin noise-based terrain with structured data for each cell.
+        Regenerates if the resulting terrain has poor land connectivity.
         """
 
-        #    ____                  _  __                  _ _       _       _
-        #   / ___| _ __   ___  ___(_)/ _|_   _    ___ ___| | |   __| | __ _| |_ __ _
-        #   \___ \| '_ \ / _ \/ __| | |_| | | |  / __/ _ \ | |  / _` |/ _` | __/ _` |
-        #    ___) | |_) |  __/ (__| |  _| |_| | | (_|  __/ | | | (_| | (_| | || (_| |
-        #   |____/| .__/ \___|\___|_|_|  \__, |  \___\___|_|_|  \__,_|\__,_|\__\__,_|
-        #         |_|                    |___/
-
-        # Define a structured NumPy array with fields 'type', 'occupied',
-        # 'faction', and 'resource_type'
-        dtype = [('type', 'U10'),      # 'land' or 'water'
-                 ('occupied', 'bool'),  # True if the cell is occupied by an agent
-                 # Name or ID of the faction occupying the cell, None if
-                 # unoccupied
-                 ('faction', 'U10'),
-                 ('resource_type', 'U15')]  # Resource type (e.g., 'apple_tree', 'gold_lump'), None if no resource
+        dtype = [
+            ('type', 'U10'),           # 'land' or 'water'
+            ('occupied', 'bool'),      # True if occupied by an agent
+            ('faction', 'U10'),        # Faction name or ID
+            ('resource_type', 'U15')   # e.g., 'apple_tree', 'gold_lump'
+        ]
         grid = np.zeros((width, height), dtype=dtype)
-
-        # Generate Perlin noise for terrain elevation
         x_indices = np.linspace(0, width / scale, width)
         y_indices = np.linspace(0, height / scale, height)
         nx, ny = np.meshgrid(x_indices, y_indices)
 
-        noise_map = np.zeros((width, height))
-        base_seed = np.random.randint(
-            0, 1000) if random else utils_config.Terrain_Seed
-        for i in range(width):
-            for j in range(height):
-                noise_map[i][j] = noise.pnoise2(
-                    nx[i][j],
-                    ny[i][j],
-                    octaves=octaves,
-                    persistence=persistence,
-                    lacunarity=lacunarity,
-                    repeatx=1024,
-                    repeaty=1024,
-                    base=base_seed)
+        max_retries = 500
+        attempts = 0
+        land_ratio = 0
 
-        # Apply water threshold
-        threshold = np.percentile(noise_map, utils_config.WATER_COVERAGE * 100)
+        while land_ratio < 0.6 and attempts <= max_retries:
+            base_seed = np.random.randint(0, 1000) if random else utils_config.Terrain_Seed
+            noise_map = np.zeros((width, height))
 
-        for i in range(width):
-            for j in range(height):
-                if noise_map[i][j] < threshold:  # Water
-                    grid[i][j]['type'] = 'water'
-                else:  # Land
-                    grid[i][j]['type'] = 'land'
-                grid[i][j]['occupied'] = False
-                grid[i][j]['faction'] = 'None'
-                grid[i][j]['resource_type'] = 'None'
+            for i in range(width):
+                for j in range(height):
+                    noise_map[i][j] = noise.pnoise2(
+                        nx[i][j], ny[i][j],
+                        octaves=octaves,
+                        persistence=persistence,
+                        lacunarity=lacunarity,
+                        repeatx=1024,
+                        repeaty=1024,
+                        base=base_seed
+                    )
+
+            threshold = np.percentile(noise_map, utils_config.WATER_COVERAGE * 100)
+
+            for i in range(width):
+                for j in range(height):
+                    grid[i][j]['type'] = 'land' if noise_map[i][j] >= threshold else 'water'
+                    grid[i][j]['occupied'] = False
+                    grid[i][j]['faction'] = 'None'
+                    grid[i][j]['resource_type'] = 'None'
+
+            grid = self.ensure_connected_land(grid)
+
+            land_tiles = np.count_nonzero(grid['type'] == 'land')
+            total_tiles = width * height
+            land_ratio = land_tiles / total_tiles
+            attempts += 1
+
+        if land_ratio < 0.6:
+            print(f"[WARNING] Terrain generation produced only {land_ratio:.2%} land after {attempts} attempts.")
 
         return grid
+
 
     def smooth_noise_map(self, grid):
         """

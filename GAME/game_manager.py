@@ -44,6 +44,9 @@ class GameManager:
         # Initialise a logger specific to GameManager
         self.logger = Logger(
             log_file="game_manager_log.txt", log_level=logging.DEBUG)
+        self.metric_history = defaultdict(lambda: defaultdict(list))
+        # Structure: {faction_id: {metric_name: [values over episodes]}}
+
         
         # Log initialisation
         if utils_config.ENABLE_LOGGING:
@@ -203,8 +206,9 @@ class GameManager:
             # Handle camera movement input
             keys = pygame.key.get_pressed()
             self.handle_camera_movement(keys)
+            plotter = MatplotlibPlotter()
 
-            # 🧼 Clear prior-step action decisions (important for batching)
+            #Clear prior-step action decisions (important for batching)
             for agent in self.agents:
                 agent.current_action = None
                 agent.log_prob = None
@@ -239,10 +243,29 @@ class GameManager:
             # Let HQs assign strategies/tasks
             for faction in self.faction_manager.factions:
                 faction.update(self.resource_manager, self.agents, self.current_step)
-            
-            
 
-            
+                # === Track the HQ strategy for each faction and log it as a heatmap ===
+                # Get the current strategy for the faction (e.g., "DEFEND_HQ", "COLLECT_GOLD", etc.)
+                if faction.current_strategy is not None:
+                    strategy_index = utils_config.HQ_STRATEGY_OPTIONS.index(faction.current_strategy)
+                    
+                    # Use one-hot encoding to visualize which strategy is being used
+                    one_hot_strategy = np.zeros((1, len(utils_config.HQ_STRATEGY_OPTIONS)), dtype=int)
+                    one_hot_strategy[0, strategy_index] = 1
+                    
+                    # Define the strategy keys for X-axis labeling
+                    strategy_keys = utils_config.HQ_STRATEGY_OPTIONS  # List of strategies
+                    
+                    plotter.add_episode_matrix(
+                        name=f"Faction_{faction.id}_HQ_Strategy",
+                        matrix=one_hot_strategy,
+                        step=self.current_step,
+                        episode=self.episode,
+                        plot_type="heatmap",
+                        keys=strategy_keys  # Pass strategy keys for X-axis labels
+                    )
+                            
+                            
             
 
             # ========== TensorBoard Logging + Plotting ==========
@@ -267,24 +290,38 @@ class GameManager:
 
                         role_task_buffers[role].append(task_index)
 
+                        
                         # ==== Add episode matrix for Matplotlib ====
                         one_hot_action = np.zeros((1, len(utils_config.ROLE_ACTIONS_MAP[role])), dtype=int)
                         one_hot_action[0, action_index] = 1
+
+                        # Define the keys (e.g., action names or strategy names) for X-axis labeling
+                        action_keys = utils_config.ROLE_ACTIONS_MAP[role]  # List of action names for current role
+
+
                         plotter.add_episode_matrix(
                             name=f"{role}_actions (Grouped by Role)",
                             matrix=one_hot_action,
                             step=self.current_step,
-                            episode=self.episode
+                            episode=self.episode,
+                            plot_type="heatmap",
+                            keys=action_keys  # Pass action keys for X-axis labels
                         )
 
                         num_task_types = len(utils_config.TASK_TYPE_MAPPING)
                         one_hot_task = np.zeros((1, num_task_types), dtype=int)
                         one_hot_task[0, task_index] = 1
+
+                        # Define the keys (e.g., task names) for X-axis labeling
+                        task_keys = list(utils_config.TASK_TYPE_MAPPING.keys())
+
                         plotter.add_episode_matrix(
                             name=f"{role}_task_distribution",
                             matrix=one_hot_task,
                             step=self.current_step,
-                            episode=self.episode
+                            episode=self.episode,
+                            plot_type="heatmap",
+                            keys=task_keys  # Pass task keys for X-axis labels
                         )
 
                     # ==== Log agent models once ====
@@ -694,395 +731,481 @@ class GameManager:
         """
         Main game loop handling both training and evaluation modes.
         """
-        self.best_scores_per_role = {}  # role -> (best_reward, agent)
+        self.best_scores_per_role = {}
+        self.global_hq_top5 = []
+        running = True
 
         try:
             print(f"Running game in {self.mode} mode...")
-            running = True
 
             while running and (self.episode <= utils_config.EPISODES_LIMIT):
                 self.reset()
-                print(
-                    "\033[92m" +
-                    f"Starting {self.mode} Episode {self.episode}" +
-                    "\033[0m")
+                self.episode_reward = 0  # <-- Initialise episode_reward at the start of the episode
+                print(f"\033[92mStarting {self.mode} Episode {self.episode}\033[0m")
                 if utils_config.ENABLE_LOGGING:
-                    self.logger.log_msg(
-                        f"Starting {self.mode} Episode", level=logging.INFO)
+                    self.logger.log_msg(f"Starting {self.mode} Episode", level=logging.INFO)
 
                 self.current_step = 0
-                episode_reward = 0
-                
+                role_rewards = {}
+
+                # Calculate HQ rewards for each faction
+                hq_rewards = {faction.id: faction.compute_hq_reward(victory=True) for faction in self.faction_manager.factions}
 
                 while self.current_step < utils_config.STEPS_PER_EPISODE:
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            print("[INFO] Window closed. Exiting game...")
-                            if utils_config.ENABLE_LOGGING:
-                                self.logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
-                            self.cleanup(QUIT=True)
-
-                        elif event.type == pygame.KEYDOWN:
-                            if event.key in (pygame.K_PLUS, pygame.K_EQUALS):
-                                mouse_x, mouse_y = pygame.mouse.get_pos()
-                                self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
-                            elif event.key == pygame.K_MINUS:
-                                mouse_x, mouse_y = pygame.mouse.get_pos()
-                                self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
-
-
-                                                
+                    self.process_pygame_events()
 
                     self.step()
-                    self.current_step += 1
-
-                    for res in self.resource_manager.resources:
-                        if isinstance(res, AppleTree):
-                            res.update()
-
-                    self.resource_counts = {
-                        "gold_lumps": sum(
-                            1 for res in self.resource_manager.resources if isinstance(
-                                res, GoldLump)), "gold_quantity": sum(
-                            res.quantity for res in self.resource_manager.resources if isinstance(
-                                res, GoldLump)), "apple_trees": sum(
-                            1 for res in self.resource_manager.resources if isinstance(
-                                res, AppleTree)), "apple_quantity": sum(
-                            res.quantity for res in self.resource_manager.resources if isinstance(
-                                res, AppleTree)), }
-
+                    self.update_resources()
                     self.renderer.render(
-                        self.camera,
-                        self.terrain,
-                        self.resource_manager.resources,
-                        self.faction_manager.factions,
-                        self.agents,
-                        self.episode,
-                        self.current_step,
-                        self.resource_counts
+                        self.camera, self.terrain, self.resource_manager.resources,
+                        self.faction_manager.factions, self.agents,
+                        self.episode, self.current_step, self.resource_counts
                     )
 
-                    for agent in self.agents:
-                        if agent.ai.memory["rewards"]:
-                            episode_reward += agent.ai.memory["rewards"][-1]
-
+                    self.collect_episode_rewards()  # Collect rewards from agents
                     pygame.display.update()
-
-                    events = self.event_manager.get_events()
-                    for event in events:
-                        self.handle_event(event)
 
                     winner = check_victory(self.faction_manager.factions)
                     winner_id = winner.id if winner else None
                     if winner:
-                        print(
-                            f"Faction {winner.id} wins! Moving to next episode...")
-                        if utils_config.ENABLE_LOGGING:
-                            self.logger.log_msg(
-                                f"Faction {winner.id} wins! Ending episode early.",
-                                level=logging.INFO)
+                        self.handle_victory(winner)
                         break
 
-                # TensorBoard: Episode summary
+                    self.current_step += 1
+
+                # === End of Episode ===
                 if utils_config.ENABLE_TENSORBOARD:
-                    tensorboard_logger.log_scalar(
-                        "Episode/Steps_Taken", self.current_step, self.episode)
-
-                for faction in self.faction_manager.factions:
-                    # Aggregate rewards per role
-                    role_rewards = {}
-                    total_reward = 0
-
-                    for agent in faction.agents:
-                        rewards = agent.ai.memory.get("rewards", [])
-                        if rewards:
-                            last_reward = rewards[-1]
-                            total_reward += last_reward
-
-                            role = agent.role
-                            role_rewards[role] = role_rewards.get(
-                                role, 0) + last_reward
-
-                    # Log overall faction reward
-                    if utils_config.ENABLE_TENSORBOARD:
-                        tensorboard_logger.log_scalar(
-                            f"Faction_{faction.id}/Total_Reward", total_reward, self.episode)
-                        tensorboard_logger.log_scalar(
-                            f"Faction_{faction.id}/Gold_Balance", faction.gold_balance, self.episode)
-                        tensorboard_logger.log_scalar(
-                            f"Faction_{faction.id}/Food_Balance", faction.food_balance, self.episode)
-                        tensorboard_logger.log_scalar(
-                            f"Faction_{faction.id}/Agents_Alive", len(faction.agents), self.episode)
-
-                        # Log reward by role
-                        for role, reward in role_rewards.items():
-                            tensorboard_logger.log_scalar(
-                                f"Faction_{faction.id}/Reward_{role}", reward, self.episode)
-
-                    print(f"Faction {faction.id} total reward: {total_reward}")
-                    print(
-                        f"Faction {faction.id} gold balance: {faction.gold_balance}")
-                    print(
-                        f"Faction {faction.id} food balance: {faction.food_balance}")
-                    print(
-                        f"Faction {faction.id} agents alive: {len(faction.agents)}")
-                    for role, reward in role_rewards.items():
-                        print(f"Faction {faction.id} {role} reward: {reward}")
-
-                #  Train agents at the end of the episode
-                if self.mode == "train":
-                    if utils_config.ENABLE_LOGGING:
-                        self.logger.log_msg(
-                            "[TRAINING] Starting PPO training at end of episode.",
-                            level=logging.INFO)
-                    for agent in self.agents:
-                        if agent.mode == "train" and len(
-                                agent.ai.memory["rewards"]) > 0:
-                            if utils_config.ENABLE_LOGGING:
-                                self.logger.log_msg(
-                                    f"[TRAIN CALL] Agent {agent.agent_id} training...", level=logging.INFO)
-                            try:
-                                agent.ai.train(mode="train", batching=True)
-                            except Exception as e:
-                                print(
-                                    f"Training failed for agent {agent.agent_id}: {e}")
-                                traceback.print_exc()
-                    
-                    # Collect rewards per role dynamically
-                    role_rewards = {}
-                    for agent in self.agents:
-                        rewards = agent.ai.memory.get("rewards", [])
-                        if rewards:
-                            role = agent.role
-                            total_reward = sum(rewards)
-                            role_rewards.setdefault(role, []).append((agent.ai, total_reward))
-                        else:
-                            print(f"[DEBUG] Agent {agent.agent_id} has empty rewards")
-
-                    # Ensure agent save dir exists
-                    agent_model_dir = "NEURAL_NETWORK/saved_models/Agents/"
-                    os.makedirs(agent_model_dir, exist_ok=True)
-
-                    # Log collected roles and counts
-                    print(f"[DEBUG] Collected roles: { {r: len(v) for r, v in role_rewards.items()} }")
-
-                    # For each role, handle top-5 saving
-                    for role, reward_list in role_rewards.items():
-                        best_model, best_reward = max(reward_list, key=lambda x: x[1])
-
-                        if role not in self.best_scores_per_role:
-                            self.best_scores_per_role[role] = []
-
-                        # Load current on-disk models for this role
-                        model_files = [
-                            (os.path.join(agent_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
-                            for f in os.listdir(agent_model_dir)
-                            if f.startswith(f"Best_{role}_") and "_reward_" in f
-                        ]
-
-                        # Combine disk + memory + current model
-                        all_scores = list({(p, r) for p, r in model_files + self.best_scores_per_role[role] + [(None, best_reward)]})
-                        all_scores.sort(key=lambda x: x[1], reverse=True)
-                        top5 = all_scores[:5]
-
-                        # Save only if needed
-                        if (None, best_reward) in top5:
-                            save_name = f"Best_{role}_episode_{self.episode}_reward_{best_reward:.2f}.pth"
-                            save_path = os.path.join(agent_model_dir, save_name)
-                            try:
-                                best_model.save_model(save_path)
-                                print(f"[SAVE] Agent model for {role} saved at {save_path}")
-                            except Exception as e:
-                                print(f"[ERROR] Failed to save model for role {role}: {e}")
-                                traceback.print_exc()
-
-                            # Update paths in top5
-                            top5 = [(save_path if p is None else p, r) for p, r in top5]
-
-                            if utils_config.ENABLE_LOGGING:
-                                self.logger.log_msg(
-                                    f"[SAVE] Top-5 agent model saved for {role} at {save_path} (reward={best_reward:.2f})",
-                                    level=logging.INFO
-                                )
-
-                        # Prune older files if >5 exist
-                        if len(model_files) > 5:
-                            keep_paths = set(p for p, _ in top5)
-                            for f in os.listdir(agent_model_dir):
-                                f_path = os.path.join(agent_model_dir, f)
-                                if f_path not in keep_paths and f.startswith(f"Best_{role}_") and "_reward_" in f:
-                                    os.remove(f_path)
-                                    if utils_config.ENABLE_LOGGING:
-                                        self.logger.log_msg(f"[PRUNE] Removed outdated model: {f_path}", level=logging.INFO)
-
-                        self.best_scores_per_role[role] = top5
-
-                    # Clone best agents per role into bottom 50% (softly)
-                    for role in role_rewards:
-                        agents_of_role = [a for a in self.agents if a.role == role]
-                        clone_best_agents(agents_of_role)
-
-                    # Finally: clear memory for all agents
-                    for agent in self.agents:
-                        agent.ai.clear_memory()
-
-
-                    for faction in self.faction_manager.factions:
-                        is_winner = (faction.id == winner_id)
-                        hq_reward = faction.compute_hq_reward(victory=is_winner)
-
-                        if hasattr(faction.network, "update_memory_rewards"):
-                            faction.network.update_memory_rewards(hq_reward)
-
-                        if hasattr(faction.network, "train") and faction.network.hq_memory:
-                            try:
-                                if utils_config.ENABLE_LOGGING:
-                                    self.logger.log_msg(
-                                        f"[HQ TRAIN] Training strategy network for Faction {faction.id} with {len(faction.network.hq_memory)} samples.",
-                                        level=logging.INFO)
-
-                                faction.network.train(faction.network.hq_memory, faction.optimizer)
-                                
-
-                                # -- Top-5 Tracking --
-                                if not hasattr(self, "global_hq_top5"):
-                                    self.global_hq_top5 = []
-
-                                hq_model_dir = "NEURAL_NETWORK/saved_models/HQ/"
-                                os.makedirs(hq_model_dir, exist_ok=True)
-
-                                # Load all HQ models regardless of faction
-                                model_files = [
-                                    (os.path.join(hq_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
-                                    for f in os.listdir(hq_model_dir)
-                                    if f.startswith("HQ_Faction_") and "_reward_" in f
-                                ]
-
-                                # Combine disk models + in-memory top list + current result
-                                combined_scores = model_files + self.global_hq_top5 + [(None, hq_reward)]
-                                combined_scores = list({(p, r) for p, r in combined_scores})  # deduplicate
-                                combined_scores.sort(key=lambda x: x[1], reverse=True)
-
-                                top5 = combined_scores[:5]
-
-                                # Save if this reward is in the top-5 and not yet saved
-                                if (None, hq_reward) in top5:
-                                    save_name = f"HQ_Faction_{faction.id}_episode_{self.episode}_reward_{hq_reward:.2f}.pth"
-                                    save_path = os.path.join(hq_model_dir, save_name)
-                                    if hasattr(faction.network, "save_model"):
-                                        faction.network.save_model(save_path)
-                                        print(f"[SAVE] HQ model for Faction {faction.id} saved at {save_path}")
-
-                                    # Update saved path in top5
-                                    top5 = [(save_path if p is None else p, r) for p, r in top5]
-
-                                    if utils_config.ENABLE_LOGGING:
-                                        self.logger.log_msg(
-                                            f"[SAVE] Top-5 HQ model saved globally at {save_path} (reward={hq_reward:.2f})",
-                                            level=logging.INFO
-                                        )
-
-                                # Prune any excess beyond global top 5
-                                if len(model_files) > 5:
-                                    keep_paths = set(p for p, _ in top5)
-                                    for f in os.listdir(hq_model_dir):
-                                        f_path = os.path.join(hq_model_dir, f)
-                                        if f_path not in keep_paths and f.startswith("HQ_Faction_") and "_reward_" in f:
-                                            os.remove(f_path)
-                                            if utils_config.ENABLE_LOGGING:
-                                                self.logger.log_msg(f"[PRUNE] Removed outdated HQ model: {f_path}", level=logging.INFO)
-
-                                # Save the updated global top-5 HQ networks list
-                                self.global_hq_top5 = top5
-
-
-                                faction.network.clear_memory()
-
-                            except Exception as e:
-                                print(f"[HQ TRAIN ERROR] Failed to train HQ network for Faction {faction.id}: {e}")
-                                traceback.print_exc()
-
-
-
-
-                menu_renderer = MenuRenderer(screen=self.screen)  # Ensure screen is passed
-                # Wrap up the episode
-                print(f"End of {self.mode} Episode {self.episode}")
-                for faction in self.faction_manager.factions:
-                    print(f"Faction {faction.id} assigned tasks: {faction.assigned_tasks}")
-            
-                plotter = MatplotlibPlotter()
-                # Log HQ strategy distribution at the end
-                if utils_config.ENABLE_TENSORBOARD:
-                    #Gather and create all matplot plots
-                    
-
-
-                    MatplotlibPlotter().flush_episode_plots(
-                        tensorboard_logger=tensorboard_logger
-                    )
-
-
-
-
-                    for faction in self.faction_manager.factions:
-
-
-                        plotter.plot_task_timeline(
-                            task_records=faction.assigned_tasks,
-                            name=f"Faction_{faction.id}_Task_Timeline{self.episode}",
-                            tensorboard_logger=tensorboard_logger,
-                            step=self.current_step
-                        )
-           
-                        if hasattr(faction, "strategy_history") and faction.strategy_history:
-                            try:
-                                strategy_to_idx = {s: idx for idx, s in enumerate(utils_config.HQ_STRATEGY_OPTIONS)}
-                                indices = [strategy_to_idx.get(s, -1) for s in faction.strategy_history if s in strategy_to_idx]
-
-                                if indices:
-                                    tensorboard_logger.log_distribution(
-                                        name=f"Faction_{faction.id}/HQ_Strategy_Distribution_Final",
-                                        values=indices,
-                                        step=self.episode  # or self.current_step, but self.episode is cleaner
-                                    )
-                            except Exception as e:
-                                print(f"[TensorBoard] Failed to log final HQ strategy distribution for Faction {faction.id}: {e}")
-
-
+                    tensorboard_logger.log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
                 
-                if utils_config.ENABLE_LOGGING:
-                    self.logger.log_msg(
-                        f"End of {self.mode} Episode {self.episode}",
-                        level=logging.INFO)
+                plotter = MatplotlibPlotter()
+                self.collect_role_rewards(role_rewards)
+                self.log_faction_metrics(tensorboard_logger, plotter, {
+                    role: np.mean([r for _, r in agents]) for role, agents in role_rewards.items()
+                }, hq_rewards)  # <-- Pass hq_rewards here
+
+                if self.mode == "train":
+                    self.train_agents()
+                    self.save_top_models(role_rewards)
+                    self.train_hq_networks(winner_id)
+
+                plotter.flush_episode_plots(tensorboard_logger=tensorboard_logger)
+
+                self.print_episode_summary()
+
                 self.episode += 1
 
-                # If training is done, return to the main menu
                 if self.mode == "train" and self.episode > utils_config.EPISODES_LIMIT:
                     print(f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
-                    
-                    
-                    # Return to the menu
-                    menu_renderer.show_message(f"Training completed after {utils_config.EPISODES_LIMIT} episodes", duration=3000)
-                    
-                    menu_renderer.render_menu()  # Switch back to the menu
-                    running = False  # End the game loop after training completes
-                    return running
+                    running = False
 
-                return True
+            return running
 
-
-            
         except SystemExit:
-            print("Whoops - game_manager.py: SystemExit")
             print("[INFO] Game closed successfully.")
         except Exception as e:
             print(f"An error occurred in {self.mode}: {e}")
             traceback.print_exc()
-            
             self.cleanup(QUIT=True)
 
-    
+
+
+
+
+                
+
+
+    def log_faction_metrics(self, tensorboard_logger, plotter, role_rewards, hq_rewards):
+        if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger.log_scalar(
+                "Episode/Steps_Taken", self.current_step, self.episode
+            )
+
+        # Local dictionary to track tasks for the current episode
+        task_tracking = {}
+
+        # HQ Strategy Names
+        HQ_STRATEGY_OPTIONS = utils_config.HQ_STRATEGY_OPTIONS
+
+        for faction in self.faction_manager.factions:
+            faction_total_reward = 0
+            agent_count = len(faction.agents)
+
+            for agent in faction.agents:
+                rewards = agent.ai.memory.get("rewards", [])
+                if rewards:
+                    agent_total = sum(rewards)
+                    faction_total_reward += agent_total
+
+            average_reward = faction_total_reward / agent_count if agent_count > 0 else 0
+
+            # Store the metrics in self.metric_history for tracking over time
+            self.metric_history[faction.id]["gold_balance"].append(faction.gold_balance)
+            self.metric_history[faction.id]["food_balance"].append(faction.food_balance)
+            self.metric_history[faction.id]["agents_alive"].append(agent_count)
+
+            # Add role-specific rewards to the history for each role
+            for role, reward in role_rewards.items():
+                if role not in self.metric_history[faction.id]:
+                    self.metric_history[faction.id][role] = []
+                self.metric_history[faction.id][role].append(reward)
+
+            # Add HQ reward to the history
+            if hq_rewards is not None:
+                if "hq_reward" not in self.metric_history[faction.id]:
+                    self.metric_history[faction.id]["hq_reward"] = []
+                self.metric_history[faction.id]["hq_reward"].append(hq_rewards[faction.id])
+
+            if utils_config.ENABLE_TENSORBOARD:
+                tensorboard_logger.log_scalar(
+                    f"Faction_{faction.id}/Average_Reward", average_reward, self.episode
+                )
+
+            # --- Join Gold, Food, and Agents Alive into one grouped plot per faction ---
+            plotter.plot_scalar_over_time(
+                names=[f"Faction {faction.id} Gold Balance", f"Faction {faction.id} Food Balance", f"Faction {faction.id} Agents Alive"],
+                values_list=[
+                    self.metric_history[faction.id]["gold_balance"],
+                    self.metric_history[faction.id]["food_balance"],
+                    self.metric_history[faction.id]["agents_alive"]
+                ],
+                episodes=list(range(1, self.episode + 1)),
+                tensorboard_logger=tensorboard_logger
+            )
+
+            # --- Combine Peacekeeper, Gatherer, and HQ rewards into one plot ---
+            faction_rewards = []
+            role_names = ["gatherer", "peacekeeper"]  # Define the roles you want to plot (adjust as necessary)
+
+            # Add each role reward to the plot
+            for role in role_names:
+                if role in self.metric_history[faction.id]:
+                    faction_rewards.append(self.metric_history[faction.id][role])
+
+            # Add HQ reward if it exists
+            if "hq_reward" in self.metric_history[faction.id]:
+                faction_rewards.append(self.metric_history[faction.id]["hq_reward"])
+
+            # Now plot them together
+            plotter.plot_scalar_over_time(
+                names=[f"Faction {faction.id} Gatherer Reward", f"Faction {faction.id} Peacekeeper Reward", f"Faction {faction.id} HQ Reward"],
+                values_list=faction_rewards,
+                episodes=list(range(1, self.episode + 1)),
+                tensorboard_logger=tensorboard_logger
+            )
+
+            # --- Task Timeline: Clustered Stacked Bar Plot (by task type for the current episode) ---
+            if hasattr(faction, "assigned_tasks") and faction.assigned_tasks:
+                # For the current episode, gather the success, failure, and ongoing counts for each task type
+                task_records = faction.assigned_tasks
+
+                # Initialise counts for success, failure, ongoing tasks per task type per episode
+                task_types = ['mine', 'forage', 'explore', 'defend', 'gather', 'eliminate', 'move_to']  # Define task types you want to categorize
+                success_counts = {task_type: 0 for task_type in task_types}
+                failure_counts = {task_type: 0 for task_type in task_types}
+                ongoing_counts = {task_type: 0 for task_type in task_types}
+
+                for task_type in task_types:
+                    # Aggregate the task results for each task type
+                    for task_id, task_info in task_records.items():
+                        if task_info.get('type', '') == task_type:  # Directly check task type instead of task_id
+                            for agent_id, result in task_info.get('agents', {}).items():
+                                # Increment task counts based on the result
+                                if result == utils_config.TaskState.ONGOING:
+                                    ongoing_counts[task_type] += 1
+                                elif result == utils_config.TaskState.SUCCESS:
+                                    success_counts[task_type] += 1
+                                elif result == utils_config.TaskState.FAILURE:
+                                    failure_counts[task_type] += 1
+
+                # Plot the clustered stacked bar chart for each faction in the current episode
+                plotter.plot_clustered_stacked_bar_chart(
+                    task_types=task_types,  # Task types (mine, forage, etc.)
+                    success_counts=[success_counts[task] for task in task_types],
+                    failure_counts=[failure_counts[task] for task in task_types],
+                    ongoing_counts=[ongoing_counts[task] for task in task_types],
+                    episodes=[self.episode],  # Only the current episode
+                    tensorboard_logger=tensorboard_logger,
+                    step=self.current_step,
+                    name=f"Faction {faction.id} Task Timeline {self.episode}"  # Use faction ID to name the plot
+                )
+
+           
+
+
+
+
+
+    def collect_episode_rewards(self):
+        """
+        Collect the latest step reward from all agents for this episode.
+        """
+        for agent in self.agents:
+            if agent.ai.memory["rewards"]:
+                self.episode_reward += agent.ai.memory["rewards"][-1]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def collect_role_rewards(self, role_rewards):
+        """
+        Collect rewards per role for each agent.
+        """
+        for agent in self.agents:
+            rewards = agent.ai.memory.get("rewards", [])
+            if rewards:
+                role = agent.role
+                total_reward = sum(rewards)
+                role_rewards.setdefault(role, []).append((agent.ai, total_reward))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def save_top_models(self, role_rewards):
+        agent_model_dir = "NEURAL_NETWORK/saved_models/Agents/"
+        os.makedirs(agent_model_dir, exist_ok=True)
+
+        for role, reward_list in role_rewards.items():
+            best_model, best_reward = max(reward_list, key=lambda x: x[1])
+
+            if role not in self.best_scores_per_role:
+                self.best_scores_per_role[role] = []
+
+            # Load current on-disk models for this role
+            model_files = [
+                (os.path.join(agent_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
+                for f in os.listdir(agent_model_dir)
+                if f.startswith(f"Best_{role}_") and "_reward_" in f
+            ]
+
+            all_scores = list({(p, r) for p, r in model_files + self.best_scores_per_role[role] + [(None, best_reward)]})
+            all_scores.sort(key=lambda x: x[1], reverse=True)
+            top5 = all_scores[:5]
+
+            if (None, best_reward) in top5:
+                save_name = f"Best_{role}_episode_{self.episode}_reward_{best_reward:.2f}.pth"
+                save_path = os.path.join(agent_model_dir, save_name)
+                try:
+                    best_model.save_model(save_path)
+                    print(f"[SAVE] Agent model for {role} saved at {save_path}")
+                except Exception as e:
+                    print(f"[ERROR] Failed to save model for role {role}: {e}")
+                    traceback.print_exc()
+
+                # Update paths in top5
+                top5 = [(save_path if p is None else p, r) for p, r in top5]
+
+                if utils_config.ENABLE_LOGGING:
+                    self.logger.log_msg(
+                        f"[SAVE] Top-5 agent model saved for {role} at {save_path} (reward={best_reward:.2f})",
+                        level=logging.INFO
+                    )
+
+            # Prune older files if >5 exist
+            if len(model_files) > 5:
+                keep_paths = set(p for p, _ in top5)
+                for f in os.listdir(agent_model_dir):
+                    f_path = os.path.join(agent_model_dir, f)
+                    if f_path not in keep_paths and f.startswith(f"Best_{role}_") and "_reward_" in f:
+                        os.remove(f_path)
+                        if utils_config.ENABLE_LOGGING:
+                            self.logger.log_msg(f"[PRUNE] Removed outdated model: {f_path}", level=logging.INFO)
+
+            self.best_scores_per_role[role] = top5
+
+        # Clone best agents per role into bottom 50% (softly)
+        for role in role_rewards:
+            agents_of_role = [a for a in self.agents if a.role == role]
+            clone_best_agents(agents_of_role)
+
+
+
+
+
+
+    def train_agents(self):
+        """
+        Train agents based on their accumulated rewards and experiences.
+        """
+        if utils_config.ENABLE_LOGGING:
+            self.logger.log_msg(
+                "[TRAINING] Starting PPO training at end of episode.",
+                level=logging.INFO
+            )
+
+        for agent in self.agents:
+            if agent.mode == "train" and len(agent.ai.memory["rewards"]) > 0:
+                if utils_config.ENABLE_LOGGING:
+                    self.logger.log_msg(
+                        f"[TRAIN CALL] Agent {agent.agent_id} training...",
+                        level=logging.INFO
+                    )
+
+                try:
+                    agent.ai.train(mode="train", batching=True)
+                except Exception as e:
+                    print(f"Training failed for agent {agent.agent_id}: {e}")
+                    traceback.print_exc()
+
+    def train_hq_networks(self, winner_id):
+        """
+        Train the HQ strategy networks and save the top models.
+        """
+        for faction in self.faction_manager.factions:
+            is_winner = (faction.id == winner_id)
+            hq_reward = faction.compute_hq_reward(victory=is_winner)
+
+            if hasattr(faction.network, "update_memory_rewards"):
+                faction.network.update_memory_rewards(hq_reward)
+
+            if hasattr(faction.network, "train") and faction.network.hq_memory:
+                try:
+                    if utils_config.ENABLE_LOGGING:
+                        self.logger.log_msg(
+                            f"[HQ TRAIN] Training strategy network for Faction {faction.id} with {len(faction.network.hq_memory)} samples.",
+                            level=logging.INFO
+                        )
+
+                    faction.network.train(faction.network.hq_memory, faction.optimizer)
+
+                    # -- Top-5 Tracking --
+                    if not hasattr(self, "global_hq_top5"):
+                        self.global_hq_top5 = []
+
+                    hq_model_dir = "NEURAL_NETWORK/saved_models/HQ/"
+                    os.makedirs(hq_model_dir, exist_ok=True)
+
+                    # Load all HQ models regardless of faction
+                    model_files = [
+                        (os.path.join(hq_model_dir, f), float(f.split("_reward_")[-1].replace(".pth", "")))
+                        for f in os.listdir(hq_model_dir)
+                        if f.startswith(f"HQ_Faction_") and "_reward_" in f
+                    ]
+
+                    # Combine disk models + in-memory top list + current result
+                    combined_scores = model_files + self.global_hq_top5 + [(None, hq_reward)]
+                    combined_scores = list({(p, r) for p, r in combined_scores})  # deduplicate
+                    combined_scores.sort(key=lambda x: x[1], reverse=True)
+
+                    top5 = combined_scores[:5]
+
+                    # Save if this reward is in the top-5 and not yet saved
+                    if (None, hq_reward) in top5:
+                        save_name = f"HQ_Faction_{faction.id}_episode_{self.episode}_reward_{hq_reward:.2f}.pth"
+                        save_path = os.path.join(hq_model_dir, save_name)
+                        if hasattr(faction.network, "save_model"):
+                            faction.network.save_model(save_path)
+                            print(f"[SAVE] HQ model for Faction {faction.id} saved at {save_path}")
+
+                        # Update saved path in top5
+                        top5 = [(save_path if p is None else p, r) for p, r in top5]
+
+                        if utils_config.ENABLE_LOGGING:
+                            self.logger.log_msg(
+                                f"[SAVE] Top-5 HQ model saved globally at {save_path} (reward={hq_reward:.2f})",
+                                level=logging.INFO
+                            )
+
+                    # Prune any excess beyond global top 5
+                    if len(model_files) > 5:
+                        keep_paths = set(p for p, _ in top5)
+                        for f in os.listdir(hq_model_dir):
+                            f_path = os.path.join(hq_model_dir, f)
+                            if f_path not in keep_paths and f.startswith(f"HQ_Faction_") and "_reward_" in f:
+                                os.remove(f_path)
+                                if utils_config.ENABLE_LOGGING:
+                                    self.logger.log_msg(f"[PRUNE] Removed outdated HQ model: {f_path}", level=logging.INFO)
+
+                    # Save the updated global top-5 HQ networks list
+                    self.global_hq_top5 = top5
+
+                    faction.network.clear_memory()
+
+                except Exception as e:
+                    print(f"[HQ TRAIN ERROR] Failed to train HQ network for Faction {faction.id}: {e}")
+                    traceback.print_exc()
+
+
+
+
+
+
+
+
+
+
+    def print_episode_summary(self):
+        """
+        Print a summary at the end of an episode.
+        """
+        print(f"End of {self.mode} Episode {self.episode}")
+
+        for faction in self.faction_manager.factions:
+            print(f"Faction {faction.id} assigned tasks: {faction.assigned_tasks}\n\n")
+
+        if utils_config.ENABLE_LOGGING:
+            self.logger.log_msg(
+                f"End of {self.mode} Episode {self.episode}",
+                level=logging.INFO
+            )
+
+    def update_resources(self):
+        """
+        Update resource objects (e.g., AppleTree growth).
+        """
+        for res in self.resource_manager.resources:
+            if isinstance(res, AppleTree):
+                res.update()
+
+        self.resource_counts = {
+            "gold_lumps": sum(
+                1 for res in self.resource_manager.resources if isinstance(res, GoldLump)
+            ),
+            "gold_quantity": sum(
+                res.quantity for res in self.resource_manager.resources if isinstance(res, GoldLump)
+            ),
+            "apple_trees": sum(
+                1 for res in self.resource_manager.resources if isinstance(res, AppleTree)
+            ),
+            "apple_quantity": sum(
+                res.quantity for res in self.resource_manager.resources if isinstance(res, AppleTree)
+            ),
+        }
+
+
+
+
+
+
+
+
+
+        
 
     def handle_event(self, event):
         """
@@ -1100,8 +1223,79 @@ class GameManager:
             self.event_manager.trigger_dynamic_event(
                 max_trees=event["data"].get("max_trees", 10),
                 max_gold_lumps=event["data"].get("max_gold_lumps", 5),
-                health_penalty=event["data"].get("health_penalty", 10)
-            )
+                health_penalty=event["data"].get("health_penalty", 10))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def process_pygame_events(self):
+        """
+        Handle pygame events like quitting and camera zooming.
+        """
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print("[INFO] Window closed. Exiting game...")
+                if utils_config.ENABLE_LOGGING:
+                    self.logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
+                self.cleanup(QUIT=True)
+
+            elif event.type == pygame.KEYDOWN:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+
+                if event.key in (pygame.K_PLUS, pygame.K_EQUALS):
+                    self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
+                elif event.key == pygame.K_MINUS:
+                    self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    def handle_victory(self, winner):
+        print(f"Faction {winner.id} wins! Moving to next episode...")
+        if utils_config.ENABLE_LOGGING:
+            self.logger.log_msg(
+                f"Faction {winner.id} wins! Ending episode early.",
+                level=logging.INFO)
+
+
+            
+
+
+
+
+
+
+
+
+
 
 
 #    _   _                 _ _         ____
@@ -1124,6 +1318,21 @@ class GameManager:
         if keys[pygame.K_DOWN] or keys[pygame.K_s]:
             self.camera.move(0, self.camera.speed)
        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def cleanup(self, QUIT):
         if utils_config.ENABLE_TENSORBOARD:

@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class TensorBoardLogger:
-    """ This class handles the TensorBoard logging and visualization. 
+    """ This class handles the TensorBoard logging and visualisation. 
         It is a singleton class and can be accessed using the instance() method.
 
         It manages ensures that only one TensorBoard process is running at a time.
@@ -74,7 +74,7 @@ class TensorBoardLogger:
         self.run_dir = os.path.join(self.log_dir, run_name)
         os.makedirs(self.run_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=self.run_dir)
-        print(f"[TensorBoard] Logger initialized at: {self.run_dir}")
+        print(f"[TensorBoard] Logger initialised at: {self.run_dir}")
 
     def log_scalar(self, name, value, step):
         self._safe_log(lambda: self.writer.add_scalar(name, value, step))
@@ -100,7 +100,7 @@ class TensorBoardLogger:
 
     def log_image(self, name, image_tensor, step):
         """
-        Log images to TensorBoard (e.g., visualizations, game frames).
+        Log images to TensorBoard (e.g., visualisations, game frames).
         """
         if not utils_config.ENABLE_TENSORBOARD:
             return

@@ -72,7 +72,7 @@ class Logger:
         """
         try:
             if not utils_config.ENABLE_LOGGING:
-                raise Exception("Must enable logging through config before program start")
+                return
 
             if level == logging.DEBUG:
                 self.logger.debug(message)

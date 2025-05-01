@@ -45,6 +45,7 @@ class Faction():
             self.threats = []  # Initialise known threats
             self.task_counter = 0
             self.assigned_tasks = {}
+            
 
             self.unvisited_cells = set()
             self.reports = []
@@ -1122,37 +1123,34 @@ class Faction():
                 f"[HQ EXECUTE] Faction {self.id} executing updated strategy: {new_action}",
                 level=logging.INFO)
 
+        
+
         # ========== STRATEGY: Recruit Peacekeeper ==========
         if action == "RECRUIT_PEACEKEEPER":
             Agent_cost = utils_config.Gold_Cost_for_Agent
-            if self.gold_balance >= Agent_cost:
-                current_balance = self.gold_balance
-                new_balance = current_balance - Agent_cost
-                self.gold_balance = new_balance
+            if self.gold_balance >= Agent_cost and len(self.agents) < utils_config.MAX_AGENTS:
+                self.gold_balance -= Agent_cost
                 self.recruit_agent("peacekeeper")
                 print(f"Faction {self.id} bought a Peacekeeper")
             else:
-                logger.log_msg(
-                    f"[HQ EXECUTE] Not enough gold to recruit peacekeeper.",
-                    level=logging.WARNING)
+                reason = "Not enough gold" if self.gold_balance < Agent_cost else "Agent limit reached"
+                logger.log_msg(f"[HQ EXECUTE] Cannot recruit peacekeeper: {reason}.", level=logging.WARNING)
                 self.current_strategy = None
                 return retest_strategy()
 
         # ========== STRATEGY: Recruit Gatherer ==========
         elif action == "RECRUIT_GATHERER":
             Agent_cost = utils_config.Gold_Cost_for_Agent
-            if self.gold_balance >= Agent_cost:
-                current_balance = self.gold_balance
-                new_balance = current_balance - Agent_cost
-                self.gold_balance = new_balance
+            if self.gold_balance >= Agent_cost and len(self.agents) < utils_config.MAX_AGENTS:
+                self.gold_balance -= Agent_cost
                 self.recruit_agent("gatherer")
                 print(f"Faction {self.id} bought a Gatherer")
             else:
-                logger.log_msg(
-                    f"[HQ EXECUTE] Not enough gold to recruit gatherer.",
-                    level=logging.WARNING)
+                reason = "Not enough gold" if self.gold_balance < Agent_cost else "Agent limit reached"
+                logger.log_msg(f"[HQ EXECUTE] Cannot recruit gatherer: {reason}.", level=logging.WARNING)
                 self.current_strategy = None
                 return retest_strategy()
+
 
         # ========== STRATEGY: Defend HQ ==========
         elif action == "DEFEND_HQ":
@@ -1376,7 +1374,7 @@ class Faction():
             if not agent:
                 raise RuntimeError("spawn_agent returned None (no valid location found).")
 
-            # 🛠 Initialize critical fields
+            # 🛠 Initialise critical fields
             agent.current_action = None
             agent.current_task = None
             agent.current_task_state = utils_config.TaskState.NONE
