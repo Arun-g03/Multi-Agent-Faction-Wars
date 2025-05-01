@@ -63,115 +63,119 @@ class GameRenderer:
         Render the entire game state, including terrain, resources, home bases, and agents.
         Display tooltips for resources or agents if the mouse hovers over them.
         Optionally, show the grid cell under the mouse cursor relative to the world coordinates.
+        
         """
-        try:
-            # Clear the screen with black background
-            self.screen.fill((0, 0, 0))
-            self.update_animations()
+        if utils_config.HEADLESS_MODE:
+            return  
+        else:
+            try:
+                # Clear the screen with black background
+                self.screen.fill((0, 0, 0))
+                self.update_animations()
 
-            # Render terrain, passing factions for territory visualisation
-            terrain.draw(self.screen, camera, factions)
+                # Render terrain, passing factions for territory visualisation
+                terrain.draw(self.screen, camera, factions)
 
-            # Get mouse position
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            tooltip_text = None  # To hold tooltip text if hovering over a resource or agent
+                # Get mouse position
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                tooltip_text = None  # To hold tooltip text if hovering over a resource or agent
 
-            # Render resources and check for hover
-            for resource in resources:
-                if not hasattr(resource, 'x') or not hasattr(resource, 'y'):
-                    print(
-                        f"Warning: Resource {resource} does not have 'x' and 'y' attributes. Skipping render.")
-                    continue  # Skip this resource if invalid
-                resource.render(self.screen, camera)  # Render the resource
+                # Render resources and check for hover
+                for resource in resources:
+                    if not hasattr(resource, 'x') or not hasattr(resource, 'y'):
+                        print(
+                            f"Warning: Resource {resource} does not have 'x' and 'y' attributes. Skipping render.")
+                        continue  # Skip this resource if invalid
+                    resource.render(self.screen, camera)  # Render the resource
 
-                # Recalculate the resource's screen position based on the
-                # camera
-                screen_x = (resource.x - camera.x) * camera.zoom
-                screen_y = (resource.y - camera.y) * camera.zoom
+                    # Recalculate the resource's screen position based on the
+                    # camera
+                    screen_x = (resource.x - camera.x) * camera.zoom
+                    screen_y = (resource.y - camera.y) * camera.zoom
 
-                # Calculate the size of the resource for collision detection
-                if isinstance(resource, AppleTree):
-                    final_size = int(
-                        utils_config.CELL_SIZE *
-                        utils_config.SCALING_FACTOR *
-                        camera.zoom *
-                        utils_config.Tree_Scale_Img)
-                elif isinstance(resource, GoldLump):
-                    final_size = int(
-                        utils_config.CELL_SIZE *
-                        utils_config.SCALING_FACTOR *
-                        camera.zoom *
-                        utils_config.GoldLump_Scale_Img)
-                else:
-                    final_size = utils_config.CELL_SIZE  # Fallback for unknown resources
+                    # Calculate the size of the resource for collision detection
+                    if isinstance(resource, AppleTree):
+                        final_size = int(
+                            utils_config.CELL_SIZE *
+                            utils_config.SCALING_FACTOR *
+                            camera.zoom *
+                            utils_config.Tree_Scale_Img)
+                    elif isinstance(resource, GoldLump):
+                        final_size = int(
+                            utils_config.CELL_SIZE *
+                            utils_config.SCALING_FACTOR *
+                            camera.zoom *
+                            utils_config.GoldLump_Scale_Img)
+                    else:
+                        final_size = utils_config.CELL_SIZE  # Fallback for unknown resources
 
-                # Create a rectangle for resource collision detection
-                resource_rect = pygame.Rect(
-                    screen_x - final_size // 2,  # Center the rectangle on the resource
-                    screen_y - final_size // 2,
-                    final_size,
-                    final_size,
-                )
-
-                # Check if the mouse is over the resource
-                if resource_rect.collidepoint(mouse_x, mouse_y):
-                    # Use grid_x and grid_y directly for the tooltip
-                    tooltip_text = (
-                        f"Type: {type(resource).__name__}\n"
-                        f"Quantity: {resource.quantity}\n"
-                        f"Position: ({resource.grid_x}, {resource.grid_y})"
+                    # Create a rectangle for resource collision detection
+                    resource_rect = pygame.Rect(
+                        screen_x - final_size // 2,  # Center the rectangle on the resource
+                        screen_y - final_size // 2,
+                        final_size,
+                        final_size,
                     )
 
-            # Render home bases and agents
-            self.render_home_bases(factions, camera, mouse_x, mouse_y)
-            self.render_agents(agents, camera)
+                    # Check if the mouse is over the resource
+                    if resource_rect.collidepoint(mouse_x, mouse_y):
+                        # Use grid_x and grid_y directly for the tooltip
+                        tooltip_text = (
+                            f"Type: {type(resource).__name__}\n"
+                            f"Quantity: {resource.quantity}\n"
+                            f"Position: ({resource.grid_x}, {resource.grid_y})"
+                        )
 
-            # Render tooltip if any
-            if tooltip_text:
-                self.render_tooltip(tooltip_text)
+                # Render home bases and agents
+                self.render_home_bases(factions, camera, mouse_x, mouse_y)
+                self.render_agents(agents, camera)
 
-            # Render mouse cell tooltip if enabled
-            if enable_cell_tooltip:
-                # Calculate world-relative grid cell under the mouse
-                world_mouse_x = (mouse_x / camera.zoom) + camera.x
-                world_mouse_y = (mouse_y / camera.zoom) + camera.y
+                # Render tooltip if any
+                if tooltip_text:
+                    self.render_tooltip(tooltip_text)
 
-                # Convert world coordinates to grid coordinates
-                mouse_grid_x = int(world_mouse_x // utils_config.CELL_SIZE)
-                mouse_grid_y = int(world_mouse_y // utils_config.CELL_SIZE)
+                # Render mouse cell tooltip if enabled
+                if enable_cell_tooltip:
+                    # Calculate world-relative grid cell under the mouse
+                    world_mouse_x = (mouse_x / camera.zoom) + camera.x
+                    world_mouse_y = (mouse_y / camera.zoom) + camera.y
 
-                # Create the tooltip text for the world-relative cell and
-                # screen position
-                cell_tooltip_text = (
-                    f"Screen Pos: ({mouse_x}, {mouse_y})\n"  # Screen position
-                    # Grid coordinates
-                    f"World Cell: ({mouse_grid_x}, {mouse_grid_y})"
-                )
+                    # Convert world coordinates to grid coordinates
+                    mouse_grid_x = int(world_mouse_x // utils_config.CELL_SIZE)
+                    mouse_grid_y = int(world_mouse_y // utils_config.CELL_SIZE)
 
-                # Calculate bottom-left position for the tooltip
-                tooltip_x = 10  # Offset from the left edge
-                # 50px offset from the bottom edge (adjust based on tooltip
-                # size)
-                tooltip_y = self.screen.get_height() - 50
+                    # Create the tooltip text for the world-relative cell and
+                    # screen position
+                    cell_tooltip_text = (
+                        f"Screen Pos: ({mouse_x}, {mouse_y})\n"  # Screen position
+                        # Grid coordinates
+                        f"World Cell: ({mouse_grid_x}, {mouse_grid_y})"
+                    )
 
-                # Render the tooltip using the existing tooltip function
-                self.render_tooltip(cell_tooltip_text,
-                                    position=(tooltip_x, tooltip_y))
+                    # Calculate bottom-left position for the tooltip
+                    tooltip_x = 10  # Offset from the left edge
+                    # 50px offset from the bottom edge (adjust based on tooltip
+                    # size)
+                    tooltip_y = self.screen.get_height() - 50
 
-            #  Render the HUD with episode and step data
-            self.render_hud(self.screen, episode, step,
-                            factions, resource_counts)
+                    # Render the tooltip using the existing tooltip function
+                    self.render_tooltip(cell_tooltip_text,
+                                        position=(tooltip_x, tooltip_y))
 
-            #  Ensure Pygame updates the display
+                #  Render the HUD with episode and step data
+                self.render_hud(self.screen, episode, step,
+                                factions, resource_counts)
 
-            # Return True to indicate successful rendering
-            return True
+                #  Ensure Pygame updates the display
 
-        except Exception as e:
-            print(f"An error occurred in the render method: {e}")
-            import traceback
-            traceback.print_exc()
-            return False  # Return False to signal the rendering loop should stop
+                # Return True to indicate successful rendering
+                return True
+
+            except Exception as e:
+                print(f"An error occurred in the render method: {e}")
+                import traceback
+                traceback.print_exc()
+                return False  # Return False to signal the rendering loop should stop
 
 
 #    _   _                      _                       ___   _  ___

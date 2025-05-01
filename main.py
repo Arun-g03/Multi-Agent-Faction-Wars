@@ -4,6 +4,26 @@ import sys
 # Run the Start_up script to check/install dependencies before anything else
 startup_script = "UTILITIES\Startup_installer.py"
 
+# Prompt for headless mode before imports
+print("[INFO] - Main.py ---- Starting the game...\n")
+print("Would you like to run in HEADLESS_MODE?")
+print("\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR FASTER TRAINING\033[0m")
+
+print("\nEnter y for yes n for no: ", end="")
+user_input = input().strip().lower()
+headless_response = user_input == 'y'
+
+# Inject HEADLESS_MODE before utils_config is imported
+with open("UTILITIES/utils_config.py", "r") as f:
+    config_lines = f.readlines()
+
+with open("UTILITIES/utils_config.py", "w") as f:
+    for line in config_lines:
+        if line.startswith("HEADLESS_MODE"):
+            f.write(f"HEADLESS_MODE = {str(headless_response)}\n")
+        else:
+            f.write(line)
+
 try:
     result = subprocess.run([sys.executable, startup_script], check=True)
 except subprocess.CalledProcessError:
@@ -138,7 +158,11 @@ class MainGame:
 
                                     )
 
-                                    clock.tick(utils_config.FPS)
+                                    if not utils_config.HEADLESS_MODE:
+                                        clock.tick(utils_config.FPS)
+                                    else:
+                                        clock.tick(0)
+
                                 
                                 # If the game is done, transition back to the menu
                                 

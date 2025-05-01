@@ -39,6 +39,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re
 
+from tqdm import tqdm
+
 
 import os
 import subprocess

@@ -360,7 +360,7 @@ class GameManager:
 
 
 
-
+            
 
             # Step forward
             self.current_step += 1
@@ -727,10 +727,9 @@ class GameManager:
 #   |_| \_\\__,_|_| |_| | |\___| .__/ \___/ \___|_| |_| |
 #                        \_\   |_|                   /_/
 
+    
+
     def run(self):
-        """
-        Main game loop handling both training and evaluation modes.
-        """
         self.best_scores_per_role = {}
         self.global_hq_top5 = []
         running = True
@@ -738,31 +737,51 @@ class GameManager:
         try:
             print(f"Running game in {self.mode} mode...")
 
+            # Outer bar: episodes
+            episode_bar = tqdm(
+                total=utils_config.EPISODES_LIMIT,
+                desc="Episodes",
+                position=0,
+                leave=True
+            )
+
             while running and (self.episode <= utils_config.EPISODES_LIMIT):
                 self.reset()
-                self.episode_reward = 0  # <-- Initialise episode_reward at the start of the episode
-                print(f"\033[92mStarting {self.mode} Episode {self.episode}\033[0m")
+                self.episode_reward = 0
+                if not utils_config.HEADLESS_MODE:
+                    print(f"\033[92mStarting {self.mode} Episode {self.episode}\033[0m")
                 if utils_config.ENABLE_LOGGING:
                     self.logger.log_msg(f"Starting {self.mode} Episode", level=logging.INFO)
 
                 self.current_step = 0
                 role_rewards = {}
 
-                
+                # Inner bar: steps
+                step_bar = None
+                if utils_config.HEADLESS_MODE:
+                    step_bar = tqdm(
+                        total=utils_config.STEPS_PER_EPISODE,
+                        desc=f"Episode {self.episode} / {utils_config.EPISODES_LIMIT} | Steps",
+                        position=1,
+                        leave=False
+                    )
 
                 while self.current_step < utils_config.STEPS_PER_EPISODE:
                     self.process_pygame_events()
-
                     self.step()
                     self.update_resources()
-                    self.renderer.render(
-                        self.camera, self.terrain, self.resource_manager.resources,
-                        self.faction_manager.factions, self.agents,
-                        self.episode, self.current_step, self.resource_counts
-                    )
 
-                    self.collect_episode_rewards()  # Collect rewards from agents
-                    pygame.display.update()
+                    if not utils_config.HEADLESS_MODE:
+                        self.renderer.render(
+                            self.camera, self.terrain, self.resource_manager.resources,
+                            self.faction_manager.factions, self.agents,
+                            self.episode, self.current_step, self.resource_counts
+                        )
+                        pygame.display.update()
+                    else:
+                        step_bar.update(1)
+
+                    self.collect_episode_rewards()
 
                     winner = check_victory(self.faction_manager.factions)
                     winner_id = winner.id if winner else None
@@ -770,21 +789,26 @@ class GameManager:
                         self.handle_victory(winner)
                         break
 
-                    
+                    self.current_step += 1
 
-                # === End of Episode ===
+                if utils_config.HEADLESS_MODE:
+                    step_bar.close()
+
                 if utils_config.ENABLE_TENSORBOARD:
                     tensorboard_logger.log_scalar("Episode/Steps_Taken", self.current_step, self.episode)
-                
+
                 plotter = MatplotlibPlotter()
                 self.collect_role_rewards(role_rewards)
 
-                # Calculate HQ rewards for each faction
-                hq_rewards = {faction.id: faction.compute_hq_reward(victory=True) for faction in self.faction_manager.factions}
+                hq_rewards = {
+                    faction.id: faction.compute_hq_reward(victory=True)
+                    for faction in self.faction_manager.factions
+                }
                 print(f"HQ Rewards: {hq_rewards}")
                 self.log_faction_metrics(tensorboard_logger, plotter, {
-                    role: np.mean([r for _, r in agents]) for role, agents in role_rewards.items()
-                }, hq_rewards) 
+                    role: np.mean([r for _, r in agents])
+                    for role, agents in role_rewards.items()
+                }, hq_rewards)
 
                 if self.mode == "train":
                     self.train_agents()
@@ -792,23 +816,22 @@ class GameManager:
                     self.train_hq_networks(winner_id)
 
                 plotter.flush_episode_plots(tensorboard_logger=tensorboard_logger)
-
                 self.print_episode_summary()
+
                 for faction in self.faction_manager.factions:
-                    
                     faction.hq_step_rewards = []
                     faction.assigned_tasks = {}
                     faction.threats = []
                     faction.resources = []
 
-
-
                 self.episode += 1
-
+                episode_bar.update(1)
                 if self.mode == "train" and self.episode > utils_config.EPISODES_LIMIT:
                     print(f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
                     running = False
 
+
+            episode_bar.close()
             return running
 
         except SystemExit:
@@ -817,8 +840,6 @@ class GameManager:
             print(f"An error occurred in {self.mode}: {e}")
             traceback.print_exc()
             self.cleanup(QUIT=True)
-
-
 
 
 
