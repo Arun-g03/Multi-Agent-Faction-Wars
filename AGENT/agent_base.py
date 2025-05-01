@@ -531,7 +531,7 @@ class BaseAgent:
         detected_resources = []
 
         for resource in resource_manager.resources:
-            if resource.is_depleted():
+            if resource.quantity <= 0:
                 continue
 
             if utils_config.SUB_TILE_PRECISION:

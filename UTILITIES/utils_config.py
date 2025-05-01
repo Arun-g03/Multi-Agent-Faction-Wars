@@ -42,9 +42,9 @@ ENABLE_TENSORBOARD = True
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 10# How many episodes or games to train for
+EPISODES_LIMIT = 30 # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 5000
+STEPS_PER_EPISODE = 300
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -381,11 +381,11 @@ HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
 Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 
 # Team Composition
-FACTON_COUNT = 3 # Number of factons # Customise as needed!
+FACTON_COUNT = 2 # Number of factons # Customise as needed!
 # Initial number of gatherers for a single faction # Customise as needed!
-INITAL_GATHERER_COUNT = 3
+INITAL_GATHERER_COUNT = 2
 # Initial number of peacekeepers for a single faction # Customise as needed!
-INITAL_PEACEKEEPER_COUNT = 1
+INITAL_PEACEKEEPER_COUNT = 2
 
 MAX_AGENTS = 10  # Maximum number of agents per faction
 

@@ -144,6 +144,7 @@ class Faction():
             self.strategy_update_interval = 100
             self.needs_strategy_retest = True
             self.current_step = 0
+            self.hq_step_rewards = []
 
             # Final confirmation print
             print(f"{self.name} created with ID {self.id} and colour {self.colour}")
@@ -1132,10 +1133,12 @@ class Faction():
                 self.gold_balance -= Agent_cost
                 self.recruit_agent("peacekeeper")
                 print(f"Faction {self.id} bought a Peacekeeper")
+                self.hq_step_rewards.append(+1.0)
             else:
                 reason = "Not enough gold" if self.gold_balance < Agent_cost else "Agent limit reached"
                 logger.log_msg(f"[HQ EXECUTE] Cannot recruit peacekeeper: {reason}.", level=logging.WARNING)
                 self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
                 return retest_strategy()
 
         # ========== STRATEGY: Recruit Gatherer ==========
@@ -1145,10 +1148,12 @@ class Faction():
                 self.gold_balance -= Agent_cost
                 self.recruit_agent("gatherer")
                 print(f"Faction {self.id} bought a Gatherer")
+                self.hq_step_rewards.append(+1.0)
             else:
                 reason = "Not enough gold" if self.gold_balance < Agent_cost else "Agent limit reached"
                 logger.log_msg(f"[HQ EXECUTE] Cannot recruit gatherer: {reason}.", level=logging.WARNING)
                 self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
                 return retest_strategy()
 
 
@@ -1182,11 +1187,13 @@ class Faction():
                 if dist_sq <= DEFENSE_RADIUS_SQ:
                     nearby_threat_found = True
                     break
+            self.hq_step_rewards.append(+1.0)
 
             if not nearby_threat_found:
                 logger.log_msg(
                     f"[HQ STRATEGY] No nearby threats to defend HQ.",
                     level=logging.WARNING)
+                self.hq_step_rewards.append(-0.5)
                 return retest_strategy()
 
             # Strategy is valid — assign peacekeepers to move to HQ
@@ -1219,45 +1226,62 @@ class Faction():
                 logger.log_msg(
                     f"[HQ EXECUTE] No threats to attack.",
                     level=logging.WARNING)
+                self.hq_step_rewards.append(-0.5)  # Penalise ineffective action
                 self.current_strategy = None
                 return retest_strategy()
+            else:
+                self.hq_step_rewards.append(+1.0)  # Reward valid threat engagement
+
 
         # ========== STRATEGY: Collect Gold ==========
         elif action == "COLLECT_GOLD":
-            gold_sources = [r for r in self.global_state.get(
-                "resources", []) if r["type"] == "gold"]
+            gold_sources = [
+                r for r in self.global_state.get("resources", [])
+                if r["type"] == "gold"
+            ]
             if not gold_sources:
                 logger.log_msg(
                     f"[HQ EXECUTE] No gold resources available.",
                     level=logging.WARNING)
+                self.hq_step_rewards.append(-0.5)  # Penalise for no available gold
                 self.current_strategy = None
                 return retest_strategy()
+            else:
+                self.hq_step_rewards.append(+1.0)  # Reward valid economic strategy
+
 
         # ========== STRATEGY: Collect Food ==========
         elif action == "COLLECT_FOOD":
-            food_sources = [r for r in self.global_state.get(
-                "resources", []) if r["type"] == "food"]
+            food_sources = [
+                r for r in self.global_state.get("resources", [])
+                if r["type"] == "food"
+            ]
             if not food_sources:
                 logger.log_msg(
                     f"[HQ EXECUTE] No food resources available.",
                     level=logging.WARNING)
+                self.hq_step_rewards.append(-0.5)
                 self.current_strategy = None
                 return retest_strategy()
+            else:
+                self.hq_step_rewards.append(+1.0)  # Reward viable food collection
+
 
         # ========== STRATEGY: No Priority ==========
         elif action == "NO_PRIORITY":
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[HQ EXECUTE] Faction {self.id} conserving resources.",
-                    level=logging.INFO)
-                time.sleep(5)
-                return retest_strategy()
+            logger.log_msg(
+                f"[HQ EXECUTE] Faction {self.id} conserving resources.",
+                level=logging.INFO)
+            self.hq_step_rewards.append(-1.0)  # Discourage doing nothing
+            return retest_strategy()
+
 
         # ========== Unknown Strategy ==========
         else:
             logger.log_msg(
                 f"[HQ EXECUTE] Unknown strategy '{action}'. Retesting...",
                 level=logging.WARNING)
+            self.hq_step_rewards.append(-1.0)
             return retest_strategy()
 
         # Set current strategy only if it's valid and successful
@@ -1270,7 +1294,11 @@ class Faction():
         """
         reward = 0
 
-        # Weights — adjust freely
+        # Sum shaped rewards collected during the episode
+        if hasattr(self, "hq_step_rewards") and self.hq_step_rewards:
+            reward += sum(self.hq_step_rewards)
+
+        # Existing static components
         w_gold = 0.01
         w_food = 0.01
         w_agents = 1.0
@@ -1278,24 +1306,21 @@ class Faction():
         w_threats = 0.3
         w_victory = 10.0
 
-        # Basic resource/agent reward
         reward += self.gold_balance * w_gold
         reward += self.food_balance * w_food
         reward += len(self.agents) * w_agents
 
-        # Optional: tasks completed (requires tracking if desired)
         if hasattr(self, "tasks_completed"):
             reward += self.tasks_completed * w_tasks
 
-        # Optional: threats eliminated (you can track this too)
         if hasattr(self, "threats_eliminated"):
             reward += self.threats_eliminated * w_threats
 
-        # Win bonus
         if victory:
             reward += w_victory
 
         return reward
+
 
 
 #    _  _  ___     _______                 ___ _            _                     _  _             _        _      _   _
@@ -1323,7 +1348,7 @@ class Faction():
             new_agent = self.create_agent(role)
             if new_agent:
                 self.agents.append(new_agent)  # Add to faction
-                self.game_manager.agents.append(new_agent)  # <=== FIX: Add to global agent list!
+                self.game_manager.agents.append(new_agent)  # <=== Add to global agent list
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(

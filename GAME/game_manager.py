@@ -748,8 +748,7 @@ class GameManager:
                 self.current_step = 0
                 role_rewards = {}
 
-                # Calculate HQ rewards for each faction
-                hq_rewards = {faction.id: faction.compute_hq_reward(victory=True) for faction in self.faction_manager.factions}
+                
 
                 while self.current_step < utils_config.STEPS_PER_EPISODE:
                     self.process_pygame_events()
@@ -771,7 +770,7 @@ class GameManager:
                         self.handle_victory(winner)
                         break
 
-                    self.current_step += 1
+                    
 
                 # === End of Episode ===
                 if utils_config.ENABLE_TENSORBOARD:
@@ -779,9 +778,13 @@ class GameManager:
                 
                 plotter = MatplotlibPlotter()
                 self.collect_role_rewards(role_rewards)
+
+                # Calculate HQ rewards for each faction
+                hq_rewards = {faction.id: faction.compute_hq_reward(victory=True) for faction in self.faction_manager.factions}
+                print(f"HQ Rewards: {hq_rewards}")
                 self.log_faction_metrics(tensorboard_logger, plotter, {
                     role: np.mean([r for _, r in agents]) for role, agents in role_rewards.items()
-                }, hq_rewards)  # <-- Pass hq_rewards here
+                }, hq_rewards) 
 
                 if self.mode == "train":
                     self.train_agents()
@@ -791,6 +794,14 @@ class GameManager:
                 plotter.flush_episode_plots(tensorboard_logger=tensorboard_logger)
 
                 self.print_episode_summary()
+                for faction in self.faction_manager.factions:
+                    
+                    faction.hq_step_rewards = []
+                    faction.assigned_tasks = {}
+                    faction.threats = []
+                    faction.resources = []
+
+
 
                 self.episode += 1
 
@@ -1079,9 +1090,12 @@ class GameManager:
         for faction in self.faction_manager.factions:
             is_winner = (faction.id == winner_id)
             hq_reward = faction.compute_hq_reward(victory=is_winner)
+            
+            hq_reward += sum(faction.hq_step_rewards)
+            print(f"HQ Reward: {hq_reward}")
 
-            if hasattr(faction.network, "update_memory_rewards"):
-                faction.network.update_memory_rewards(hq_reward)
+            
+            faction.network.update_memory_rewards(hq_reward)
 
             if hasattr(faction.network, "train") and faction.network.hq_memory:
                 try:
