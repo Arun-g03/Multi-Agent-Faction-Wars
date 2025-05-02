@@ -213,17 +213,18 @@ class AppleTree:
         self.last_regen_time = time.time()  # Track last regeneration time
 
         # Load the sprite sheet
-        sprite_sheet = pygame.image.load(
-            utils_config.TREE_IMAGE_PATH).convert_alpha()
+        if not utils_config.HEADLESS_MODE:
+            sprite_sheet = pygame.image.load(
+                utils_config.TREE_IMAGE_PATH).convert_alpha()
 
-        # Dimensions of the sprite sheet and individual sprites
-        sprite_width = sprite_sheet.get_width() // 6  # Assuming 6 frames horizontally
-        sprite_height = sprite_sheet.get_height()
+            # Dimensions of the sprite sheet and individual sprites
+            sprite_width = sprite_sheet.get_width() // 6  # Assuming 6 frames horizontally
+            sprite_height = sprite_sheet.get_height()
 
-        # Extract the final tree (6th frame)
-        self.image = sprite_sheet.subsurface(
-            pygame.Rect(sprite_width * 5, 0, sprite_width, sprite_height)
-        )
+            # Extract the final tree (6th frame)
+            self.image = sprite_sheet.subsurface(
+                pygame.Rect(sprite_width * 5, 0, sprite_width, sprite_height)
+            )
         self.update()
 
     def update(self):
@@ -298,6 +299,10 @@ class AppleTree:
         """
         Render the apple tree, aligning the stump with the grid cell and shifting it to the left by half its width.
         """
+        # Skip rendering if headless mode is active
+        if utils_config.HEADLESS_MODE:
+            return
+
         # Calculate the screen position based on the camera
         screen_x, screen_y = camera.apply((self.x, self.y))
 
@@ -311,6 +316,7 @@ class AppleTree:
 
         # Draw tree image at corrected position
         screen.blit(tree_image_scaled, (screen_x - offset_x, screen_y - offset_y))
+
 
 
 
@@ -349,13 +355,14 @@ class GoldLump:
         self.quantity = utils_config.GoldLump_base_quantity  # Set quantity of gold
         self.resource_manager = resource_manager
 
-        # Load and scale the gold image
-        self.image = pygame.image.load(
-            utils_config.GOLD_IMAGE_PATH).convert_alpha()
-        # Scale to 3% of screen height
-        image_size = int(utils_config.SCREEN_HEIGHT * 0.03)
-        self.image = pygame.transform.scale(
-            self.image, (image_size, image_size))
+        if not utils_config.HEADLESS_MODE:
+            # Load and scale the gold image
+            self.image = pygame.image.load(
+                utils_config.GOLD_IMAGE_PATH).convert_alpha()
+            # Scale to 3% of screen height
+            image_size = int(utils_config.SCREEN_HEIGHT * 0.03)
+            self.image = pygame.transform.scale(
+                self.image, (image_size, image_size))
 
     def mine(self, credit_callback=None):
         """Mine gold from the lump and credit it using the provided callback."""
@@ -407,6 +414,10 @@ class GoldLump:
         """
         Render the gold lump, centering it within the grid cell.
         """
+        # Skip rendering in headless mode
+        if utils_config.HEADLESS_MODE:
+            return
+
         # Calculate the screen position using the camera
         screen_x, screen_y = camera.apply((self.x, self.y))
 
@@ -424,6 +435,7 @@ class GoldLump:
         offset_y = final_size // 2
 
         screen.blit(gold_image_scaled, (screen_x - offset_x, screen_y - offset_y))
+
 
 
 

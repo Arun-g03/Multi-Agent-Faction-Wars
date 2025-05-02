@@ -204,8 +204,9 @@ class GameManager:
     def step(self):
         try:
             # Handle camera movement input
-            keys = pygame.key.get_pressed()
-            self.handle_camera_movement(keys)
+            if not utils_config.HEADLESS_MODE:
+                keys = pygame.key.get_pressed()
+                self.handle_camera_movement(keys)
             plotter = MatplotlibPlotter()
 
             #Clear prior-step action decisions (important for batching)
@@ -1279,6 +1280,9 @@ class GameManager:
         """
         Handle pygame events like quitting and camera zooming.
         """
+        if utils_config.HEADLESS_MODE or not pygame.display.get_init():
+            return  # Skip processing events in headless mode or if display is closed
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 print("[INFO] Window closed. Exiting game...")
@@ -1293,6 +1297,7 @@ class GameManager:
                     self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
                 elif event.key == pygame.K_MINUS:
                     self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
+
     
 
 

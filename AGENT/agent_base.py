@@ -828,16 +828,16 @@ class Peacekeeper(BaseAgent):
                 mode=mode,
                 network_type=network_type
             )
-            self.base_sprite = pygame.image.load(
-                base_sprite_path).convert_alpha()
-            sprite_size = int(utils_config.SCREEN_HEIGHT *
-                              utils_config.AGENT_SCALE_FACTOR)
-            self.base_sprite = pygame.transform.scale(
-                self.base_sprite, (sprite_size, sprite_size))
-            self.sprite = tint_sprite(
-                self.base_sprite, faction.colour) if faction and hasattr(
-                faction, 'colour') else self.base_sprite
-
+            if not utils_config.HEADLESS_MODE:
+                self.base_sprite = pygame.image.load(
+                    base_sprite_path).convert_alpha()
+                sprite_size = int(utils_config.SCREEN_HEIGHT *
+                                  utils_config.AGENT_SCALE_FACTOR)
+                self.base_sprite = pygame.transform.scale(
+                    self.base_sprite, (sprite_size, sprite_size))
+                self.sprite = tint_sprite(
+                    self.base_sprite, faction.colour) if faction and hasattr(
+                    faction, 'colour') else self.base_sprite
             from RENDER.Game_Renderer import get_font
             self.font = get_font(24)
 
@@ -887,15 +887,16 @@ class Gatherer(BaseAgent):
                 mode=mode,
                 network_type=network_type
             )
-            self.base_sprite = pygame.image.load(
-                base_sprite_path).convert_alpha()
-            sprite_size = int(utils_config.SCREEN_HEIGHT *
-                              utils_config.AGENT_SCALE_FACTOR)
-            self.base_sprite = pygame.transform.scale(
-                self.base_sprite, (sprite_size, sprite_size))
-            self.sprite = tint_sprite(
-                self.base_sprite, faction.colour) if faction and hasattr(
-                faction, 'colour') else self.base_sprite
+            if not utils_config.HEADLESS_MODE:
+                self.base_sprite = pygame.image.load(
+                    base_sprite_path).convert_alpha()
+                sprite_size = int(utils_config.SCREEN_HEIGHT *
+                                  utils_config.AGENT_SCALE_FACTOR)
+                self.base_sprite = pygame.transform.scale(
+                    self.base_sprite, (sprite_size, sprite_size))
+                self.sprite = tint_sprite(
+                    self.base_sprite, faction.colour) if faction and hasattr(
+                    faction, 'colour') else self.base_sprite            
             from RENDER.Game_Renderer import get_font
 
             self.font = get_font(24)

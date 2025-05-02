@@ -39,14 +39,16 @@ class GameRenderer:
         pygame.display.set_caption(Game_Title)
         # Use cached font for displaying faction IDs on bases
         self.font = get_font(24)
-        self.attack_sprite_sheet = pygame.image.load(
-            "RENDER\IMAGES\Attack_Animation.png").convert_alpha()
-        self.attack_frames = self.load_frames(
-            self.attack_sprite_sheet, frame_width=64, frame_height=64)
+        if not utils_config.HEADLESS_MODE:
+            self.attack_sprite_sheet = pygame.image.load(
+                "RENDER\IMAGES\Attack_Animation.png").convert_alpha()
+            self.faction_base_image = pygame.image.load(
+                "RENDER\IMAGES\castle-7440761_1280.png").convert_alpha()
+            self.attack_frames = self.load_frames(
+                self.attack_sprite_sheet, frame_width=64, frame_height=64)
         self.camera = camera  # Set camera if passed, or use None by default
         self.active_animations = []
-        self.faction_base_image = pygame.image.load(
-            "RENDER\IMAGES\castle-7440761_1280.png").convert_alpha()
+        
 
     def render(
             self,
@@ -187,123 +189,127 @@ class GameRenderer:
 
 
     def render_home_bases(self, factions, camera, mouse_x, mouse_y):
-        for faction in factions:
-            if faction.home_base["position"]:
-                x, y = faction.home_base["position"]
-                
-                size = faction.home_base["size"]
-                colour = faction.home_base["colour"]
 
-                # Adjust position and scale based on camera
-                screen_x, screen_y = camera.apply((x, y))
-                adjusted_size = size * camera.zoom
+        if utils_config.HEADLESS_MODE:
+                return  
+        else:
+            for faction in factions:
+                if faction.home_base["position"]:
+                    x, y = faction.home_base["position"]
+                    
+                    size = faction.home_base["size"]
+                    colour = faction.home_base["colour"]
 
-                # Draw the home base square
-                # Load and scale the PNG image for the faction base
-                base_image_scaled = pygame.transform.scale(
-                    self.faction_base_image, (int(adjusted_size), int(adjusted_size)))
-                # Blit the base image instead of drawing a square
-                self.screen.blit(base_image_scaled, (screen_x, screen_y))
+                    # Adjust position and scale based on camera
+                    screen_x, screen_y = camera.apply((x, y))
+                    adjusted_size = size * camera.zoom
 
-                # Display the faction ID at the center of the base
-                text = get_text_surface(str(faction.id), "Arial", 24, (0, 0, 0))                
-                text_rect = text.get_rect(
-                    center=(
-                        screen_x +
-                        adjusted_size //
-                        2 -
-                        12,
-                        screen_y +
-                        adjusted_size //
-                        2))
-                self.screen.blit(text, text_rect)
-                # Highlight resources and threats known to the faction if
-                # hovering over the base
-                base_rect = pygame.Rect(
-                    screen_x, screen_y, adjusted_size, adjusted_size)
-                if base_rect.collidepoint(mouse_x, mouse_y):
+                    # Draw the home base square
+                    # Load and scale the PNG image for the faction base
+                    base_image_scaled = pygame.transform.scale(
+                        self.faction_base_image, (int(adjusted_size), int(adjusted_size)))
+                    # Blit the base image instead of drawing a square
+                    self.screen.blit(base_image_scaled, (screen_x, screen_y))
 
-                    # Highlight resources
-                    for resource in faction.global_state["resources"]:
-                        resource_screen_x = (
-                            resource["location"][0] * utils_config.CELL_SIZE - camera.x) * camera.zoom
-                        resource_screen_y = (
-                            resource["location"][1] * utils_config.CELL_SIZE - camera.y) * camera.zoom
+                    # Display the faction ID at the center of the base
+                    text = get_text_surface(str(faction.id), "Arial", 24, (0, 0, 0))                
+                    text_rect = text.get_rect(
+                        center=(
+                            screen_x +
+                            adjusted_size //
+                            2 -
+                            12,
+                            screen_y +
+                            adjusted_size //
+                            2))
+                    self.screen.blit(text, text_rect)
+                    # Highlight resources and threats known to the faction if
+                    # hovering over the base
+                    base_rect = pygame.Rect(
+                        screen_x, screen_y, adjusted_size, adjusted_size)
+                    if base_rect.collidepoint(mouse_x, mouse_y):
 
-                        pygame.draw.rect(
-                            self.screen,
-                            (0, 255, 0),  # Green colour for highlighting resources
-                            pygame.Rect(
-                                resource_screen_x - utils_config.CELL_SIZE * camera.zoom // 2,
-                                resource_screen_y - utils_config.CELL_SIZE * camera.zoom // 2,
-                                utils_config.CELL_SIZE * camera.zoom,
-                                utils_config.CELL_SIZE * camera.zoom
-                            ),
-                            width=2
-                        )
+                        # Highlight resources
+                        for resource in faction.global_state["resources"]:
+                            resource_screen_x = (
+                                resource["location"][0] * utils_config.CELL_SIZE - camera.x) * camera.zoom
+                            resource_screen_y = (
+                                resource["location"][1] * utils_config.CELL_SIZE - camera.y) * camera.zoom
 
-                    # Highlight threats
-                    for threat in faction.global_state["threats"]:
-                        try:
-                            if isinstance(
-                                    threat, dict) and "location" in threat:
-                                threat_x, threat_y = threat["location"]
-                            else:
-                                continue  # Skip invalid threats
-
-                            # Convert grid coordinates to screen coordinates
-                            threat_screen_x = (
-                                threat_x - camera.x) * camera.zoom
-                            threat_screen_y = (
-                                threat_y - camera.y) * camera.zoom
-
-                            # Draw the threat box
-                            box_size = utils_config.CELL_SIZE * camera.zoom
                             pygame.draw.rect(
                                 self.screen,
-                                (255, 0, 0),  # Red colour for threats
+                                (0, 255, 0),  # Green colour for highlighting resources
                                 pygame.Rect(
-                                    threat_screen_x - box_size // 2,
-                                    threat_screen_y - box_size // 2,
-                                    box_size,
-                                    box_size
+                                    resource_screen_x - utils_config.CELL_SIZE * camera.zoom // 2,
+                                    resource_screen_y - utils_config.CELL_SIZE * camera.zoom // 2,
+                                    utils_config.CELL_SIZE * camera.zoom,
+                                    utils_config.CELL_SIZE * camera.zoom
                                 ),
-                                width=2  # Border thickness
+                                width=2
                             )
-                        except Exception as e:
-                            print(f"Error highlighting threat: {e}")
-                            continue
 
-                    # Gather faction metrics
-                    resource_counts = {
-                        "apple_trees": sum(
-                            1 for res in faction.global_state["resources"] if res.get("type") == "AppleTree"),
-                        "gold_lumps": sum(
-                            1 for res in faction.global_state["resources"] if res.get("type") == "GoldLump"),
-                    }
-                    threat_count = len(faction.global_state["threats"])
-                    peacekeeper_count = sum(
-                        1 for agent in faction.agents if agent.role == "peacekeeper")
-                    gatherer_count = sum(
-                        1 for agent in faction.agents if agent.role == "gatherer")
+                        # Highlight threats
+                        for threat in faction.global_state["threats"]:
+                            try:
+                                if isinstance(
+                                        threat, dict) and "location" in threat:
+                                    threat_x, threat_y = threat["location"]
+                                else:
+                                    continue  # Skip invalid threats
 
-                    # Display all metrics in the tooltip
+                                # Convert grid coordinates to screen coordinates
+                                threat_screen_x = (
+                                    threat_x - camera.x) * camera.zoom
+                                threat_screen_y = (
+                                    threat_y - camera.y) * camera.zoom
 
-                    overlay_text = (
-                        f"Faction ID: {faction.id}\n\n"
-                        f"Known Entities:\n"
-                        f"Apple Trees: {resource_counts['apple_trees']}\n"
-                        f"Gold Lumps: {resource_counts['gold_lumps']}\n"
-                        f"Threats: {threat_count}\n\n"
-                        f"Faction Metrics:\n"
-                        f"Gold: {faction.gold_balance}\n"
-                        f"Food: {faction.food_balance}\n"
-                        f"Peacekeepers: {peacekeeper_count}\n"
-                        f"Gatherers: {gatherer_count}\n"
-                        f"Current Strategy: {faction.current_strategy}\n"
-                        f"HQ Location: {x, y}"
-                    )
-                    self.render_tooltip(overlay_text)
+                                # Draw the threat box
+                                box_size = utils_config.CELL_SIZE * camera.zoom
+                                pygame.draw.rect(
+                                    self.screen,
+                                    (255, 0, 0),  # Red colour for threats
+                                    pygame.Rect(
+                                        threat_screen_x - box_size // 2,
+                                        threat_screen_y - box_size // 2,
+                                        box_size,
+                                        box_size
+                                    ),
+                                    width=2  # Border thickness
+                                )
+                            except Exception as e:
+                                print(f"Error highlighting threat: {e}")
+                                continue
+
+                        # Gather faction metrics
+                        resource_counts = {
+                            "apple_trees": sum(
+                                1 for res in faction.global_state["resources"] if res.get("type") == "AppleTree"),
+                            "gold_lumps": sum(
+                                1 for res in faction.global_state["resources"] if res.get("type") == "GoldLump"),
+                        }
+                        threat_count = len(faction.global_state["threats"])
+                        peacekeeper_count = sum(
+                            1 for agent in faction.agents if agent.role == "peacekeeper")
+                        gatherer_count = sum(
+                            1 for agent in faction.agents if agent.role == "gatherer")
+
+                        # Display all metrics in the tooltip
+
+                        overlay_text = (
+                            f"Faction ID: {faction.id}\n\n"
+                            f"Known Entities:\n"
+                            f"Apple Trees: {resource_counts['apple_trees']}\n"
+                            f"Gold Lumps: {resource_counts['gold_lumps']}\n"
+                            f"Threats: {threat_count}\n\n"
+                            f"Faction Metrics:\n"
+                            f"Gold: {faction.gold_balance}\n"
+                            f"Food: {faction.food_balance}\n"
+                            f"Peacekeepers: {peacekeeper_count}\n"
+                            f"Gatherers: {gatherer_count}\n"
+                            f"Current Strategy: {faction.current_strategy}\n"
+                            f"HQ Location: {x, y}"
+                        )
+                        self.render_tooltip(overlay_text)
 
 
 #    _   _ _   _ ____
@@ -600,17 +606,13 @@ class GameRenderer:
     def load_frames(self, sprite_sheet, frame_width, frame_height):
         """
         Extract individual frames from a sprite sheet.
-
-        :param sprite_sheet: The loaded sprite sheet image.
-        :param frame_width: The width of each frame in the sprite sheet.
-        :param frame_height: The height of each frame in the sprite sheet.
-        :return: A list of individual frames.
         """
+        if utils_config.HEADLESS_MODE:
+            return []  # Skip loading frames entirely
+
         frames = []
         sheet_width, sheet_height = sprite_sheet.get_size()
-        for i in range(
-                sheet_height //
-                frame_height):  # Loop through vertical frames
+        for i in range(sheet_height // frame_height):
             frame = sprite_sheet.subsurface(
                 pygame.Rect(0, i * frame_height, frame_width, frame_height)
             )
@@ -619,22 +621,20 @@ class GameRenderer:
 
     def play_attack_animation(self, position, duration):
         """
-        Play an attack animation at the given world position without blocking the main loop.
-
-        :param position: World coordinates (x, y) for the animation.
-        :param duration: Duration of the animation in milliseconds.
+        Queue an attack animation at the given world position.
         """
-        print(f"Renderer - Playing attack animation at position: {position}")
-        # Convert world position to screen position
-        screen_x, screen_y = self.camera.apply(position)
-        # print(f"World Position: {position}")
-        # print(f"Screen Position: ({screen_x}, {screen_y})")
+        if utils_config.HEADLESS_MODE:
+            return  # Skip in headless mode
 
-        # Number of animation frames and duration per frame
+        print(f"Renderer - Playing attack animation at position: {position}")
+        screen_x, screen_y = self.camera.apply(position)
+
         frame_count = len(self.attack_frames)
+        if frame_count == 0:
+            return  # Avoid div-by-zero if load_frames was skipped
+
         frame_duration = duration // frame_count
 
-        # Store the animation state
         self.active_animations.append({
             "screen_position": (screen_x, screen_y),
             "start_time": pygame.time.get_ticks(),
@@ -642,13 +642,17 @@ class GameRenderer:
             "current_frame": 0,
             "total_frames": frame_count,
             "duration": duration,
-            "z_index": 100  # Add high z-index to ensure animation appears in front
+            "z_index": 100
         })
+
 
     def update_animations(self):
         """
         Update and render active animations frame by frame.
         """
+        if utils_config.HEADLESS_MODE:
+            return  # Skip animation rendering in headless mode
+
         current_time = pygame.time.get_ticks()
         updated_animations = []
 
@@ -657,14 +661,13 @@ class GameRenderer:
             frame_index = elapsed_time // animation["frame_duration"]
 
             if frame_index < animation["total_frames"]:
-                # Render the current frame
                 frame = self.attack_frames[frame_index]
                 screen_x, screen_y = animation["screen_position"]
-                self.screen.blit(frame,
-                                 (screen_x - frame.get_width() // 2,
-                                  screen_y - frame.get_height() // 2))
+                self.screen.blit(
+                    frame,
+                    (screen_x - frame.get_width() // 2, screen_y - frame.get_height() // 2)
+                )
                 updated_animations.append(animation)
 
-        # Update the active animations
         self.active_animations = updated_animations
 

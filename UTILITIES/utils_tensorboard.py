@@ -198,14 +198,27 @@ class TensorBoardLogger:
     def cleanup_event_files(self, log_dir="RUNTIME_LOGS/Tensorboard_logs"):
         for root, dirs, files in os.walk(log_dir):
             event_files = [f for f in files if f.startswith("events.out.")]
+            small_files_deleted = 0
+
             for file in event_files:
                 try:
                     file_path = os.path.join(root, file)
-                    if os.path.getsize(file_path) < 5120:  # 5KB = 5 * 1024
+                    if os.path.getsize(file_path) < 5120:  # 5KB
                         os.remove(file_path)
+                        small_files_deleted += 1
                         print(f"[TensorBoard] Deleted small event file: {file_path}")
                 except Exception as e:
                     print(f"[TensorBoard ERROR] Failed to delete {file_path}: {e}")
+
+            # If all event files were small and deleted, and the folder is now empty, remove it
+            if len(event_files) > 0 and small_files_deleted == len(event_files):
+                try:
+                    if not os.listdir(root):  # Confirm it's empty
+                        os.rmdir(root)
+                        print(f"[TensorBoard] Deleted empty log folder: {root}")
+                except Exception as e:
+                    print(f"[TensorBoard ERROR] Failed to delete folder {root}: {e}")
+
 
     def log_strategy_distribution(self, tensorboard_logger, step):
         if not self.strategy_history:

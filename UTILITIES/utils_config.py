@@ -20,7 +20,7 @@ So i dont have to change the internal code every time I want to change something
 HEADLESS_MODE = True
 """Disable pygame game rendering for performance"""
 # Customisable
-ENABLE_PROFILE_BOOL = False
+ENABLE_PROFILE_BOOL = True
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
 ENABLE_LOGGING = False
@@ -43,9 +43,9 @@ ENABLE_TENSORBOARD = True
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 10 # How many episodes or games to train for
+EPISODES_LIMIT = 1 # How many episodes or games to train for
 # How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 5000
+STEPS_PER_EPISODE = 300
 
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
