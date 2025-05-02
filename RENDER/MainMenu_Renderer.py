@@ -144,7 +144,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     
-                    self.cleanup(QUIT=True)
+                    cleanup(QUIT=True)
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if start_button_rect.collidepoint(event.pos):
@@ -222,7 +222,7 @@ class MenuRenderer:
                     elif exit_button_rect.collidepoint(event.pos):
                         print("[INFO] Exiting game...")
                         
-                        self.cleanup(QUIT=True)
+                        cleanup(QUIT=True)
 
             pygame.display.update()
             return True
@@ -327,7 +327,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     
-                    self.cleanup(QUIT=True)
+                    cleanup(QUIT=True)
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if train_button.collidepoint(event.pos):
@@ -374,7 +374,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     
-                    self.cleanup(QUIT=True)
+                    cleanup(QUIT=True)
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if load_button.collidepoint(event.pos):
                         selected_models = self.select_models_by_role()
@@ -578,7 +578,7 @@ class MenuRenderer:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     
-                    self.cleanup(QUIT=True)
+                    cleanup(QUIT=True)
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
@@ -645,12 +645,4 @@ class MenuRenderer:
         return f"{role:<10} | {episode:<10} | {reward:<10}"
 
 
-    def cleanup(self, QUIT):
-        if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
-
-
-        if QUIT:
-            pygame.quit()
-            sys.exit()  # Ensure the system fully exits when quitting the game
-            print("[INFO] - MainMenu_Renderer ---- Game closed successfully.")
+    

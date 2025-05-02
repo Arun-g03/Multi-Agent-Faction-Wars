@@ -20,7 +20,7 @@ So i dont have to change the internal code every time I want to change something
 HEADLESS_MODE = True
 """Disable pygame game rendering for performance"""
 # Customisable
-ENABLE_PROFILE_BOOL = True
+ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
 ENABLE_LOGGING = False
@@ -43,10 +43,11 @@ ENABLE_TENSORBOARD = True
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 1 # How many episodes or games to train for
-# How many steps to take per episode/ How long should a game last
-STEPS_PER_EPISODE = 300
+EPISODES_LIMIT = 10 
+"""How many episodes or games to train for"""
 
+STEPS_PER_EPISODE = 5000
+"""How many steps to take per episode/ How long should an episode last"""
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
 
@@ -58,11 +59,12 @@ STEPS_PER_EPISODE = 300
 #   |_|  |_|\___|\__|_|  |_|\___|___/
 #
 
-
-# Metric path for tensorboard
 ModelMetrics_Path = "logs/"
-# I suggest leaving this as default
+"""
+Metric path for tensorboard
 
+I suggest leaving this as default
+"""
 
 #    ____
 #   / ___|  ___ _ __ ___  ___ _ __
@@ -123,7 +125,7 @@ else:
 
 # Perlin Noise Settings
 # If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
-RandomiseTerrainBool = False # Customise as needed!
+RandomiseTerrainBool = True # Customise as needed!
 Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
 # combination with the current perlin noise settings
 
@@ -156,7 +158,8 @@ WaterAnimationToggle = False  # Toggle water animation #Turn off for performance
 # Perlin Noise Parameters
 # Together, these parameters control the terrain's appearance.
 # Good as default
-NOISE_SCALE = 100  # Higher values create larger features, lower values create smaller features # Customise as needed!
+NOISE_SCALE = 100 
+"""Higher values create larger features, lower values create smaller features Customise as needed!"""
 # Higher values add more detail, lower values create smoother terrain #
 # Customise as needed!
 NOISE_OCTAVES = 4
@@ -175,10 +178,17 @@ TREE_DENSITY = 0.05# Density of apple trees on land # Customise as needed!  #DEF
 APPLE_REGEN_TIME = 20 #DEFAULT 20
 # Probability of spawning a gold zone # Customise as needed!
 GOLD_ZONE_PROBABILITY = 0.05 #Default 0.05
-GOLD_SPAWN_DENSITY = 0.03  # Density of gold in gold zones # Customise as needed!
+GOLD_SPAWN_DENSITY = 0.03  #Default 0.03 # Density of gold in gold zones # Customise as needed!
 
-Apple_Base_quantity = 5  # Base quantity of apples on a tree # Customise as needed!
-GoldLump_base_quantity = 5  # Base quantity of gold in a gold zone # Customise as needed!
+Apple_Base_quantity = 5  #default 5 # Base quantity of apples on a tree # Customise as needed!
+GoldLump_base_quantity = 5  #default 5 # Base quantity of gold in a gold zone # Customise as needed!
+
+RESOURCE_VICTORY_TARGET_RATIO = 0.7 
+"""
+Percentage of resources needed to win an episode.
+Calculated based on the total resources spawned at the start of the episode.
+Default 0.7
+ """
 
 # File paths for resource images
 # Okay as is
@@ -382,7 +392,7 @@ HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
 Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 
 # Team Composition
-FACTON_COUNT = 2 # Number of factons # Customise as needed!
+FACTON_COUNT = 3 # Number of factons # Customise as needed!
 # Initial number of gatherers for a single faction # Customise as needed!
 INITAL_GATHERER_COUNT = 2
 # Initial number of peacekeepers for a single faction # Customise as needed!

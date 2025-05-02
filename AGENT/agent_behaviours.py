@@ -967,7 +967,7 @@ class AgentBehaviour:
                     logger.log_msg(
                         f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",
                         level=logging.INFO)
-                    print(f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.")
+                print(f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.")
                 if target_agent.Health <= 0:
                     self.report_threat_eliminated(threat)
                     return utils_config.TaskState.SUCCESS
@@ -984,15 +984,17 @@ class AgentBehaviour:
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.",
+                            print(f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}."),
                             level=logging.INFO)
                     if enemy.Health <= 0:
                         if utils_config.ENABLE_LOGGING:
                             logger.log_msg(
                                 f"{self.agent.role} eliminated nearby  {enemy.role}.",
+                                print(f"{self.agent.role} eliminated nearby  {enemy.role}."),
                                 level=logging.INFO)
                     return utils_config.TaskState.ONGOING
 
-        # ❌ Nothing in range — fail the task this step
+        # Nothing in range — fail the task this step
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} could not reach assigned threat and found no enemies in attack range.",

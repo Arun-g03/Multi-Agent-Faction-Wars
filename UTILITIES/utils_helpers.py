@@ -183,3 +183,16 @@ def generate_random_colour(used_colours=None, min_distance=100):
 
 
 
+def cleanup(QUIT):
+        """
+        Clean up resources and exit the game.
+        """
+        if utils_config.ENABLE_TENSORBOARD:
+            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
+
+
+        if QUIT:
+            pygame.quit()
+            
+            print("[INFO] - MainMenu_Renderer ---- Game closed successfully.")
+            sys.exit()  # Ensure the system fully exits when quitting the game

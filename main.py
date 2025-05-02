@@ -7,7 +7,7 @@ startup_script = "UTILITIES\Startup_installer.py"
 # Prompt for headless mode before imports
 print("[INFO] - Main.py ---- Starting the game...\n")
 print("Would you like to run in HEADLESS_MODE?")
-print("\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR FASTER TRAINING\033[0m")
+print("\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR BETTER PERFORMANCE\033[0m")
 
 print("\nEnter y for yes n for no: ", end="")
 user_input = input().strip().lower()
@@ -194,7 +194,7 @@ class MainGame:
         except Exception as e:
             print(f"[FATAL] An error occurred in main(): {e}")
             traceback.print_exc()
-            self.cleanup(QUIT=True)
+            cleanup(QUIT=True)
 
             
 
@@ -240,17 +240,7 @@ class MainGame:
             traceback.print_exc()
             return None
 
-    def cleanup(self, QUIT):
-        if utils_config.ENABLE_TENSORBOARD:
-            
-            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
-
-        
-
-        if QUIT:
-            pygame.quit()
-            sys.exit()  # Ensure the system fully exits when quitting the game
-            print("[INFO] - Game_manager.py ---- Game closed successfully.")
+    
 
 # Run the main function with profiling if enabled
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from AGENT.agent_factions import Faction
 from AGENT.agent_faction_manager import FactionManager
 from AGENT.agent_communication import CommunicationSystem
 from NEURAL_NETWORK.Common import Training_device, save_checkpoint, load_checkpoint, clone_best_agents
-from GAME.game_rules import check_victory
+from GAME.game_rules import check_victory, calculate_resource_victory_targets
 from ENVIRONMENT.env_terrain import Terrain
 from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
 from GAME.camera import Camera
@@ -76,6 +76,14 @@ class GameManager:
 
         # Initialise the resource manager with the terrain
         self.resource_manager = ResourceManager(self.terrain)
+
+        self.resource_spawn_history = {
+            "episode": [],
+            "gold_lumps": [],
+            "gold_quantity": [],
+            "apple_trees": [],
+            "apple_quantity": []
+        }
         self.camera = Camera(
             utils_config.WORLD_WIDTH,
             utils_config.WORLD_HEIGHT,
@@ -197,11 +205,13 @@ class GameManager:
 #   |___/\__\___| .__/
 #               |_|
 
-    """
-    Executes a single game step with .
-    """
+    
 
     def step(self):
+
+        """
+        Executes a single game step with episode.
+        """
         try:
             # Handle camera movement input
             if not utils_config.HEADLESS_MODE:
@@ -388,6 +398,11 @@ class GameManager:
             print("Resetting the environment...")
             self.terrain = Terrain()
             self.resource_manager = ResourceManager(self.terrain)
+            calculate_resource_victory_targets(
+                resources=self.resource_manager.resources,
+                faction_count=len(self.faction_manager.factions),
+                target_ratio=utils_config.RESOURCE_VICTORY_TARGET_RATIO
+            )
 
             # Reset factions and agents
             self.agents_initialised = False  # Reset flag for agents initialisation
@@ -436,7 +451,8 @@ class GameManager:
             # Step 2: Initialise Resources
             print("Initialising resources...")
             self.resource_manager = ResourceManager(self.terrain)
-            self.resource_manager.generate_resources(episode=self.episode)
+            
+            
 
             # Now set the `resources` attribute after generating them
             # Assign resources after generation
@@ -448,6 +464,8 @@ class GameManager:
             self.faction_manager.reset_factions(
                 utils_config.FACTON_COUNT, self.resource_manager, self.agents, self)
             print(f"{utils_config.FACTON_COUNT} factions initialised.")
+
+            
 
             # Step 4: Initialise Agents and Place HQs
             self.agents.clear()  # Clear any existing agents
@@ -771,6 +789,13 @@ class GameManager:
                     self.process_pygame_events()
                     self.step()
                     self.update_resources()
+                    # Track resource spawn at the start of the episode
+                    
+
+                    
+
+                    
+
 
                     if not utils_config.HEADLESS_MODE:
                         self.renderer.render(
@@ -791,6 +816,13 @@ class GameManager:
                         break
 
                     self.current_step += 1
+                
+                self.resource_spawn_history["episode"].append(self.episode)
+                self.resource_spawn_history["gold_lumps"].append(self.resource_counts["gold_lumps"])
+                self.resource_spawn_history["gold_quantity"].append(self.resource_counts["gold_quantity"])
+                self.resource_spawn_history["apple_trees"].append(self.resource_counts["apple_trees"])
+                self.resource_spawn_history["apple_quantity"].append(self.resource_counts["apple_quantity"])
+                print(f"resource_spawn_history: {self.resource_spawn_history}")
 
                 if utils_config.HEADLESS_MODE:
                     step_bar.close()
@@ -806,10 +838,15 @@ class GameManager:
                     for faction in self.faction_manager.factions
                 }
                 print(f"HQ Rewards: {hq_rewards}")
-                self.log_faction_metrics(tensorboard_logger, plotter, {
-                    role: np.mean([r for _, r in agents])
-                    for role, agents in role_rewards.items()
-                }, hq_rewards)
+                processed_role_rewards = {}
+                for (faction_id, role), agents in role_rewards.items():
+                    avg = np.mean([r for _, r in agents])
+                    if faction_id not in processed_role_rewards:
+                        processed_role_rewards[faction_id] = {}
+                    processed_role_rewards[faction_id][role] = avg
+
+                self.log_faction_metrics(tensorboard_logger, plotter, processed_role_rewards, hq_rewards)
+
 
                 if self.mode == "train":
                     self.train_agents()
@@ -817,7 +854,7 @@ class GameManager:
                     self.train_hq_networks(winner_id)
 
                 plotter.flush_episode_plots(tensorboard_logger=tensorboard_logger)
-                self.print_episode_summary()
+                #self.print_episode_summary()
 
                 for faction in self.faction_manager.factions:
                     faction.hq_step_rewards = []
@@ -840,7 +877,7 @@ class GameManager:
         except Exception as e:
             print(f"An error occurred in {self.mode}: {e}")
             traceback.print_exc()
-            self.cleanup(QUIT=True)
+            cleanup(QUIT=True)
 
 
 
@@ -858,6 +895,23 @@ class GameManager:
 
         # HQ Strategy Names
         HQ_STRATEGY_OPTIONS = utils_config.HQ_STRATEGY_OPTIONS
+
+        # At end of run() or after final episode
+    
+        plotter = MatplotlibPlotter()
+        plotter.plot_scalar_over_time(
+            names=["Gold Lumps", "Apple Trees", "Total Gold", "Total Food"],
+            values_list=[
+                self.resource_spawn_history["gold_lumps"],
+                self.resource_spawn_history["apple_trees"],
+                self.resource_spawn_history["gold_quantity"],
+                self.resource_spawn_history["apple_quantity"]
+            ],
+            episodes=self.resource_spawn_history["episode"],
+            tensorboard_logger=tensorboard_logger
+        )
+
+
 
         for faction in self.faction_manager.factions:
             faction_total_reward = 0
@@ -877,7 +931,7 @@ class GameManager:
             self.metric_history[faction.id]["agents_alive"].append(agent_count)
 
             # Add role-specific rewards to the history for each role
-            for role, reward in role_rewards.items():
+            for role, reward in role_rewards.get(faction.id, {}).items():
                 if role not in self.metric_history[faction.id]:
                     self.metric_history[faction.id][role] = []
                 self.metric_history[faction.id][role].append(reward)
@@ -993,14 +1047,17 @@ class GameManager:
 
     def collect_role_rewards(self, role_rewards):
         """
-        Collect rewards per role for each agent.
+        Collect rewards per role **per faction**.
         """
-        for agent in self.agents:
-            rewards = agent.ai.memory.get("rewards", [])
-            if rewards:
-                role = agent.role
-                total_reward = sum(rewards)
-                role_rewards.setdefault(role, []).append((agent.ai, total_reward))
+        for faction in self.faction_manager.factions:
+            for agent in faction.agents:
+                rewards = agent.ai.memory.get("rewards", [])
+                if rewards:
+                    role = agent.role
+                    total_reward = sum(rewards)
+                    # Key by (faction_id, role)
+                    key = (faction.id, role)
+                    role_rewards.setdefault(key, []).append((agent.ai, total_reward))
 
 
 
@@ -1288,7 +1345,7 @@ class GameManager:
                 print("[INFO] Window closed. Exiting game...")
                 if utils_config.ENABLE_LOGGING:
                     self.logger.log_msg("Window closed - Exiting game.", level=logging.INFO)
-                self.cleanup(QUIT=True)
+                cleanup(QUIT=True)
 
             elif event.type == pygame.KEYDOWN:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -1374,18 +1431,7 @@ class GameManager:
 
 
 
-    def cleanup(self, QUIT):
-        if utils_config.ENABLE_TENSORBOARD:
-            
-            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
-
-        
-
-        if QUIT:
-            pygame.quit()
-            sys.exit()  # Ensure the system fully exits when quitting the game
-            print("[INFO] - Game_manager.py ---- Game closed successfully.")
-
+    
 
 #    ____                              _        _____                 _
 #   |  _ \ _   _ _ __   __ _ _ __ ___ (_) ___  | ____|_   _____ _ __ | |_
@@ -1454,8 +1500,7 @@ class EventManager:
 
         # Debug with terrain grid context
 
-        print(
-            f"[Event Manager] Grid Pos: {position}, World Pos: {world_position}, Screen Pos: ({screen_x}, {screen_y})")
+        #print(f"[Event Manager] Attack Triggered @ Grid Pos: {position}, World Pos: {world_position}, Screen Pos: ({screen_x}, {screen_y})")
 
         # Trigger animation at calculated screen position
         self.add_event("attack_animation", {

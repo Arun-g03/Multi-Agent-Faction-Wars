@@ -55,4 +55,4 @@ from UTILITIES.utils_tensorboard import TensorBoardLogger
 tensorboard_logger = TensorBoardLogger()
 from UTILITIES.utils_matplot import MatplotlibPlotter
 
-from UTILITIES.utils_helpers import profile_function, find_closest_actor, generate_random_colour
+from UTILITIES.utils_helpers import profile_function, find_closest_actor, generate_random_colour,cleanup

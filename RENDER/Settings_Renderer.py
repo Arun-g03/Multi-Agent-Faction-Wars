@@ -229,7 +229,7 @@ class SettingsMenuRenderer:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 
-                self.cleanup(QUIT=True)
+                cleanup(QUIT=True)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 for i, setting in enumerate(settings):
@@ -321,13 +321,4 @@ class SettingsMenuRenderer:
                 settings[setting["key"]] = setting["value"]
         return settings
 
-    def cleanup(self, QUIT):
-        if utils_config.ENABLE_TENSORBOARD:
-            
-            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
-
-
-        if QUIT:
-            pygame.quit()
-            sys.exit()  # Ensure the system fully exits when quitting the game
-            print("[INFO] - Settings_renderer.py ---- Game closed successfully.")
+    

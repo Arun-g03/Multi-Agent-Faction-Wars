@@ -314,54 +314,48 @@ class MatplotlibPlotter:
 
 
     def plot_scalar_over_time(self, names, values_list, episodes, tensorboard_logger=None):
-        """
-        Plots multiple lines on a single plot. Each line corresponds to a different name and value set.
-
-        Parameters:
-        - names: List of strings, each representing the label for a line.
-        - values_list: List of lists or arrays containing the values for each line.
-        - episodes: List of episodes (x-axis).
-        - tensorboard_logger: TensorBoard logger instance (optional).
-        """
         fig, ax = plt.subplots(figsize=(10, 5))
 
-        # Plot each set of values with a corresponding name
+        # Pad value lists to match length of episodes
+        max_length = len(episodes)
+        for idx in range(len(values_list)):
+            if len(values_list[idx]) < max_length:
+                values_list[idx] += [0] * (max_length - len(values_list[idx]))
+
+        # Ensure values_list and names match in count
+        if len(values_list) < len(names):
+            values_list += [[] for _ in range(len(names) - len(values_list))]
+        elif len(values_list) > len(names):
+            values_list = values_list[:len(names)]
+
+        # Plot each line
         for name, values in zip(names, values_list):
             ax.plot(episodes, values, marker='o', label=name)
-
-            # Calculate the final average for this line
             final_avg = sum(values) / len(values) if values else 0
-
-            # Add the final average as text on the plot
             ax.text(
-                episodes[-1], final_avg, 
-                f"Avg: {final_avg:.2f}", 
-                color='black', 
+                episodes[-1], final_avg,
+                f"Avg: {final_avg:.2f}",
+                color='black',
                 backgroundcolor='grey',
                 fontsize=10,
-                verticalalignment='bottom', 
+                verticalalignment='bottom',
                 horizontalalignment='right'
             )
 
-        # Clean the names for title and legend purposes (replace underscores with spaces)
         clean_names = [name.replace("_", " ") for name in names]
-        
-        # Set the title and labels
         ax.set_title(f"{names} over {episodes[-1]} episodes")
         ax.set_xlabel("Episode")
         ax.set_ylabel("Value")
         ax.grid(True)
         ax.legend(title="Metrics")
-        
-        # Update the plot with the cleaned name for the file
+
         self.update_image_plot(name="_".join(clean_names) + "_trend", fig=fig, tensorboard_logger=tensorboard_logger, step=episodes[-1])
 
-        # Save scalar data as CSV
+        # Save CSV
         save_dir = self.image_dir
         if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
-            save_dir = tensorboard_logger.run_dir  # Use TensorBoard's directory if available
-        
-        os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
+            save_dir = tensorboard_logger.run_dir
+        os.makedirs(save_dir, exist_ok=True)
 
         csv_name = "_".join(clean_names) + "_trend.csv"
         csv_path = os.path.join(save_dir, csv_name)
@@ -370,21 +364,19 @@ class MatplotlibPlotter:
             with open(csv_path, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(["Episode"] + clean_names)
+
                 for i, ep in enumerate(episodes):
-                    # Check if any list in values_list is empty or shorter than expected for the current episode
                     row = [ep]
                     for j in range(len(names)):
                         if len(values_list[j]) > i:
                             row.append(values_list[j][i])
                         else:
-                            row.append(0)  # Default value when there's no data for that episode (e.g., 0)
-                    
+                            row.append(0)
                     writer.writerow(row)
 
             print(f"[Plotter] Scalar trend data saved to {csv_path}")
         except Exception as e:
             print(f"[Plotter] Failed to write CSV for scalar trend: {e}")
-
 
 
 

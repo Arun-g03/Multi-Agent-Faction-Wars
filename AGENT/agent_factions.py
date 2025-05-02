@@ -237,16 +237,10 @@ class Faction():
         if current_step % self.strategy_update_interval == 0 or self.needs_strategy_retest:
             new_strategy = self.choose_HQ_Strategy()
             if new_strategy != self.current_strategy:
-                print(
-                    "\033[92m" +
-                    f"Faction {self.id} has changed HQ from {self.current_strategy} to {new_strategy}." +
-                    "\033[0m")
+                print(f"\033[94mFaction {self.id} has changed HQ from {self.current_strategy} to {new_strategy}.\033[0m\n")
                 self.perform_HQ_Strategy(new_strategy)
             else:
-                print(
-                    "\033[93m" +
-                    f"Faction {self.id} maintained HQ strategy: {self.current_strategy}" +
-                    "\033[0m")
+                print(f"\033[93m Faction {self.id} maintained HQ strategy: {self.current_strategy}\033[0m")
                 self.current_strategy = new_strategy
                 self.perform_HQ_Strategy(self.current_strategy)
             self.needs_strategy_retest = False
@@ -1106,8 +1100,7 @@ class Faction():
         HQ executes the chosen strategic action if valid.
         If invalid, it re-evaluates strategy using the HQ network.
         """
-        print(
-            f"[HQ_STRATEGY] Faction {self.id} perform_HQ_Strategy - Trying to  {action}")
+        
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"[HQ EXECUTE] Faction {self.id} attempting strategy: {action}",
