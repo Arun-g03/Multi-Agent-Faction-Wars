@@ -35,7 +35,7 @@ from scipy.ndimage import gaussian_filter, label
 from torch.distributions import Categorical
 from torch.utils.tensorboard import SummaryWriter
 import seaborn as sns
-import matplotlib.pyplot as plt
+import matplotlib
 import pandas as pd
 import re
 

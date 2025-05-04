@@ -161,22 +161,16 @@ class BaseAgent:
         Initialise the network model based on the selected network type.
         """
         if network_type_int == utils_config.NETWORK_TYPE_MAPPING["PPOModel"]:
-            print(
-                "\033[93m" +
-                f"Initialising PPOModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}" +
-                "\033[0m")
+            #print(f"\033[93mInitialising PPOModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")            
             return PPOModel(
-                AgentID=AgentID,
-                state_size=state_size,
-                action_size=action_size,
-                training_mode=self.mode
+                    AgentID=AgentID,
+                    state_size=state_size,
+                    action_size=action_size,
+                    training_mode=self.mode
             )
 
         elif network_type_int == utils_config.NETWORK_TYPE_MAPPING["DQNModel"]:
-            print(
-                "\033[93m" +
-                f"Initialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}" +
-                "\033[0m")
+            #print(f"\033[93mInitialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")            
             return DQNModel(
                 state_size=state_size,
                 action_size=action_size

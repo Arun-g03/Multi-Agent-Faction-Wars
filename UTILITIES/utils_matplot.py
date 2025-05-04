@@ -1,5 +1,8 @@
 from SHARED.core_imports import *
+
+matplotlib.use("Agg")  # Disable the need for an interactive plots since system saves them as images
 import matplotlib.pyplot as plt
+
 import seaborn as sns
 import io
 from PIL import Image
@@ -201,6 +204,66 @@ class MatplotlibPlotter:
             except Exception as e:
                 print(f"[Plotter] Failed to write CSV for {name}: {e}")
 
+    def plot_victory_timeline(self, episodes, winner_ids, victory_types, tensorboard_logger=None):
+        """
+        Plots a per-episode timeline showing which faction won and how (e.g., resource, elimination),
+        and saves a corresponding CSV file.
+        """
+        if not episodes or not winner_ids or not victory_types:
+            print("[Plotter] Victory data is empty — skipping plot.")
+            return
+
+        fig, ax = plt.subplots(figsize=(12, 5))
+
+        color_map = {
+            "resource": "green",
+            "elimination": "blue",
+            "timeout": "orange",
+            "none": "grey"
+        }
+
+        labels = []
+        colors = []
+        for wid, vtype in zip(winner_ids, victory_types):
+            if wid == -1:
+                labels.append("No Winner")
+            else:
+                labels.append(f"Faction {wid} ({vtype})")
+            colors.append(color_map.get(vtype, "black"))
+
+        ax.bar(episodes, [1] * len(episodes), color=colors)
+
+        for i, label in enumerate(labels):
+            ax.text(episodes[i], 0.5, label, ha='center', va='center', color='white', fontsize=9, weight='bold')
+
+        ax.set_title("Victory Timeline Per Episode")
+        ax.set_xlabel("Episode")
+        ax.set_yticks([])
+        ax.set_xlim(left=0)
+        ax.grid(True, axis='x', linestyle='--', alpha=0.4)
+
+        self.update_image_plot(name="victory_timeline", fig=fig, tensorboard_logger=tensorboard_logger, step=episodes[-1])
+
+        # === Save CSV ===
+        save_dir = self.image_dir
+        if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
+            save_dir = tensorboard_logger.run_dir
+        elif not save_dir:
+            save_dir = os.path.join("VISUALS", "PLOTS")
+
+        os.makedirs(save_dir, exist_ok=True)
+        csv_path = os.path.join(save_dir, "victory_timeline.csv")
+
+        try:
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Episode", "Winner ID", "Victory Type", "Label"])
+                for ep, wid, vtype, label in zip(episodes, winner_ids, victory_types, labels):
+                    writer.writerow([ep, wid, vtype, label])
+            print(f"[Plotter] Victory timeline CSV saved to {csv_path}")
+        except Exception as e:
+            print(f"[Plotter] Failed to write CSV for victory timeline: {e}")
+
 
 
 
@@ -309,6 +372,8 @@ class MatplotlibPlotter:
 
 
 
+    
+
 
 
 
@@ -330,7 +395,22 @@ class MatplotlibPlotter:
 
         # Plot each line
         for name, values in zip(names, values_list):
+            if len(values) != len(episodes):
+                print(f"[Plotter] Skipping '{name}' — length mismatch (episodes: {len(episodes)}, values: {len(values)})")
+                continue  # skip broken/empty data
+
             ax.plot(episodes, values, marker='o', label=name)
+            final_avg = sum(values) / len(values) if values else 0
+            ax.text(
+                episodes[-1], final_avg,
+                f"Avg: {final_avg:.2f}",
+                color='black',
+                backgroundcolor='grey',
+                fontsize=10,
+                verticalalignment='bottom',
+                horizontalalignment='right'
+            )
+
             final_avg = sum(values) / len(values) if values else 0
             ax.text(
                 episodes[-1], final_avg,

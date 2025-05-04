@@ -404,6 +404,8 @@ class GameManager:
                 target_ratio=utils_config.RESOURCE_VICTORY_TARGET_RATIO
             )
 
+            
+
             # Reset factions and agents
             self.agents_initialised = False  # Reset flag for agents initialisation
             self.faction_manager.reset_factions(
@@ -483,6 +485,14 @@ class GameManager:
             global CurrEpisode
             CurrEpisode = self.episode
             print(f"Game initialised in {mode} mode.")
+
+
+            print(
+                  
+                  f"Starting episode {self.mode} for {utils_config.EPISODES_LIMIT} episodes.\n",
+                  f"total steps: {utils_config.STEPS_PER_EPISODE}\n"
+                  
+                  )
         except BaseException:
             print("An error occurred during initialisation.")
             raise
@@ -756,13 +766,7 @@ class GameManager:
         try:
             print(f"Running game in {self.mode} mode...")
 
-            # Outer bar: episodes
-            episode_bar = tqdm(
-                total=utils_config.EPISODES_LIMIT,
-                desc="Episodes",
-                position=0,
-                leave=True
-            )
+            
 
             while running and (self.episode <= utils_config.EPISODES_LIMIT):
                 self.reset()
@@ -810,19 +814,34 @@ class GameManager:
                     self.collect_episode_rewards()
 
                     winner = check_victory(self.faction_manager.factions)
-                    winner_id = winner.id if winner else None
+                    winner_id = winner.id if winner else -1
+                    victory_type = getattr(winner, "victory_reason", "none") if winner else "none"
+
+                    if not hasattr(self, "victory_history"):
+                        self.victory_history = {
+                            "episode": [],
+                            "winner_id": [],
+                            "victory_type": []
+                        }
+
+                    self.victory_history["episode"].append(self.episode)
+                    self.victory_history["winner_id"].append(winner_id)
+                    self.victory_history["victory_type"].append(victory_type)
+
+
                     if winner:
                         self.handle_victory(winner)
                         break
 
                     self.current_step += 1
+
                 
                 self.resource_spawn_history["episode"].append(self.episode)
                 self.resource_spawn_history["gold_lumps"].append(self.resource_counts["gold_lumps"])
                 self.resource_spawn_history["gold_quantity"].append(self.resource_counts["gold_quantity"])
                 self.resource_spawn_history["apple_trees"].append(self.resource_counts["apple_trees"])
                 self.resource_spawn_history["apple_quantity"].append(self.resource_counts["apple_quantity"])
-                print(f"resource_spawn_history: {self.resource_spawn_history}")
+                
 
                 if utils_config.HEADLESS_MODE:
                     step_bar.close()
@@ -863,13 +882,13 @@ class GameManager:
                     faction.resources = []
 
                 self.episode += 1
-                episode_bar.update(1)
+                
                 if self.mode == "train" and self.episode > utils_config.EPISODES_LIMIT:
                     print(f"Training completed after {utils_config.EPISODES_LIMIT} episodes")
                     running = False
 
 
-            episode_bar.close()
+            
             return running
 
         except SystemExit:
@@ -898,7 +917,7 @@ class GameManager:
 
         # At end of run() or after final episode
     
-        plotter = MatplotlibPlotter()
+        
         plotter.plot_scalar_over_time(
             names=["Gold Lumps", "Apple Trees", "Total Gold", "Total Food"],
             values_list=[
@@ -910,6 +929,18 @@ class GameManager:
             episodes=self.resource_spawn_history["episode"],
             tensorboard_logger=tensorboard_logger
         )
+
+        
+        plotter.plot_victory_timeline(
+            episodes=self.victory_history["episode"],
+            winner_ids=self.victory_history["winner_id"],
+            victory_types=self.victory_history["victory_type"],
+            tensorboard_logger=tensorboard_logger  # or None
+        )
+
+
+
+
 
 
 
@@ -1015,6 +1046,7 @@ class GameManager:
                     step=self.current_step,
                     name=f"Faction {faction.id} Task Timeline {self.episode}"  # Use faction ID to name the plot
                 )
+            
 
            
 
@@ -1326,7 +1358,22 @@ class GameManager:
 
 
 
+    def prepare_victory_scalar_history(self):
+        """
+        Transforms victory history into per-faction scalar data for plotting.
+        """
+        faction_count = len(self.faction_manager.factions)
 
+        # Initialize series for each faction and a 'No Winner' line
+        victory_series = {f"Faction {i} Wins": [] for i in range(faction_count)}
+        victory_series["No Winner"] = []
+
+        for wid in self.victory_history["winner_id"]:
+            for i in range(faction_count):
+                victory_series[f"Faction {i} Wins"].append(1 if wid == i else 0)
+            victory_series["No Winner"].append(1 if wid == -1 else 0)
+
+        return victory_series
 
 
 

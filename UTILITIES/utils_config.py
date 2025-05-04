@@ -43,10 +43,10 @@ ENABLE_TENSORBOARD = True
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 10 
+EPISODES_LIMIT = 30 
 """How many episodes or games to train for"""
 
-STEPS_PER_EPISODE = 5000
+STEPS_PER_EPISODE = 20000
 """How many steps to take per episode/ How long should an episode last"""
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)

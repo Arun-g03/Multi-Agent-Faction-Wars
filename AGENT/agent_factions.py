@@ -237,10 +237,12 @@ class Faction():
         if current_step % self.strategy_update_interval == 0 or self.needs_strategy_retest:
             new_strategy = self.choose_HQ_Strategy()
             if new_strategy != self.current_strategy:
-                print(f"\033[94mFaction {self.id} has changed HQ from {self.current_strategy} to {new_strategy}.\033[0m\n")
+                if utils_config.ENABLE_LOGGING:
+                    print(f"\033[94mFaction {self.id} has changed HQ from {self.current_strategy} to {new_strategy}.\033[0m\n")
                 self.perform_HQ_Strategy(new_strategy)
             else:
-                print(f"\033[93m Faction {self.id} maintained HQ strategy: {self.current_strategy}\033[0m")
+                if utils_config.ENABLE_LOGGING:    
+                    print(f"\033[93m Faction {self.id} maintained HQ strategy: {self.current_strategy}\033[0m")
                 self.current_strategy = new_strategy
                 self.perform_HQ_Strategy(self.current_strategy)
             self.needs_strategy_retest = False
@@ -1356,7 +1358,9 @@ class Faction():
             logger.log_msg(
                 f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}",
                 level=logging.ERROR)
-            raise
+            
+            raise(f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}")
+            
 
 
     def create_agent(self, role: str):
@@ -1396,7 +1400,7 @@ class Faction():
             agent.current_action = None
             agent.current_task = None
             agent.current_task_state = utils_config.TaskState.NONE
-            agent.mode = "train"
+            agent.mode = self.game_manager.mode
             agent.log_prob = None
             agent.value = None
 
@@ -1405,7 +1409,7 @@ class Faction():
                     f"[SPAWN] Created {role} for Faction {self.id} at ({agent.x}, {agent.y}).",
                     level=logging.INFO
                 )
-
+            print(f"Created {role} for Faction {self.id} at ({agent.x}, {agent.y}).")
             return agent
 
         except Exception as e:

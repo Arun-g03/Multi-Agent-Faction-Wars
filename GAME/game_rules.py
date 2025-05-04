@@ -42,7 +42,7 @@ def calculate_resource_victory_targets(resources, faction_count=1, target_ratio=
     print(f"""[Victory Targets]
     - Gold Collection Target: {gold_target} of {total_gold} total ({(gold_target / total_gold * 100):.1f}%)
     - Food Collection Target: {food_target} of {total_food} total ({(food_target / total_food * 100):.1f}%)
-    """)
+    \n""")
 
 
 
@@ -64,17 +64,17 @@ def check_victory(factions):
     for faction in factions:
         if faction.gold_balance >= FACTION_GOAL['gold_collection'] or \
            faction.food_balance >= FACTION_GOAL['food_collection']:
-            print("Resource victory!")
+            print("\n\nResource victory!\n\n")
             return faction  # Return the winning faction
 
     # Check last faction standing
     if len(active_factions) == 1:
-        print("Last faction standing!")
+        print("\n\nLast faction standing!\n\n")
         return active_factions[0]
 
     # Check draw (no active factions)
     if len(active_factions) == 0:
-        print("Draw!")
+        print("\n\nDraw!\n\n")
         return None  # Draw/stalemate
 
     return None  # No winner yet
