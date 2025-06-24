@@ -17,7 +17,7 @@ So i dont have to change the internal code every time I want to change something
 #   |____/|_____|____/ \___/ \____|  \___/|_|    |_| |___\___/|_| \_|____/
 #
 
-HEADLESS_MODE = True
+HEADLESS_MODE = False
 """Disable pygame game rendering for performance"""
 # Customisable
 ENABLE_PROFILE_BOOL = False
