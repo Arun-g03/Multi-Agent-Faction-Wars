@@ -1,3 +1,21 @@
+# MultiAgent Faction Wars
+
+A Python-based multi-agent simulation game that explores emergent behaviors through competitive and collaborative agent interactions. This project demonstrates advanced AI concepts including reinforcement learning, neural networks, and complex multi-agent systems.
+
+## Overview
+
+MultiAgent Faction Wars is an interactive simulation environment where multiple AI agents compete and collaborate within faction-based groups. The system features:
+
+- **Multi-Agent Non-Static Environment**: Dynamic, ever-changing simulation where agents must adapt to evolving conditions
+- **Multi-Agent Reinforcement Learning**: Agents learn through experience using PPO algorithms (DQN Future works)
+- **Faction-Based Competition**: Agents form alliances and compete for resources and territory
+- **Emergent Behaviors**: Complex strategies emerge from simple agent interactions
+- **Real-Time Visualisation**: Live game rendering with customizable settings
+- **TensorBoard Integration**: Comprehensive metrics tracking and analysis
+- **Neural Network Architecture**: Custom attention mechanisms and hierarchical networks
+
+The project serves as both an educational tool for understanding multi-agent systems and a research platform for studying emergent behaviors in competitive environments.
+
 **Developed in Python 3.9.7**
 
 ## Getting Started
