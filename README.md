@@ -20,8 +20,6 @@ TensorBoard is used to track various metrics and help identify trends over time.
 It can be launched while the main app is running or afterwards.
 Metric data is logged either in real-time or at the end of each episode, depending on the specific metric.
 
-
-
 ### Customisation
 
 You can customise project settings in the utils_config.py file.
@@ -32,3 +30,30 @@ Examples include:
 - World and screen settings
 
 Look for comments like "Customise as needed!" throughout the code to easily find configurable sections.
+
+## Screenshots
+
+### Main Game Interface
+![Main Game Interface](Documentation/image.png)
+
+### Setup and Configuration
+![Settings Screenshot 1](Documentation/image-1.png)
+
+![Settings Screenshot 2](Documentation/image-2.png)
+
+![Settings Screenshot 3](Documentation/image-3.png)
+
+### Simulation Setup
+![Select Simulation Mode Screenshot](Documentation/image-6.png)
+
+![Train fresh or Load model Screenshot](Documentation/image-7.png)
+
+### Gameplay
+![Gameplay Screenshot 1](Documentation/image-8.png)
+
+![Gameplay Screenshot 2](Documentation/image-9.png)
+
+### Monitoring and Credits
+![Tensorboard Screenshot 5](Documentation/image-5.png)
+
+![Credits Screenshot 4](Documentation/image-4.png)
