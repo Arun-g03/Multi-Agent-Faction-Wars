@@ -11,6 +11,7 @@ import UTILITIES.utils_config as utils_config
 """File Specific Imports"""
 from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
+from NEURAL_NETWORK.HQ_Network import HQ_Network
 from AGENT.agent_behaviours import AgentBehaviour
 
 
@@ -173,7 +174,16 @@ class BaseAgent:
             #print(f"\033[93mInitialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")            
             return DQNModel(
                 state_size=state_size,
-                action_size=action_size
+                action_size=action_size,
+                AgentID=AgentID
+            )
+            
+        elif network_type_int == utils_config.NETWORK_TYPE_MAPPING["HQ_Network"]:
+            #print(f"\033[93mInitialising HQ_Network with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")
+            return HQ_Network(
+                state_size=state_size,
+                action_size=action_size,
+                AgentID=AgentID
             )
 
         else:
@@ -305,14 +315,8 @@ class BaseAgent:
 #   |  _ \ ___ _ __ / _| ___  _ __ _ __ ___   | |_| |__   ___  | |_ __ _ ___| | __  / / __ ___ | | ___    __ _  ___| |_(_) ___  _ __\ \
 #   | |_) / _ \ '__| |_ / _ \| '__| '_ ` _ \  | __| '_ \ / _ \ | __/ _` / __| |/ / | | '__/ _ \| |/ _ \  / _` |/ __| __| |/ _ \| '_ \| |
 #   |  __/  __/ |  |  _| (_) | |  | | | | | | | |_| | | |  __/ | || (_| \__ \   <  | | | | (_) | |  __/ | (_| | (__| |_| | (_) | | | | |
-#   |_|   \___|_|  |_|  \___/|_|  |_| |_| |_|  \__|_| |_|\___|  \__\__,_|___/_|\_\ | |_|  \___/|_|\___|  \__,_|\___|\__|_|\___/|_| |_| |
-#                                                                                   \_\                                             /_/
-#         _                            _             _   _                                       _              _                      _
-#     ___| |__   ___  ___  ___ _ __   | |__  _   _  | |_| |__   ___   _ __   ___ _   _ _ __ __ _| |  _ __   ___| |___      _____  _ __| | __
-#    / __| '_ \ / _ \/ __|/ _ \ '_ \  | '_ \| | | | | __| '_ \ / _ \ | '_ \ / _ \ | | | '__/ _` | | | '_ \ / _ \ __\ \ /\ / / _ \| '__| |/ /
-#   | (__| | | | (_) \__ \  __/ | | | | |_) | |_| | | |_| | | |  __/ | | | |  __/ |_| | | | (_| | | | | | |  __/ |_ \ V  V / (_) | |  |   <
-#    \___|_| |_|\___/|___/\___|_| |_| |_.__/ \__, |  \__|_| |_|\___| |_| |_|\___|\__,_|_|  \__,_|_| |_| |_|\___|\__| \_/\_/ \___/|_|  |_|\_\
-#                                            |___/
+#   |_|   \_\__, |\___|_| |_|\__|___/ | .__/ \___/|___/___/_|_.__/|_|\___|  \__,_|\___|\__|_|\___/|_| |_|___/
+#           |___/                     |_|
 
     def perform_task(self, state, resource_manager, agents, current_step=None, current_episode=None):
         """

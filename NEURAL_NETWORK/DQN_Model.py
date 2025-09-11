@@ -28,8 +28,11 @@ This would allow variety in active models used by the agents.
 
 
 class DQNModel(nn.Module):
-    def __init__(self, state_size, action_size, device=Training_device):
+    def __init__(self, state_size, action_size, device=Training_device, AgentID=None):
         super().__init__()
+        # Store AgentID for consistency with other network models
+        self.AgentID = AgentID
+        
         self.fc1 = nn.Linear(state_size, 128)
         self.fc2 = nn.Linear(128, 128)
         self.q_values = nn.Linear(128, action_size)

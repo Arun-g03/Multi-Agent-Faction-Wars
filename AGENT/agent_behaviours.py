@@ -123,6 +123,11 @@ class AgentBehaviour:
 
         # === No current task: act independently ===
         if not self.agent.current_task:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[DEBUG] {self.agent.role} {self.agent.agent_id} has no task, acting independently",
+                    level=logging.DEBUG
+                )
             valid_indices = self.get_valid_action_indices(resource_manager, agents)
             action_index, log_prob, value = self.ai.choose_action(state, valid_indices=valid_indices)
 
@@ -149,6 +154,11 @@ class AgentBehaviour:
             return reward, task_state
 
         # === Task is valid and ongoing ===
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[DEBUG] {self.agent.role} {self.agent.agent_id} executing task: {self.agent.current_task}",
+                level=logging.DEBUG
+            )
         self.agent.current_task["state"] = utils_config.TaskState.ONGOING
         logger.log_msg(f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}", level=logging.INFO)
 
@@ -162,10 +172,23 @@ class AgentBehaviour:
         if expected_method:
             task_handler = getattr(self, expected_method, None)
             if task_handler:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[DEBUG] {self.agent.role} {self.agent.agent_id} calling task handler: {expected_method}",
+                        level=logging.DEBUG
+                    )
                 task_state = task_handler(state, resource_manager, agents)
             else:
+                logger.log_msg(
+                    f"[ERROR] Task handler {expected_method} not found for {self.agent.role} {self.agent.agent_id}",
+                    level=logging.ERROR
+                )
                 task_state = utils_config.TaskState.FAILURE
         else:
+            logger.log_msg(
+                f"[ERROR] No task method mapping found for task type '{task_type}' for {self.agent.role} {self.agent.agent_id}",
+                level=logging.ERROR
+            )
             task_state = utils_config.TaskState.FAILURE
 
         # === Handle completed task immediately ===
@@ -620,6 +643,19 @@ class AgentBehaviour:
             #print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
             return utils_config.TaskState.SUCCESS
 
+        # Actually move the agent towards the target
+        if dx > dy:
+            # Move horizontally first
+            if agent_cell_x < target_x:
+                self.move_right()
+            else:
+                self.move_left()
+        else:
+            # Move vertically first
+            if agent_cell_y < target_y:
+                self.move_down()
+            else:
+                self.move_up()
         
         return utils_config.TaskState.ONGOING
 
@@ -632,9 +668,18 @@ class AgentBehaviour:
         Move dynamically towards the target based on dx, dy.
         """
         if abs(dx) > abs(dy):
-            return self.move_right() if dx > 0 else self.move_left()
+            if dx > 0:
+                self.move_right()
+            else:
+                self.move_left()
         else:
-            return self.move_down() if dy > 0 else self.move_up()
+            if dy > 0:
+                self.move_down()
+            else:
+                self.move_up()
+        
+        # Return ONGOING since we're still moving towards the target
+        return utils_config.TaskState.ONGOING
 
 
 #    ____  _                        _      _        _   _

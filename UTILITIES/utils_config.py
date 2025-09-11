@@ -23,10 +23,10 @@ HEADLESS_MODE = False
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
 """Used to enable visual debugging"""
-ENABLE_LOGGING = False
+ENABLE_LOGGING = True
 """Enable logging for debugging"""
 
-ENABLE_TENSORBOARD = True
+ENABLE_TENSORBOARD = False
 """Enable tensorboard for visualisation"""
 
 
@@ -35,7 +35,7 @@ ENABLE_TENSORBOARD = True
 #    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ _____ ___ _   _  ____ ____
 #   | ____|  _ \_ _/ ___| / _ \|  _ \| ____| / ___|| ____|_   _|_   _|_ _| \ | |/ ___/ ___|
 #   |  _| | |_) | |\___ \| | | | | | |  _|   \___ \|  _|   | |   | |  | ||  \| | |  _\___ \
-#   | |___|  __/| | ___) | |_| | |_| | |___   ___) | |___  | |   | |  | || |\  | |_| |___) |
+#   | |___|  __/| | ___) | |_| | |_| | | |___   ___) | |___  | |   | |  | || |\  | |_| |___) |
 #   |_____|_|  |___|____/ \___/|____/|_____| |____/|_____| |_|   |_| |___|_| \_|\____|____/
 #
 
@@ -50,6 +50,55 @@ STEPS_PER_EPISODE = 20000
 """How many steps to take per episode/ How long should an episode last"""
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
+
+# ===== ADVANCED TRAINING CONFIGURATION =====
+# Enhanced training parameters for better AI performance
+
+# Learning Rate Configuration
+INITIAL_LEARNING_RATE_PPO = 3e-4  # Optimal PPO learning rate
+INITIAL_LEARNING_RATE_HQ = 1e-4   # HQ network learning rate
+MIN_LEARNING_RATE = 1e-6          # Minimum learning rate
+LEARNING_RATE_DECAY = 0.95        # Learning rate decay factor
+LEARNING_RATE_STEP_SIZE = 500     # Steps between LR updates
+
+# Training Optimization
+BATCH_SIZE = 64                   # Training batch size
+MIN_MEMORY_SIZE = 128             # Minimum memory before training
+GAE_LAMBDA = 0.95                 # GAE lambda parameter
+VALUE_LOSS_COEFF = 0.5           # Value function loss coefficient
+ENTROPY_COEFF = 0.01             # Entropy bonus coefficient
+GRADIENT_CLIP_NORM = 0.5         # Gradient clipping norm
+PPO_CLIP_RATIO = 0.2             # PPO clip ratio
+
+# Curriculum Learning
+ENABLE_CURRICULUM_LEARNING = True
+CURRICULUM_DIFFICULTY_STEPS = [5, 10, 15, 20, 25]  # Episodes to increase difficulty
+INITIAL_RESOURCE_SPAWN_RATE = 0.3  # Start with fewer resources
+FINAL_RESOURCE_SPAWN_RATE = 1.0    # End with normal spawn rate
+
+# Experience Replay
+ENABLE_EXPERIENCE_REPLAY = True
+REPLAY_BUFFER_SIZE = 10000        # Experience replay buffer size
+PRIORITY_REPLAY_ALPHA = 0.6       # Priority replay alpha
+PRIORITY_REPLAY_BETA = 0.4        # Priority replay beta
+
+# Multi-Agent Training
+ENABLE_MULTI_AGENT_TRAINING = True
+INTER_AGENT_COMMUNICATION = True   # Allow agents to share experiences
+FACTION_COORDINATION_BONUS = 0.1   # Bonus for coordinated actions
+
+# Training Monitoring
+ENABLE_TRAINING_MONITORING = True
+SAVE_CHECKPOINT_EVERY = 5         # Save checkpoint every N episodes
+EVALUATION_FREQUENCY = 3          # Evaluate performance every N episodes
+EARLY_STOPPING_PATIENCE = 10      # Episodes without improvement before stopping
+
+# Advanced Loss Functions
+USE_HUBER_LOSS = True             # Use Huber loss for value function
+USE_FOCAL_LOSS = False            # Use focal loss for policy (experimental)
+LOSS_NORMALIZATION = True         # Normalize losses for stability
+
+# ===== END ADVANCED TRAINING CONFIGURATION =====
 
 
 #    __  __      _        _
@@ -205,7 +254,7 @@ Tree_Scale_Img = 3
 
 #    _____         _      ____  _        _
 #   |_   _|_ _ ___| | __ / ___|| |_ __ _| |_ ___
-#     | |/ _` / __| |/ / \___ \| __/ _` | __/ _ \
+#     | |/ _` |/ __| |/ / \___ \| __/ _` | __/ _ \
 #     | | (_| \__ \   <   ___) | || (_| | ||  __/
 #     |_|\__,_|___/_|\_\ |____/ \__\__,_|\__\___|
 #
@@ -280,6 +329,8 @@ HQ_STRATEGY_OPTIONS = [
     "COLLECT_FOOD",
     "RECRUIT_GATHERER",
     "RECRUIT_PEACEKEEPER",
+    "SWAP_TO_GATHERER",
+    "SWAP_TO_PEACEKEEPER",
     "NO_PRIORITY",
 ]
 """
@@ -369,6 +420,7 @@ Peacekeeper_PNG = 'RENDER\IMAGES\peacekeeper.png'  # Path to peacekeeper image
 Gatherer_PNG = 'RENDER\IMAGES\gatherer.png'  # Path to gatherer image
 
 Gold_Cost_for_Agent = 10  # Gold cost for an agent
+Gold_Cost_for_Agent_Swap = 5  # Gold cost for swapping an existing agent to a different role
 
 
 DEF_AGENT_STATE_SIZE = 11 + len(TASK_TYPE_MAPPING)

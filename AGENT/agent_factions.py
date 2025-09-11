@@ -445,8 +445,8 @@ class Faction():
 #     ____ _                    _   _                  _       _           _       _        _
 #    / ___| | ___  __ _ _ __   | |_| |__   ___    __ _| | ___ | |__   __ _| |  ___| |_ __ _| |_ ___
 #   | |   | |/ _ \/ _` | '_ \  | __| '_ \ / _ \  / _` | |/ _ \| '_ \ / _` | | / __| __/ _` | __/ _ \
-#   | |___| |  __/ (_| | | | | | |_| | | |  __/ | (_| | | (_) | |_) | (_| | | \__ \ || (_| | ||  __/
-#    \____|_|\___|\__,_|_| |_|  \__|_| |_|\___|  \__, |_|\___/|_.__/ \__,_|_| |___/\__\__,_|\__\___|
+#   | |___| |  __/ (_| | | | | | |_| | | |  __/ | (_| | | (_) | |_) | (_) | |  | |_\__ \ |  _| | | (_) | | | | | | | (_| | (_| |  __/ | | | |_\__ \
+#    \____|_|\___|\__,_|_| |_|  \__|_| |_|\___|  \__, |_|\___/|_.__/ \___/|_| |___/\__\__,_|\__\___|
 #                                                |___/
 
     def clean_global_state(self):
@@ -605,6 +605,11 @@ class Faction():
                 continue  # Still busy with a valid task
 
             # === 4. Assign a new task ===
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[DEBUG] Assigning task to {agent.role} {agent.agent_id} (idle: {agent_idle})",
+                    level=logging.DEBUG
+                )
             task = self.assign_task(agent)
             if task:
                 agent.current_task = task
@@ -630,7 +635,11 @@ class Faction():
                     logger.log_msg(
                         f"[DEBUG] {agent.agent_id} has task: {agent.current_task}",
                         level=logging.DEBUG)
-
+            else:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[DEBUG] No task assigned to {agent.role} {agent.agent_id}",
+                        level=logging.DEBUG)
 
     """
 
@@ -638,7 +647,7 @@ class Faction():
     #      / \\   ___ ___(_) __ _ _ __   | |_ __ _ ___| | _____  | |_ ___     __ _  __ _  ___ _ __ | |_ ___
     #     / _ \\ / __/ __| |/ _` | '_ \\  | __/ _` / __| |/ / __| | __/ _ \\   / _` |/ _` |/ _ \\ '_ \\| __/ __|
     #    / ___ \\__ \\__ \\ | (_| | | | | | || (_| \\__ \\   <\\__ \\ | || (_) | | (_| | (_| |  __/ | | | |_\\__ \
-    #   /_/   \\_\\___/___/_|\\__, |_| |_|  \\__\\__,_|___/_|\\_\\___/  \\__\\___/   \\__,_|\\__, |\\___|_| |_|\\__|___/
+    #   /_/   \\_\\___/___/_|\\__, |_| |_|  \\__\\__,_|___/_|\\_\\   \\_/\\_/ \\___|_|\\__, |_| |_|\\__|___/
     #                      |___/                                                  |___/
     ========================================================================================================
     """
@@ -707,6 +716,12 @@ class Faction():
             current = agent.current_task
             current_type = current["type"] if current else "none"
 
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[DEBUG] Peacekeeper {agent.agent_id} - Current task: {current}, Strategy: {strategy}, Has threats: {has_threats}",
+                    level=logging.DEBUG
+                )
+
             if isinstance(current_type, str):
                 current_type_id = utils_config.TASK_TYPE_MAPPING.get(current_type, utils_config.TASK_TYPE_MAPPING["none"])
             else:
@@ -751,6 +766,12 @@ class Faction():
                 )
                 if is_explore_move and agent.current_task_state == utils_config.TaskState.ONGOING:
                     return current
+                
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[DEBUG] Peacekeeper {agent.agent_id} - Assigning explore task (strategy: {strategy})",
+                        level=logging.DEBUG
+                    )
                 return self.assign_explore_task(agent)
 
             return current  # fallback
@@ -864,7 +885,7 @@ class Faction():
             level=logging.INFO)
         return utils_config.create_task(self, "gather", target, task_id)
 
-    def assign_explore_task(self, agent) -> Optional[dict]:
+    def assign_explore_task(self, agent):
         terrain = self.resource_manager.terrain
 
         self.calculate_territory(terrain)  # track current control
@@ -924,6 +945,12 @@ class Faction():
                 }
             }
 
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[DEBUG] Explore task created for {agent.role} {agent.agent_id}: {task}",
+                    level=logging.DEBUG
+                )
+
             return task
 
         logger.log_msg(f"[EXPLORE] No valid unexplored cells left for agent {agent.agent_id}", level=logging.WARNING)
@@ -936,10 +963,10 @@ class Faction():
 
     #     ____      _            _       _         _            _                   _       _     _
     #    / ___|__ _| | ___ _   _| | __ _| |_ ___  | |_ __ _ ___| | __ __      _____(_) __ _| |__ | |_ ___
-    #   | |   / _` | |/ __| | | | |/ _` | __/ _ \\ | __/ _` / __| |/ / \\ \\ /\\ / / _ \\ |/ _` | '_ \\| __/ __|
-    #   | |__| (_| | | (__| |_| | | (_| | ||  __/ | || (_| \\__ \\   <   \\ V  V /  __/ | (_| | | | | |_\\__ \
-    #    \\____\\__,_|_|\\___|\\__,_|_|\\__,_|\\__\\___|  \\__\\__,_|___/_|\\_\\   \\_/\\_/ \\___|_|\\__, |_| |_|\\__|___/
-    #                                                                                 |___/
+    #   | |   / _` | |/ __| | | | |/ _` | __/ _ \\ | __/ _` / __| |/ / \\ \\ /\\ / / _` / __|  / __/ _ \| '_ ` _ \| '_ \| |/ _ \ __/ _ \/ _` |
+    #   | |__| (_| | | (__| |_| | | (_| | ||  __/ | || (_| \__ \   <   \\ V  V / (_| \__ \ | (_| (_) | | | | | | |_) | |  __/ ||  __/ (_| |
+    #    \___|_| |_|\___|\__,_|_|\\__,_|_|_|_| |___/\__|_| \__,_|\__\___\__, |\_, | /_/ \_\__\___/_|_|_|_\__| /_/ \_\__|\__|_\___/_||_/__/
+    #                                                                  |___/ |__/
     =======================================================================================================
     """
 
@@ -978,8 +1005,8 @@ class Faction():
 #     ___| |__   ___  ___| | __ | |_| |__   ___  | |_ __ _ ___| | __ __      ____ _ ___    ___ ___  _ __ ___  _ __ | | ___| |_ ___  __| |
 #    / __| '_ \ / _ \/ __| |/ / | __| '_ \ / _ \ | __/ _` / __| |/ / \ \ /\ / / _` / __|  / __/ _ \| '_ ` _ \| '_ \| |/ _ \ __/ _ \/ _` |
 #   | (__| | | |  __/ (__|   <  | |_| | | |  __/ | || (_| \__ \   <   \ V  V / (_| \__ \ | (_| (_) | | | | | | |_) | |  __/ ||  __/ (_| |
-#    \___|_| |_|\___|\___|_|\_\  \__|_| |_|\___|  \__\__,_|___/_|\_\   \_/\_/ \__,_|___/  \___\___/|_| |_| |_| .__/|_|\___|\__\___|\__,_|
-#                                                                                                            |_|
+#    \___|_| |_|\___|\__,_|_|\\__,_|_|_|_| |___/\__|_| \__,_|\__\___\__, |\_, | /_/ \_\__\___/_|_|_|_\__| /_/ \_\__|\__|_\___/_||_/__/
+#                                                                  |___/ |__/
 
 
     def complete_task(self, task_id_str, agent, task_state):
@@ -1067,11 +1094,13 @@ class Faction():
                 f"[HQ STRATEGY] Faction {self.id} requesting decision from HQ network...",
                 level=logging.INFO)
 
-        strategy = "NO_PRIORITY"  # Default
+        strategy = "NO_PRIORITY"  # Default fallback
         previous_strategy = self.current_strategy
 
         if hasattr(self, "network") and self.network:
-            predicted = self.network.predict_strategy(self.global_state)
+            # Use enhanced state for better strategy selection
+            enhanced_state = self.get_enhanced_global_state()
+            predicted = self.network.predict_strategy(enhanced_state)
 
             if predicted in utils_config.HQ_STRATEGY_OPTIONS:
                 strategy = predicted
@@ -1092,8 +1121,33 @@ class Faction():
                 f"[HQ STRATEGY] No HQ network found. Falling back to NO_PRIORITY.",
                 level=logging.WARNING)
 
+        # Ensure we always have a valid strategy
+        if strategy not in utils_config.HQ_STRATEGY_OPTIONS:
+            strategy = "NO_PRIORITY"
+            logger.log_msg(
+                f"[HQ STRATEGY] Invalid strategy detected, defaulting to NO_PRIORITY.",
+                level=logging.WARNING)
+
+        # Log strategy selection reasoning for debugging
+        if utils_config.ENABLE_LOGGING:
+            if strategy.startswith("SWAP_TO_"):
+                composition = self.get_faction_composition()
+                if composition and composition.get("suggestions"):
+                    best_suggestion = composition["suggestions"][0]
+                    logger.log_msg(
+                        f"[HQ STRATEGY] Swap strategy {strategy} selected based on: {best_suggestion['reason']}",
+                        level=logging.INFO
+                    )
+            
+            # Add debug logging for initial strategy assignment
+            if previous_strategy is None:
+                logger.log_msg(
+                    f"[DEBUG] Faction {self.id} initial strategy set to: {strategy}",
+                    level=logging.DEBUG
+                )
+
         self.current_strategy = strategy
-        self.strategy_history.append(strategy)  #  Track it
+        self.strategy_history.append(strategy)  # Track it
         return strategy
 
 
@@ -1151,6 +1205,63 @@ class Faction():
                 self.hq_step_rewards.append(-0.5)
                 return retest_strategy()
 
+        # ========== STRATEGY: Swap to Gatherer ==========
+        elif action == "SWAP_TO_GATHERER":
+            if len(self.agents) == 0:
+                logger.log_msg(f"[HQ EXECUTE] Cannot swap to gatherer: No agents available.", level=logging.WARNING)
+                self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
+                return retest_strategy()
+            
+            # Evaluate which agents to swap
+            candidates = self.evaluate_agent_swap_candidates("gatherer")
+            
+            if candidates:
+                best_candidate, score = candidates[0]
+                if self.swap_agent_role(best_candidate, "gatherer"):
+                    print(f"Faction {self.id} swapped {best_candidate.role} to Gatherer")
+                    self.hq_step_rewards.append(+1.0)
+                    # Log swap statistics for monitoring
+                    self.log_swap_statistics()
+                else:
+                    logger.log_msg(f"[HQ EXECUTE] Failed to swap agent to gatherer.", level=logging.WARNING)
+                    self.current_strategy = None
+                    self.hq_step_rewards.append(-0.5)
+                    return retest_strategy()
+            else:
+                logger.log_msg(f"[HQ EXECUTE] No suitable candidates for swapping to gatherer.", level=logging.WARNING)
+                self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
+                return retest_strategy()
+
+        # ========== STRATEGY: Swap to Peacekeeper ==========
+        elif action == "SWAP_TO_PEACEKEEPER":
+            if len(self.agents) == 0:
+                logger.log_msg(f"[HQ EXECUTE] Cannot swap to peacekeeper: No agents available.", level=logging.WARNING)
+                self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
+                return retest_strategy()
+            
+            # Evaluate which agents to swap
+            candidates = self.evaluate_agent_swap_candidates("peacekeeper")
+            
+            if candidates:
+                best_candidate, score = candidates[0]
+                if self.swap_agent_role(best_candidate, "peacekeeper"):
+                    print(f"Faction {self.id} swapped {best_candidate.role} to Peacekeeper")
+                    self.hq_step_rewards.append(+1.0)
+                    # Log swap statistics for monitoring
+                    self.log_swap_statistics()
+                else:
+                    logger.log_msg(f"[HQ EXECUTE] Failed to swap agent to peacekeeper.", level=logging.WARNING)
+                    self.current_strategy = None
+                    self.hq_step_rewards.append(-0.5)
+                    return retest_strategy()
+            else:
+                logger.log_msg(f"[HQ EXECUTE] No suitable candidates for swapping to peacekeeper.", level=logging.WARNING)
+                self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
+                return retest_strategy()
 
         # ========== STRATEGY: Defend HQ ==========
         elif action == "DEFEND_HQ":
@@ -1265,10 +1376,10 @@ class Faction():
         # ========== STRATEGY: No Priority ==========
         elif action == "NO_PRIORITY":
             logger.log_msg(
-                f"[HQ EXECUTE] Faction {self.id} conserving resources.",
+                f"[HQ EXECUTE] Faction {self.id} conserving resources and waiting for opportunities.",
                 level=logging.INFO)
-            self.hq_step_rewards.append(-1.0)  # Discourage doing nothing
-            return retest_strategy()
+            # This is a valid strategy - no need to retest
+            self.hq_step_rewards.append(0.0)  # Neutral reward for waiting
 
 
         # ========== Unknown Strategy ==========
@@ -1434,7 +1545,7 @@ class Faction():
             if not isinstance(threat_id, utils_config.AgentIDStruc):
                 continue
 
-            # Ignore self threats (shouldn’t happen, but just in case)
+            # Ignore self threats (shouldn't happen, but just in case)
             if threat_id.faction_id == self.id:
                 continue
 
@@ -1449,3 +1560,431 @@ class Faction():
                 return True
 
         return False
+
+    def evaluate_agent_swap_candidates(self, target_role: str):
+        """
+        Evaluate which agents should be swapped to the target role.
+        Returns a list of (agent, swap_score) tuples sorted by priority.
+        """
+        try:
+            if not self.agents:
+                return []
+            
+            candidates = []
+            
+            for agent in self.agents:
+                if agent.role == target_role:
+                    continue  # Skip agents that are already the target role
+                
+                swap_score = 0
+                
+                # Base score for role mismatch
+                if target_role == "gatherer":
+                    # Prefer swapping peacekeepers to gatherers when we need resources
+                    if agent.role == "peacekeeper":
+                        if self.food_balance < 20 or self.gold_balance < 30:
+                            swap_score += 3  # High priority for resource gathering
+                        else:
+                            swap_score += 1  # Lower priority when resources are sufficient
+                elif target_role == "peacekeeper":
+                    # Prefer swapping gatherers to peacekeepers when under threat
+                    if agent.role == "gatherer":
+                        if self.global_state.get("threat_count", 0) > 0:
+                            swap_score += 3  # High priority for defense
+                        else:
+                            swap_score += 1  # Lower priority when safe
+                
+                # Consider agent health and performance
+                if hasattr(agent, 'Health') and agent.Health < 50:
+                    swap_score += 2  # Injured agents are good swap candidates
+                
+                # Consider agent position (prefer swapping agents far from HQ)
+                if hasattr(agent, 'x') and hasattr(agent, 'y'):
+                    hq_x, hq_y = self.home_base["position"]
+                    distance = ((agent.x - hq_x)**2 + (agent.y - hq_y)**2)**0.5
+                    if distance > 100:  # Far from HQ
+                        swap_score += 1
+                
+                # Consider current task state
+                if hasattr(agent, 'current_task_state'):
+                    if agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+                        swap_score += 1  # Idle agents are good swap candidates
+                
+                if swap_score > 0:
+                    candidates.append((agent, swap_score))
+            
+            # Sort by swap score (highest first)
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            return candidates
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[SWAP EVALUATION] Error evaluating swap candidates: {e}", level=logging.ERROR)
+            return []
+    
+    def swap_agent_role(self, agent, new_role: str):
+        """
+        Swap an existing agent to a new role.
+        This is more cost-effective than recruiting a new agent.
+        """
+        try:
+            swap_cost = utils_config.Gold_Cost_for_Agent_Swap
+            
+            if self.gold_balance < swap_cost:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ SWAP] Faction {self.id} lacks gold to swap {agent.role} to {new_role}.",
+                        level=logging.WARNING)
+                return False
+            
+            # Store old role for logging
+            old_role = agent.role
+            
+            # Remove agent from current lists
+            if agent in self.agents:
+                self.agents.remove(agent)
+            if agent in self.game_manager.agents:
+                self.game_manager.agents.remove(agent)
+            
+            # Create new agent with the new role
+            new_agent = self.create_agent(new_role)
+            
+            if new_agent:
+                # Position the new agent where the old one was
+                new_agent.x = agent.x
+                new_agent.y = agent.y
+                
+                # Add to lists
+                self.agents.append(new_agent)
+                self.game_manager.agents.append(new_agent)
+                
+                # Deduct swap cost
+                self.gold_balance -= swap_cost
+                
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ SWAP] Faction {self.id} swapped {old_role} to {new_role} at ({new_agent.x}, {new_agent.y}) — Gold: {self.gold_balance}",
+                        level=logging.INFO)
+                
+                return True
+            else:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ SWAP] Failed to create new {new_role} during swap.",
+                        level=logging.ERROR)
+                return False
+                
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[HQ SWAP] Error swapping agent {agent.agent_id if hasattr(agent, 'agent_id') else 'unknown'}: {e}",
+                    level=logging.ERROR)
+            return False
+
+    def get_faction_composition(self):
+        """
+        Get current faction composition and suggest optimal unit distribution.
+        """
+        try:
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            peacekeeper_count = len([a for a in self.agents if a.role == "peacekeeper"])
+            total_agents = len(self.agents)
+            
+            composition = {
+                "gatherers": gatherer_count,
+                "peacekeepers": peacekeeper_count,
+                "total": total_agents,
+                "gatherer_ratio": gatherer_count / total_agents if total_agents > 0 else 0,
+                "peacekeeper_ratio": peacekeeper_count / total_agents if total_agents > 0 else 0
+            }
+            
+            # Analyze current needs
+            needs_analysis = self.analyze_faction_needs()
+            
+            # Suggest optimal distribution
+            suggestions = []
+            
+            if needs_analysis["resource_priority"] > needs_analysis["defense_priority"]:
+                if gatherer_count < peacekeeper_count:
+                    suggestions.append({
+                        "action": "SWAP_TO_GATHERER",
+                        "reason": "Need more resource gathering",
+                        "priority": needs_analysis["resource_priority"]
+                    })
+            elif needs_analysis["defense_priority"] > needs_analysis["resource_priority"]:
+                if peacekeeper_count < gatherer_count:
+                    suggestions.append({
+                        "action": "SWAP_TO_PEACEKEEPER",
+                        "reason": "Need more defense",
+                        "priority": needs_analysis["defense_priority"]
+                    })
+            
+            # Balance suggestions
+            if abs(gatherer_count - peacekeeper_count) > 1:
+                if gatherer_count > peacekeeper_count:
+                    suggestions.append({
+                        "action": "SWAP_TO_PEACEKEEPER",
+                        "reason": "Balance unit distribution",
+                        "priority": 1.0
+                    })
+                else:
+                    suggestions.append({
+                        "action": "SWAP_TO_GATHERER",
+                        "reason": "Balance unit distribution",
+                        "priority": 1.0
+                    })
+            
+            return {
+                "composition": composition,
+                "needs_analysis": needs_analysis,
+                "suggestions": suggestions
+            }
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[COMPOSITION] Error analyzing faction composition: {e}", level=logging.ERROR)
+            return {}
+    
+    def analyze_faction_needs(self):
+        """
+        Analyze current faction needs to determine optimal unit distribution.
+        """
+        try:
+            needs = {
+                "resource_priority": 0.0,
+                "defense_priority": 0.0,
+                "exploration_priority": 0.0
+            }
+            
+            # Resource needs
+            if self.food_balance < 20:
+                needs["resource_priority"] += 2.0
+            elif self.food_balance < 50:
+                needs["resource_priority"] += 1.0
+                
+            if self.gold_balance < 30:
+                needs["resource_priority"] += 2.0
+            elif self.gold_balance < 80:
+                needs["resource_priority"] += 1.0
+            
+            # Defense needs
+            threat_count = self.global_state.get("threat_count", 0)
+            if threat_count > 2:
+                needs["defense_priority"] += 3.0
+            elif threat_count > 0:
+                needs["defense_priority"] += 2.0
+            
+            # Exploration needs
+            if len(self.resources) < 5:
+                needs["exploration_priority"] += 1.0
+            
+            # Normalize priorities
+            total = sum(needs.values())
+            if total > 0:
+                for key in needs:
+                    needs[key] = needs[key] / total
+            
+            return needs
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[NEEDS ANALYSIS] Error analyzing faction needs: {e}", level=logging.ERROR)
+            return {"resource_priority": 0.5, "defense_priority": 0.5, "exploration_priority": 0.0}
+    
+    def suggest_optimal_swap(self):
+        """
+        Suggest the optimal swap action based on current faction state.
+        """
+        try:
+            composition = self.get_faction_composition()
+            if not composition:
+                return None
+            
+            suggestions = composition.get("suggestions", [])
+            if not suggestions:
+                return None
+            
+            # Sort by priority and return the best suggestion
+            suggestions.sort(key=lambda x: x["priority"], reverse=True)
+            return suggestions[0]["action"]
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[SWAP SUGGESTION] Error suggesting optimal swap: {e}", level=logging.ERROR)
+            return None
+
+    def log_swap_statistics(self):
+        """
+        Log current swap statistics and faction composition for monitoring.
+        """
+        try:
+            composition = self.get_faction_composition()
+            if not composition:
+                return
+            
+            comp = composition["composition"]
+            needs = composition["needs_analysis"]
+            suggestions = composition["suggestions"]
+            
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[SWAP STATS] Faction {self.id} Composition: "
+                    f"Gatherers: {comp['gatherers']}, Peacekeepers: {comp['peacekeepers']}, "
+                    f"Total: {comp['total']}",
+                    level=logging.INFO
+                )
+                
+                logger.log_msg(
+                    f"[SWAP STATS] Faction {self.id} Needs: "
+                    f"Resources: {needs['resource_priority']:.2f}, "
+                    f"Defense: {needs['defense_priority']:.2f}, "
+                    f"Exploration: {needs['exploration_priority']:.2f}",
+                    level=logging.INFO
+                )
+                
+                if suggestions:
+                    best_suggestion = suggestions[0]
+                    logger.log_msg(
+                        f"[SWAP STATS] Faction {self.id} Best Swap: "
+                        f"{best_suggestion['action']} - {best_suggestion['reason']} "
+                        f"(Priority: {best_suggestion['priority']:.2f})",
+                        level=logging.INFO
+                    )
+                else:
+                    logger.log_msg(
+                        f"[SWAP STATS] Faction {self.id} No swap suggestions needed",
+                        level=logging.INFO
+                    )
+                    
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[SWAP STATS] Error logging swap statistics: {e}", level=logging.ERROR)
+    
+    def get_swap_efficiency_metrics(self):
+        """
+        Calculate efficiency metrics for the swapping system.
+        """
+        try:
+            if not hasattr(self, 'strategy_history') or not self.strategy_history:
+                return {}
+            
+            # Count swap strategies used
+            swap_strategies = [s for s in self.strategy_history if s.startswith("SWAP_TO_")]
+            total_strategies = len(self.strategy_history)
+            
+            # Calculate efficiency metrics
+            swap_usage_rate = len(swap_strategies) / total_strategies if total_strategies > 0 else 0
+            
+            # Analyze strategy distribution
+            strategy_counts = {}
+            for strategy in self.strategy_history:
+                strategy_counts[strategy] = strategy_counts.get(strategy, 0) + 1
+            
+            return {
+                "total_strategies": total_strategies,
+                "swap_strategies_used": len(swap_strategies),
+                "swap_usage_rate": swap_usage_rate,
+                "strategy_distribution": strategy_counts,
+                "efficiency_score": self.calculate_swap_efficiency_score()
+            }
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[SWAP EFFICIENCY] Error calculating efficiency metrics: {e}", level=logging.ERROR)
+            return {}
+    
+    def calculate_swap_efficiency_score(self):
+        """
+        Calculate a score indicating how efficiently the swapping system is being used.
+        """
+        try:
+            if len(self.agents) == 0:
+                return 0.0
+            
+            # Get current composition
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            peacekeeper_count = len([a for a in self.agents if a.role == "peacekeeper"])
+            total_agents = len(self.agents)
+            
+            # Calculate balance score (closer to 0.5 is better)
+            gatherer_ratio = gatherer_count / total_agents
+            balance_score = 1.0 - abs(gatherer_ratio - 0.5) * 2  # 0.5 = perfect balance
+            
+            # Calculate resource efficiency
+            resource_efficiency = min(1.0, (self.food_balance + self.gold_balance) / 100.0)
+            
+            # Calculate threat response efficiency
+            threat_count = self.global_state.get("threat_count", 0)
+            if threat_count == 0:
+                threat_efficiency = 1.0
+            else:
+                # More peacekeepers when there are threats is better
+                peacekeeper_ratio = peacekeeper_count / total_agents
+                threat_efficiency = peacekeeper_ratio if threat_count > 0 else 1.0
+            
+            # Weighted average
+            efficiency_score = (
+                balance_score * 0.4 +
+                resource_efficiency * 0.3 +
+                threat_efficiency * 0.3
+            )
+            
+            return max(0.0, min(1.0, efficiency_score))
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[SWAP EFFICIENCY] Error calculating efficiency score: {e}", level=logging.ERROR)
+            return 0.0
+
+    def get_enhanced_global_state(self):
+        """
+        Get enhanced global state with additional context for better strategy selection.
+        This helps the HQ network make more informed decisions about when to use swap strategies.
+        """
+        try:
+            # Get base global state
+            enhanced_state = self.global_state.copy()
+            
+            # Add swap-relevant context
+            if len(self.agents) > 0:
+                composition = self.get_faction_composition()
+                if composition:
+                    comp = composition["composition"]
+                    needs = composition["needs_analysis"]
+                    
+                    # Add composition metrics
+                    enhanced_state["gatherer_count"] = comp["gatherers"]
+                    enhanced_state["peacekeeper_count"] = comp["peacekeepers"]
+                    enhanced_state["unit_balance"] = abs(comp["gatherers"] - comp["peacekeepers"])
+                    
+                    # Add needs analysis
+                    enhanced_state["resource_priority"] = needs["resource_priority"]
+                    enhanced_state["defense_priority"] = needs["defense_priority"]
+                    enhanced_state["exploration_priority"] = needs["exploration_priority"]
+                    
+                    # Add swap opportunity indicators
+                    enhanced_state["swap_to_gatherer_benefit"] = 0.0
+                    enhanced_state["swap_to_peacekeeper_benefit"] = 0.0
+                    
+                    if comp["gatherers"] < comp["peacekeepers"] and needs["resource_priority"] > 0.6:
+                        enhanced_state["swap_to_gatherer_benefit"] = needs["resource_priority"]
+                    
+                    if comp["peacekeepers"] < comp["gatherers"] and needs["defense_priority"] > 0.6:
+                        enhanced_state["swap_to_peacekeeper_benefit"] = needs["defense_priority"]
+                    
+                    # Add cost-benefit analysis
+                    enhanced_state["can_afford_swap"] = 1.0 if self.gold_balance >= utils_config.Gold_Cost_for_Agent_Swap else 0.0
+                    enhanced_state["can_afford_recruit"] = 1.0 if self.gold_balance >= utils_config.Gold_Cost_for_Agent else 0.0
+                    
+                    # Add efficiency metrics
+                    efficiency_metrics = self.get_swap_efficiency_metrics()
+                    if efficiency_metrics:
+                        enhanced_state["swap_efficiency_score"] = efficiency_metrics.get("efficiency_score", 0.0)
+                        enhanced_state["swap_usage_rate"] = efficiency_metrics.get("swap_usage_rate", 0.0)
+            
+            return enhanced_state
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(f"[ENHANCED STATE] Error getting enhanced global state: {e}", level=logging.ERROR)
+            return self.global_state
