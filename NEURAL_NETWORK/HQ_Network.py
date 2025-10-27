@@ -175,10 +175,22 @@ class HQ_Network(nn.Module):
             old_feature_extractor[7],  # Second Dropout/Identity
         ).to(self.device)
 
-        # Update stored sizes
-        self.state_size = new_input_size - (
+        # Update stored sizes - prevent negative state size
+        calculated_state_size = new_input_size - (
             self.role_size + self.local_state_size + self.global_state_size
         )
+        
+        # Minimum state size is 5 (base state vector has 5 elements)
+        MIN_STATE_SIZE = 5
+        
+        # Prevent invalid state size - if calculation goes negative or below minimum, keep original
+        if calculated_state_size >= MIN_STATE_SIZE:
+            self.state_size = calculated_state_size
+        else:
+            logger.log_msg(
+                f"[WARNING] Calculated state_size={calculated_state_size} is invalid (min={MIN_STATE_SIZE}), keeping original size {self.state_size}",
+                level=logging.WARNING,
+            )
 
     def forward(self, state, role, local_state, global_state):
         """
@@ -215,11 +227,33 @@ class HQ_Network(nn.Module):
         # Apply attention if enabled
         if self.attention is not None:
             # Reshape for attention (batch_size, seq_len, features)
-            if features.dim() == 2:
-                features = features.unsqueeze(1)
-            features = self.attention(features)
+            # Ensure features has the right dimensions
+            if features.dim() == 1:
+                features = features.unsqueeze(0).unsqueeze(0)  # Add batch and seq dimensions
+            elif features.dim() == 2:
+                features = features.unsqueeze(1)  # Add seq dimension
+            # At this point features should be (batch_size, seq_len, features) = (?, ?, hidden_size)
+            
+            # Only apply attention if we have valid dimensions
+            if features.dim() >= 2:
+                try:
+                    features = self.attention(features)
+                except RuntimeError as e:
+                    if "Dimension out of range" in str(e):
+                        # Skip attention if dimensions are invalid
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(
+                                f"[WARNING] Skipping attention due to dimension error: {e}",
+                                level=logging.WARNING
+                            )
+                    else:
+                        raise
+            
+            # Restore original dimensions
             if features.dim() == 3:
-                features = features.squeeze(1)
+                features = features.squeeze(1)  # Remove seq dimension if present
+            elif features.dim() == 2 and features.shape[0] == 1:
+                features = features.squeeze(0)  # Remove batch dimension if batch_size=1
 
         # Policy and value outputs
         policy_logits = self.policy_head(features)
@@ -521,6 +555,7 @@ class HQ_Network(nn.Module):
 
             # Shared central state vector (used for main state input)
             # Normalize values to prevent extreme inputs
+            # Always create 5 base elements
             state_vector = [
                 min(
                     max(g.get("HQ_health", 100.0) / 100.0, 0.0), 1.0
@@ -538,6 +573,15 @@ class HQ_Network(nn.Module):
                     max(g.get("threat_count", 0.0) / 10.0, 0.0), 2.0
                 ),  # Allow up to 2x normal
             ]
+            
+            # If state_size is smaller than the minimum required size, fix it
+            MIN_STATE_SIZE = len(state_vector)  # Ensure at least 5 elements
+            if self.state_size < MIN_STATE_SIZE:
+                logger.log_msg(
+                    f"[WARNING] state_size={self.state_size} is too small, setting to minimum {MIN_STATE_SIZE}",
+                    level=logging.WARNING,
+                )
+                self.state_size = MIN_STATE_SIZE
 
             # Role vector (placeholder: 1-hot HQ, or make dynamic later)
             # Ensure role vector has correct size
@@ -635,7 +679,16 @@ class HQ_Network(nn.Module):
                     [0.0] * (self.global_state_size - len(global_vector))
                 )
 
-            # Validate vector sizes
+            # Validate and fix state_size BEFORE truncation to prevent negative slicing
+            if self.state_size <= 0:
+                # Prevent negative state_size - use actual encoded size
+                logger.log_msg(
+                    f"[WARNING] Invalid state_size={self.state_size}, using actual state vector size {len(state_vector)}",
+                    level=logging.WARNING,
+                )
+                self.state_size = len(state_vector)
+            
+            # Now safely validate and pad/truncate
             if len(state_vector) != self.state_size:
                 logger.log_msg(
                     f"[WARNING] State vector size mismatch: expected {self.state_size}, got {len(state_vector)}",
@@ -645,7 +698,23 @@ class HQ_Network(nn.Module):
                 if len(state_vector) < self.state_size:
                     state_vector.extend([0.0] * (self.state_size - len(state_vector)))
                 else:
-                    state_vector = state_vector[: self.state_size]
+                    # Only truncate if state_size is positive AND larger than minimum
+                    MIN_STATE_SIZE = 5  # Base state vector is always 5 elements
+                    if self.state_size > 0 and self.state_size >= MIN_STATE_SIZE:
+                        state_vector = state_vector[: self.state_size]
+                    elif self.state_size < MIN_STATE_SIZE:
+                        # Don't truncate below minimum - just keep what we have
+                        logger.log_msg(
+                            f"[WARNING] Cannot truncate state vector: size {len(state_vector)} required, but state_size={self.state_size} is below minimum. Keeping full vector.",
+                            level=logging.WARNING,
+                        )
+                        self.state_size = len(state_vector)
+                    else:
+                        # If somehow still negative, just pad to current size
+                        logger.log_msg(
+                            f"[ERROR] State size still invalid after fix: {self.state_size}. Keeping original vector.",
+                            level=logging.ERROR,
+                        )
 
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
@@ -658,8 +727,9 @@ class HQ_Network(nn.Module):
 
         except Exception as e:
             logger.log_msg(f"[ERROR] State encoding failed: {e}", level=logging.ERROR)
-            # Return safe default values
-            default_state = [0.5] * self.state_size
+            # Return safe default values with positive size
+            safe_state_size = max(self.state_size, 5)  # Ensure at least 5 elements
+            default_state = [0.5] * safe_state_size
             default_role = [1.0] + [0.0] * (self.role_size - 1)
             default_local = [0.0] * self.local_state_size
             default_global = [0.0] * self.global_state_size
