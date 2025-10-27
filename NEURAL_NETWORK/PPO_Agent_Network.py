@@ -178,6 +178,9 @@ class PPOModel(nn.Module):
 
         # 🛠️ KEY: Now call your OWN forward() directly
         logits, value = self.forward(state_tensor)
+        
+        # Clip logits to prevent numerical instability
+        logits = torch.clamp(logits, -10.0, 10.0)
 
         if valid_indices is not None:
             mask = torch.full_like(logits, float('-inf'))
@@ -244,6 +247,20 @@ class PPOModel(nn.Module):
         self.memory["values"].append(local_value)
         self.memory["global_values"].append(global_value)
         self.memory["dones"].append(done)
+        
+        # Prevent memory buffer overflow
+        MAX_MEMORY_SIZE = 20000  # Max steps per episode
+        if len(self.memory["rewards"]) > MAX_MEMORY_SIZE:
+            # Remove oldest transitions (FIFO)
+            for key in self.memory.keys():
+                self.memory[key] = self.memory[key][-MAX_MEMORY_SIZE:]
+            
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[MEMORY OVERFLOW] {self.AgentID} memory exceeded {MAX_MEMORY_SIZE}, truncated to latest",
+                    level=logging.WARNING
+                )
+        
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"[MEMORY COUNT] {self.AgentID}"
@@ -318,7 +335,14 @@ class PPOModel(nn.Module):
         batch_size = utils_config.BATCH_SIZE
         indices = torch.randperm(len(self.memory["rewards"]))[:batch_size]
         
-        states = torch.stack([self.memory["states"][i] for i in indices]).to(device)
+        # Convert states to tensors before stacking
+        state_list = [self.memory["states"][i] for i in indices]
+        # Check if states are already tensors or need conversion
+        if isinstance(state_list[0], torch.Tensor):
+            states = torch.stack(state_list).to(device)
+        else:
+            states = torch.tensor(state_list, dtype=torch.float32, device=device)
+        
         actions = torch.tensor([self.memory["actions"][i] for i in indices], dtype=torch.long, device=device)
         old_log_probs = torch.tensor([self.memory["log_probs"][i] for i in indices], dtype=torch.float32, device=device)
         rewards = torch.tensor([self.memory["rewards"][i] for i in indices], dtype=torch.float32, device=device)
@@ -336,6 +360,10 @@ class PPOModel(nn.Module):
 
         # Forward pass
         logits, new_values = self.forward(states)
+        
+        # Clip logits and values to prevent numerical instability
+        logits = torch.clamp(logits, -10.0, 10.0)
+        new_values = torch.clamp(new_values, -100.0, 100.0)
         
         # Check for NaN values
         if torch.isnan(logits).any():
@@ -423,6 +451,10 @@ class PPOModel(nn.Module):
 
         # Forward pass
         logits, new_values = self.forward(states)
+        
+        # Clip logits and values to prevent numerical instability
+        logits = torch.clamp(logits, -10.0, 10.0)
+        new_values = torch.clamp(new_values, -100.0, 100.0)
         
         # Check for NaN values
         if torch.isnan(logits).any():

@@ -28,19 +28,26 @@ class Logger:
         if self.logger.hasHandlers():
             self.logger.handlers.clear()
 
-        # Ensure the LOG directory exists
-        log_directory = "RUNTIME_LOGS/LOGS"
-        os.makedirs(log_directory, exist_ok=True)
+        # Ensure the LOG directories exist (separate folders for general and error logs)
+        general_log_dir = "RUNTIME_LOGS/General_Logs"
+        error_log_dir = "RUNTIME_LOGS/Error_Logs"
+        os.makedirs(general_log_dir, exist_ok=True)
+        os.makedirs(error_log_dir, exist_ok=True)
 
-        self.log_file = os.path.join(log_directory, log_file)
+        self.log_file = os.path.join(general_log_dir, log_file)
+        # Create error log file name in Error_Logs folder
+        error_log_file = os.path.join(error_log_dir, log_file)
         self.log_level = log_level
 
         if clear_logs:
             open(self.log_file, 'w').close()
-            print(f"Logger initialised. Logs will be saved to: {os.path.abspath(self.log_file)}")
+            open(error_log_file, 'w').close()
+            print(f"Logger initialised. General logs will be saved to: {os.path.abspath(self.log_file)}")
+            print(f"Error logs will be saved to: {os.path.abspath(error_log_file)}")
 
         self.logger.setLevel(self.log_level)
 
+        # Regular file handler for all logs
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setLevel(self.log_level)
         file_formatter = logging.Formatter(
@@ -49,7 +56,17 @@ class Logger:
         )
         file_handler.setFormatter(file_formatter)
 
+        # Dedicated error file handler for ERROR and CRITICAL logs only
+        error_file_handler = logging.FileHandler(error_log_file)
+        error_file_handler.setLevel(logging.ERROR)  # Only capture ERROR and CRITICAL
+        error_formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s",
+            "%Y-%m-%d %H:%M:%S"
+        )
+        error_file_handler.setFormatter(error_formatter)
+
         self.logger.addHandler(file_handler)
+        self.logger.addHandler(error_file_handler)
 
         if log_to_console:
             console_handler = logging.StreamHandler()

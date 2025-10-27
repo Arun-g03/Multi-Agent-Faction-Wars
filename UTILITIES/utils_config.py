@@ -29,6 +29,9 @@ ENABLE_LOGGING = True
 ENABLE_TENSORBOARD = False
 """Enable tensorboard for visualisation"""
 
+ENABLE_PLOTS = False
+"""Enable plot and CSV generation for visualization and analysis"""
+
 
 
 
@@ -423,12 +426,16 @@ Gold_Cost_for_Agent = 10  # Gold cost for an agent
 Gold_Cost_for_Agent_Swap = 5  # Gold cost for swapping an existing agent to a different role
 
 
-DEF_AGENT_STATE_SIZE = 11 + len(TASK_TYPE_MAPPING)
+DEF_AGENT_STATE_SIZE = 18 + len(TASK_TYPE_MAPPING)  # Updated to support enhanced state: 8 core + 2 role + N task one-hot + 6 task info + 2 context
 
 """
-WARNING: DO NOT MODIFY THE STATE SIZE!
-Controls the information that is sent to/used by the agent model.
-Changing this values WILL break functionality unless updated across system :( """
+State size breakdown:
+- Core state (8): pos_x, pos_y, health, threat_proximity, threat_distance, resource_proximity, resource_distance, hq_proximity
+- Role vector (2): gatherer_onehot, peacekeeper_onehot
+- Task one-hot: len(TASK_TYPE_MAPPING)
+- Task info (6): target_x, target_y, action_norm, norm_dist, task_urgency, task_progress
+- Context (2): threat_count_norm, resource_count_norm
+"""
 
 
 #    _____          _   _

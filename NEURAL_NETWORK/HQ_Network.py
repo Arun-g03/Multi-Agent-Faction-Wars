@@ -331,8 +331,16 @@ class HQ_Network(nn.Module):
                 for key in missing_keys:
                     global_state[key] = 0.0
 
-            # 1. Extract structured input parts
-            state, role, local_state, global_state_vec = self.encode_state_parts()
+            # Store the enhanced global_state temporarily and use it for encoding
+            old_global_state = self.global_state
+            self.global_state = global_state  # Use the enhanced state passed in
+
+            try:
+                # 1. Extract structured input parts
+                state, role, local_state, global_state_vec = self.encode_state_parts()
+            finally:
+                # Restore original global_state
+                self.global_state = old_global_state
 
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
@@ -418,30 +426,53 @@ class HQ_Network(nn.Module):
             elif len(role_vector) < self.role_size:
                 role_vector.extend([0.0] * (self.role_size - len(role_vector)))
 
-            # Local state (near HQ) with better error handling
-            nearest_resource = g.get("nearest_resource", {}).get("location", [0.0, 0.0])
-            nearest_threat = g.get("nearest_threat", {}).get("location", [0.0, 0.0])
+            # Local state (near HQ) - use proximity instead of raw coordinates
+            nearest_resource_dist = g.get("nearest_resource", {}).get("distance", float('inf'))
+            nearest_threat_dist = g.get("nearest_threat", {}).get("distance", float('inf'))
             
-            # Ensure we have valid coordinates
-            if not isinstance(nearest_resource, (list, tuple)) or len(nearest_resource) < 2:
-                nearest_resource = [0.0, 0.0]
-            if not isinstance(nearest_threat, (list, tuple)) or len(nearest_threat) < 2:
-                nearest_threat = [0.0, 0.0]
+            # Normalize distances: closer = higher value (inverse distance with sigmoid)
+            # Network will learn what proximity values correlate with good outcomes
+            resource_proximity = 1.0 / (1.0 + nearest_resource_dist / 200.0) if nearest_resource_dist < float('inf') else 0.0
+            threat_proximity = 1.0 / (1.0 + nearest_threat_dist / 150.0) if nearest_threat_dist < float('inf') else 0.0
+            
+            # Provide counts as additional context
+            resource_count_norm = min(g.get("resource_count", 0) / 20.0, 1.0)
+            threat_count_norm = min(g.get("threat_count", 0) / 5.0, 1.0)
             
             local_vector = [
-                min(max(nearest_resource[0] / 100.0, -1.0), 1.0),  # Normalize to [-1, 1]
-                min(max(nearest_resource[1] / 100.0, -1.0), 1.0),
-                min(max(nearest_threat[0] / 100.0, -1.0), 1.0),
-                min(max(nearest_threat[1] / 100.0, -1.0), 1.0),
-                min(max(g.get("agent_density", 0.0) / 10.0, 0.0), 2.0)
+                resource_proximity,          # How close is nearest resource (0-1, higher=closer)
+                threat_proximity,            # How close is nearest threat (0-1, higher=closer)
+                resource_count_norm,         # How many resources known total
+                threat_count_norm,           # How many threats known total
+                min(max(g.get("agent_density", 0.0) / 10.0, 0.0), 1.0)  # Agent concentration near HQ
             ]
 
-            # Global map-wide state
+            # Global map-wide state with enhanced features  
+            # Use enhanced features from get_enhanced_global_state() if available
+            friendly_count = g.get("friendly_agent_count", 0.0)
             global_vector = [
-                min(max(g.get("friendly_agent_count", 0.0) / 10.0, 0.0), 2.0),
-                min(max(g.get("enemy_agent_count", 0.0) / 10.0, 0.0), 2.0),
-                min(max(g.get("total_agents", 0.0) / 10.0, 0.0), 2.0),
+                min(max(friendly_count / 10.0, 0.0), 2.0),  # Feature 0: number of friendly agents
+                min(max(g.get("enemy_agent_count", 0.0) / 10.0, 0.0), 2.0),     # Feature 1
+                min(max(g.get("total_agents", 0.0) / 10.0, 0.0), 2.0),          # Feature 2
+                min(max(g.get("gatherer_count", 0.0) / 10.0, 0.0), 2.0),         # Feature 3: gatherer_count (enhanced)
+                min(max(g.get("peacekeeper_count", 0.0) / 10.0, 0.0), 2.0),      # Feature 4: peacekeeper_count (enhanced)
             ]
+            
+            # Add agent presence indicator (neutral observation, not a directive)
+            # This gives the network information about agent availability without forcing recruitment
+            global_vector.append(1.0 if friendly_count > 0 else 0.0)  # Feature 5: has_agents (binary)
+            
+            # If global_state_size allows more features, add swap benefit signals and affordability
+            if self.global_state_size >= 7:
+                # Note: we already added no_agents_emergency, so this shifts indices
+                global_vector.extend([
+                    min(max(g.get("swap_to_gatherer_benefit", 0.0), 0.0), 1.0),   # Feature 6: swap to gatherer benefit
+                    min(max(g.get("swap_to_peacekeeper_benefit", 0.0), 0.0), 1.0), # Feature 7: swap to peacekeeper benefit
+                    g.get("can_afford_recruit", 0.0),  # Feature 8: can afford new recruitment (binary)
+                    g.get("can_afford_swap", 0.0)       # Feature 9: can afford swap (binary)
+                ])
+            elif self.global_state_size < 5:
+                global_vector = global_vector[:self.global_state_size]
             
             # Ensure global vector has correct size
             if len(global_vector) > self.global_state_size:

@@ -6,7 +6,7 @@ This file contains the GameManager class, which is responsible for managing the 
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from AGENT.agent_base import Peacekeeper, Gatherer
+from AGENT.Agent_Types import Peacekeeper, Gatherer
 from AGENT.agent_factions import Faction
 from AGENT.agent_faction_manager import FactionManager
 from AGENT.agent_communication import CommunicationSystem
@@ -812,6 +812,10 @@ class GameManager:
                         step_bar.update(1)
 
                     self.collect_episode_rewards()
+                    
+                    # Mini-batch training during episode (every 1000 steps if we have enough samples)
+                    if self.mode == "train" and self.current_step % 1000 == 0 and self.current_step > 0:
+                        self.train_agents_mini()
 
                     winner = check_victory(self.faction_manager.factions)
                     winner_id = winner.id if winner else -1
@@ -880,6 +884,11 @@ class GameManager:
                     faction.assigned_tasks = {}
                     faction.threats = []
                     faction.resources = []
+                
+                # Clear agent memories after training to prepare for next episode
+                if self.mode == "train":
+                    for agent in self.agents:
+                        agent.ai.clear_memory()
 
                 self.episode += 1
                 
@@ -1173,26 +1182,62 @@ class GameManager:
     def train_agents(self):
         """
         Train agents based on their accumulated rewards and experiences.
+        Uses mini-batch training during episodes and full batch at episode end.
         """
         if utils_config.ENABLE_LOGGING:
             self.logger.log_msg(
-                "[TRAINING] Starting PPO training at end of episode.",
+                "[TRAINING] Training agents at end of episode.",
                 level=logging.INFO
             )
 
+        trained_count = 0
+        skipped_count = 0
+        
         for agent in self.agents:
             if agent.mode == "train" and len(agent.ai.memory["rewards"]) > 0:
-                if utils_config.ENABLE_LOGGING:
-                    self.logger.log_msg(
-                        f"[TRAIN CALL] Agent {agent.agent_id} training...",
-                        level=logging.INFO
-                    )
+                memory_size = len(agent.ai.memory["rewards"])
+                
+                # Only train if we have enough samples
+                if memory_size >= utils_config.MIN_MEMORY_SIZE:
+                    if utils_config.ENABLE_LOGGING:
+                        self.logger.log_msg(
+                            f"[TRAIN CALL] Agent {agent.agent_id} training with {memory_size} samples...",
+                            level=logging.INFO
+                        )
 
+                    try:
+                        agent.ai.train(mode="train", batching=True)
+                        trained_count += 1
+                    except Exception as e:
+                        print(f"Training failed for agent {agent.agent_id}: {e}")
+                        traceback.print_exc()
+                else:
+                    skipped_count += 1
+                    if utils_config.ENABLE_LOGGING:
+                        self.logger.log_msg(
+                            f"[TRAIN SKIP] Agent {agent.agent_id} skipped (memory: {memory_size} < {utils_config.MIN_MEMORY_SIZE})",
+                            level=logging.DEBUG
+                        )
+        
+        if utils_config.ENABLE_LOGGING and trained_count > 0:
+            self.logger.log_msg(
+                f"[TRAINING COMPLETE] Trained {trained_count} agents, skipped {skipped_count}",
+                level=logging.INFO
+            )
+
+    def train_agents_mini(self):
+        """
+        Perform mini-batch training during an episode.
+        Trains on recent samples without clearing memory.
+        """
+        for agent in self.agents:
+            if agent.mode == "train" and len(agent.ai.memory["rewards"]) >= utils_config.MIN_MEMORY_SIZE:
                 try:
+                    # Train with batching but don't clear memory
                     agent.ai.train(mode="train", batching=True)
                 except Exception as e:
-                    print(f"Training failed for agent {agent.agent_id}: {e}")
-                    traceback.print_exc()
+                    # Silently continue if training fails during mini-batch
+                    pass
 
     def train_hq_networks(self, winner_id):
         """

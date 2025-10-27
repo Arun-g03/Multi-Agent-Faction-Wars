@@ -59,6 +59,7 @@ class SettingsMenuRenderer:
                 "debugging": [
                     ("TensorBoard", "ENABLE_TENSORBOARD"),
                     ("Logging", "ENABLE_LOGGING"),
+                    ("Plots & CSVs", "ENABLE_PLOTS"),
                     ("Performance Profiling", "ENABLE_PROFILE_BOOL"),
                 ],
                 "episode settings": [

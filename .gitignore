@@ -4,7 +4,5 @@ newenv/
 build/
 NEURAL_NETWORK/saved_models/
 game_env/
-
-
-
-
+venv/
+VISUALS/

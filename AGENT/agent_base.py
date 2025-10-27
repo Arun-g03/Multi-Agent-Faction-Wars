@@ -13,6 +13,7 @@ from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
 from AGENT.agent_behaviours import AgentBehaviour
+# Note: Peacekeeper and Gatherer are imported in agent_factions.py where they're actually used
 
 
 
@@ -127,7 +128,7 @@ class BaseAgent:
                 AgentID=self.agent_id
             )
 
-            # Then initialise the behavior object(AgentBehaviour)
+            # Initialize the behavior object (AgentBehaviour inherits from mixins based on role)
             self.behavior = AgentBehaviour(
                 agent=self,
                 state_size=state_size,
@@ -665,6 +666,34 @@ class BaseAgent:
         nearest_threat = self.nearest_threat
         nearest_resource = self.nearest_resource
 
+        # Calculate distances to nearest entities
+        if nearest_threat:
+            threat_dx = nearest_threat["location"][0] - self.x
+            threat_dy = nearest_threat["location"][1] - self.y
+            threat_distance = math.sqrt(threat_dx**2 + threat_dy**2)
+            # Proximity: closer = higher value
+            threat_proximity = 1.0 / (1.0 + threat_distance / 150.0)
+        else:
+            threat_distance = float('inf')
+            threat_proximity = 0.0
+
+        if nearest_resource:
+            resource_dx = nearest_resource.x - self.x
+            resource_dy = nearest_resource.y - self.y
+            resource_distance = math.sqrt(resource_dx**2 + resource_dy**2)
+            # Proximity: closer = higher value
+            resource_proximity = 1.0 / (1.0 + resource_distance / 200.0)
+        else:
+            resource_distance = float('inf')
+            resource_proximity = 0.0
+
+        # Calculate distance to HQ (important for "return home" behaviors)
+        hq_x, hq_y = self.faction.home_base.get("position", (0, 0))
+        hq_dx = hq_x - self.x
+        hq_dy = hq_y - self.y
+        hq_distance = math.sqrt(hq_dx**2 + hq_dy**2)
+        hq_proximity = 1.0 / (1.0 + hq_distance / 300.0)  # Home base reference
+
         if utils_config.SUB_TILE_PRECISION:
             pos_x = self.x / utils_config.WORLD_WIDTH
             pos_y = self.y / utils_config.WORLD_HEIGHT
@@ -678,13 +707,21 @@ class BaseAgent:
 
         # === Core Agent Features ===
         core_state = [
-            pos_x,   # X position
-            pos_y,   # Y position
-            self.Health / 100, # Normalised health
-            nearest_threat["location"][0] / utils_config.WORLD_WIDTH if nearest_threat else -1, # Nearest threat X position
-            nearest_threat["location"][1] / utils_config.WORLD_HEIGHT if nearest_threat else -1, # Nearest threat Y position 
-            nearest_resource.x / utils_config.WORLD_WIDTH if nearest_resource else -1, # Nearest resource X position
-            nearest_resource.y / utils_config.WORLD_HEIGHT if nearest_resource else -1, # Nearest resource Y position
+            pos_x,                    # X position (normalized)
+            pos_y,                    # Y position (normalized)
+            self.Health / 100,        # Normalized health
+            threat_proximity,         # How close is nearest threat (0-1, higher=closer)
+            threat_distance / 1000.0 if threat_distance < float('inf') else -1,  # Raw distance (normalized)
+            resource_proximity,       # How close is nearest resource (0-1, higher=closer)
+            resource_distance / 1000.0 if resource_distance < float('inf') else -1,  # Raw distance (normalized)
+            hq_proximity,             # How close to home base (0-1, higher=closer)
+        ]
+
+        # === Role Awareness ===
+        # One-hot encoding for role (gatherer vs peacekeeper)
+        role_vector = [
+            1.0 if self.role == "gatherer" else 0.0,
+            1.0 if self.role == "peacekeeper" else 0.0
         ]
 
         # === Task One-Hot Encoding ===
@@ -738,11 +775,44 @@ class BaseAgent:
         else:
             norm_dist = -1
 
+        # === Task urgency based on distance ===
+        task_urgency = 0.0
+        if norm_dist > 0:  # Valid target distance
+            # Closer targets = higher urgency (inverse relationship)
+            task_urgency = max(0.0, 1.0 - (norm_dist / 5.0))  # Normalize to 0-1
 
-        task_info = [task_target_x, task_target_y, current_action_norm, norm_dist]
+        # Task progress: are we getting closer to goal?
+        if hasattr(self, 'previous_task_distance') and norm_dist > 0:
+            task_progress = max(-1.0, min(1.0, (self.previous_task_distance - norm_dist) / 2.0))
+        else:
+            task_progress = 0.0
+        
+        # Store current distance for next iteration
+        if not hasattr(self, 'previous_task_distance'):
+            self.previous_task_distance = 0.0
+        self.previous_task_distance = norm_dist if norm_dist > 0 else 0.0
+
+        task_info = [
+            task_target_x,           # Task target X (normalized)
+            task_target_y,        # Task target Y (normalized)
+            current_action_norm,  # Current action index (normalized)
+            norm_dist,             # Distance to task target (normalized)
+            task_urgency,         # How urgent is this task (0-1, higher=more urgent)
+            task_progress         # Are we making progress? (-1 to 1)
+        ]
+
+        # === Environmental Context ===
+        # How many threats/resources perceived (not just nearest)
+        threat_count_norm = min(len(perceived_threats) / 5.0, 1.0)
+        resource_count_norm = min(len(perceived_resources) / 10.0, 1.0)
+
+        context_vector = [
+            threat_count_norm,       # Total threats in view (0-1)
+            resource_count_norm      # Total resources in view (0-1)
+        ]
 
         # === Final State Vector ===
-        state = core_state + one_hot_task + task_info
+        state = core_state + role_vector + one_hot_task + task_info + context_vector
 
         
 
@@ -785,121 +855,7 @@ class BaseAgent:
         self.faction.receive_experience(experience)
 
 
-#    ____                     _                                    _     _ _     _        _
-#   |  _ \ ___  __ _  ___ ___| | _____  ___ _ __   ___ _ __    ___| |__ (_) | __| |   ___| | __ _ ___ ___
-#   | |_) / _ \/ _` |/ __/ _ \ |/ / _ \/ _ \ '_ \ / _ \ '__|  / __| '_ \| | |/ _` |  / __| |/ _` / __/ __|
-#   |  __/  __/ (_| | (_|  __/   <  __/  __/ |_) |  __/ |    | (__| | | | | | (_| | | (__| | (_| \__ \__ \
-#   |_|   \___|\__,_|\___\___|_|\_\___|\___| .__/ \___|_|     \___|_| |_|_|_|\__,_|  \___|_|\__,_|___/___/
-#                                          |_|
-
-
-class Peacekeeper(BaseAgent):
-    try:
-
-        def __init__(
-                self,
-                x,
-                y,
-                faction,
-                base_sprite_path,
-                terrain,
-                agents,
-                resource_manager,
-                agent_id,
-                role_actions,
-                communication_system,
-                state_size=utils_config.DEF_AGENT_STATE_SIZE,
-                event_manager=None,
-                mode="train",
-                network_type="PPOModel"):
-            super().__init__(
-                x=x,
-                y=y,
-                role="peacekeeper",
-                faction=faction,
-                terrain=terrain,
-                resource_manager=resource_manager,
-                role_actions=role_actions,
-                agent_id=agent_id,
-                communication_system=communication_system,
-                event_manager=event_manager,
-                mode=mode,
-                network_type=network_type
-            )
-            if not utils_config.HEADLESS_MODE:
-                self.base_sprite = pygame.image.load(
-                    base_sprite_path).convert_alpha()
-                sprite_size = int(utils_config.SCREEN_HEIGHT *
-                                  utils_config.AGENT_SCALE_FACTOR)
-                self.base_sprite = pygame.transform.scale(
-                    self.base_sprite, (sprite_size, sprite_size))
-                self.sprite = tint_sprite(
-                    self.base_sprite, faction.colour) if faction and hasattr(
-                    faction, 'colour') else self.base_sprite
-            from RENDER.Game_Renderer import get_font
-            self.font = get_font(24)
-
-            self.known_threats = []
-    except Exception as e:
-        raise (f"Error in Initialising Peacekeeper class: {e}")
-
-
-#     ____       _   _                               _     _ _     _        _
-#    / ___| __ _| |_| |__   ___ _ __ ___ _ __    ___| |__ (_) | __| |   ___| | __ _ ___ ___
-#   | |  _ / _` | __| '_ \ / _ \ '__/ _ \ '__|  / __| '_ \| | |/ _` |  / __| |/ _` / __/ __|
-#   | |_| | (_| | |_| | | |  __/ | |  __/ |    | (__| | | | | | (_| | | (__| | (_| \__ \__ \
-#    \____|\__,_|\__|_| |_|\___|_|  \___|_|     \___|_| |_|_|_|\__,_|  \___|_|\__,_|___/___/
-#
-
-
-class Gatherer(BaseAgent):
-    try:
-
-        def __init__(
-                self,
-                x,
-                y,
-                faction,
-                base_sprite_path,
-                terrain,
-                agents,
-                resource_manager,
-                agent_id,
-                role_actions,
-                communication_system,
-                state_size=utils_config.DEF_AGENT_STATE_SIZE,
-                event_manager=None,
-                mode="train",
-                network_type="PPOModel"):
-            super().__init__(
-                x=x,
-                y=y,
-                role="gatherer",
-                faction=faction,
-                terrain=terrain,
-                resource_manager=resource_manager,
-                role_actions=role_actions,
-                agent_id=agent_id,
-                communication_system=communication_system,
-                event_manager=event_manager,
-                mode=mode,
-                network_type=network_type
-            )
-            if not utils_config.HEADLESS_MODE:
-                self.base_sprite = pygame.image.load(
-                    base_sprite_path).convert_alpha()
-                sprite_size = int(utils_config.SCREEN_HEIGHT *
-                                  utils_config.AGENT_SCALE_FACTOR)
-                self.base_sprite = pygame.transform.scale(
-                    self.base_sprite, (sprite_size, sprite_size))
-                self.sprite = tint_sprite(
-                    self.base_sprite, faction.colour) if faction and hasattr(
-                    faction, 'colour') else self.base_sprite            
-            from RENDER.Game_Renderer import get_font
-
-            self.font = get_font(24)
-
-            self.known_resources = []
-
-    except Exception as e:
-        raise (f"Error in Initialising Gatherer class: {e}")
+# Note: Peacekeeper and Gatherer classes have been moved to AGENT/Agent_Types/
+# Import them from there:
+# from AGENT.Agent_Types.peacekeeper import Peacekeeper
+# from AGENT.Agent_Types.gatherer import Gatherer

@@ -141,7 +141,7 @@ class Faction():
                 self.optimizer = torch.optim.Adam(
                     self.network.parameters(), lr=1e-3)
 
-            self.strategy_update_interval = 100
+            self.strategy_update_interval = 50  # Update strategy every 50 steps instead of 100
             self.needs_strategy_retest = True
             self.current_step = 0
             self.hq_step_rewards = []
@@ -196,25 +196,41 @@ class Faction():
                         input_size_from_ckpt = get_hq_input_size_from_checkpoint(self.models["HQ"])
 
                         # Deduct known components to infer state_size
-                        role_size = utils_config.ROLE_VECTOR_SIZE       # or 5 if hardcoded
-                        local_state_size = 5
-                        global_state_size = 5
-                        state_size = input_size_from_ckpt - (role_size + local_state_size + global_state_size)
+                        # Use the passed-in values, don't hardcode!
+                        role_size_inferred = utils_config.ROLE_VECTOR_SIZE       # or 5 if hardcoded
+                        local_state_size_inferred = 5
+                        global_state_size_inferred = 5
+                        state_size_inferred = input_size_from_ckpt - (role_size_inferred + local_state_size_inferred + global_state_size_inferred)
 
                         if utils_config.ENABLE_LOGGING:
-                            logger.log_msg(f"[HQ LOAD MODE] Using inferred state_size={state_size} from checkpoint input size={input_size_from_ckpt}",
+                            logger.log_msg(f"[HQ LOAD MODE] Using inferred state_size={state_size_inferred} from checkpoint input size={input_size_from_ckpt}",
                                         level=logging.INFO)
-                    
-
-                    return HQ_Network(
-                        state_size=state_size,
-                        action_size=action_size,
-                        role_size=role_size,
-                        local_state_size=local_state_size,
-                        global_state_size=global_state_size,
-                        device=Training_device,
-                        global_state=self.global_state
-                    )
+                        
+                        # Use inferred values for loading
+                        return HQ_Network(
+                            state_size=state_size_inferred,
+                            action_size=action_size,
+                            role_size=role_size_inferred,
+                            local_state_size=local_state_size_inferred,
+                            global_state_size=global_state_size_inferred,
+                            device=Training_device,
+                            global_state=self.global_state
+                        )
+                    else:
+                        # Not loading from checkpoint - use passed-in values
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(f"[HQ INIT] Using provided parameters: state_size={state_size}, role_size={role_size}, local_state_size={local_state_size}, global_state_size={global_state_size}",
+                                        level=logging.INFO)
+                        
+                        return HQ_Network(
+                            state_size=state_size,
+                            action_size=action_size,
+                            role_size=role_size,
+                            local_state_size=local_state_size,
+                            global_state_size=global_state_size,
+                            device=Training_device,
+                            global_state=self.global_state
+                        )
                 except Exception as e:
                     logger.log_msg(f"[ERROR] Failed to initialise HQNetwork: {e}", level=logging.ERROR)
                     raise
@@ -346,6 +362,32 @@ class Faction():
         nearby_agents = [agent for agent in self.agents if (
             (agent.x - hq_x)**2 + (agent.y - hq_y)**2) ** 0.5 < 50]
         self.global_state["agent_density"] = len(nearby_agents)
+
+        # Calculate nearest resource relative to HQ
+        if self.global_state["resources"]:
+            nearest_res = min(self.global_state["resources"], 
+                              key=lambda r: ((r["location"][0] - hq_x)**2 + (r["location"][1] - hq_y)**2)**0.5)
+            distance = ((nearest_res["location"][0] - hq_x)**2 + (nearest_res["location"][1] - hq_y)**2)**0.5
+            self.global_state["nearest_resource"] = {
+                "location": nearest_res["location"],
+                "distance": distance,
+                "type": nearest_res.get("type", "unknown")
+            }
+        else:
+            self.global_state["nearest_resource"] = {"location": (-1, -1), "distance": float('inf'), "type": None}
+
+        # Calculate nearest threat relative to HQ
+        if self.global_state["threats"]:
+            nearest_threat = min(self.global_state["threats"],
+                                key=lambda t: ((t["location"][0] - hq_x)**2 + (t["location"][1] - hq_y)**2)**0.5)
+            distance = ((nearest_threat["location"][0] - hq_x)**2 + (nearest_threat["location"][1] - hq_y)**2)**0.5
+            self.global_state["nearest_threat"] = {
+                "location": nearest_threat["location"],
+                "distance": distance,
+                "type": nearest_threat.get("type", "unknown")
+            }
+        else:
+            self.global_state["nearest_threat"] = {"location": (-1, -1), "distance": float('inf'), "type": None}
 
         #  Ensure `agent_states` are properly formatted
         self.global_state["agent_states"] = [
@@ -581,28 +623,32 @@ class Faction():
             logger.log_msg(f"[HQ] Faction {self.id} assigning high-level tasks...", level=logging.INFO)
 
         for agent in self.agents:
-            # === 1. Check if agent is idle ===
-            agent_idle = False
-
-            if agent.current_task is None:
-                agent_idle = True
-
-            elif agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
-                agent_idle = True
-
-            elif agent.current_task.get("type", "none") == "none":
-                agent_idle = True
+            # === 1. Check current task state ===
+            task_completed = False
+            task_exists = agent.current_task is not None
+            
+            if task_exists and agent.current_task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+                task_completed = True
+            elif task_exists and agent.current_task_state in [utils_config.TaskState.ONGOING, utils_config.TaskState.PENDING]:
+                # Skip busy agents
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[DEBUG] Skipping {agent.role} {agent.agent_id} - busy with task in state: {agent.current_task_state}",
+                        level=logging.DEBUG
+                    )
+                continue
 
             # === 2. Clear completed tasks if needed ===
-            if agent_idle:
-                if agent.current_task:
-                    self.complete_task(agent.current_task.get("id"), agent, agent.current_task_state)
+            if task_completed and task_exists:
+                self.complete_task(agent.current_task.get("id"), agent, agent.current_task_state)
                 agent.current_task = None
                 agent.update_task_state(utils_config.TaskState.NONE)
 
-            # === 3. Skip agents still busy ===
-            if agent.current_task:
-                continue  # Still busy with a valid task
+            # === 3. Only assign new tasks to agents who are idle ===
+            agent_idle = not task_exists or task_completed
+            
+            if not agent_idle:
+                continue  # Agent still has an active task
 
             # === 4. Assign a new task ===
             if utils_config.ENABLE_LOGGING:
@@ -741,38 +787,69 @@ class Faction():
 
             elif strategy == "DEFEND_HQ":
                 hq_position = self.home_base["position"]
-                if not utils_config.SUB_TILE_PRECISION:
-                    # If we are using grid precision, convert pixel HQ to grid
-                    hq_position = (
-                        int(hq_position[0] // utils_config.CELL_SIZE),
-                        int(hq_position[1] // utils_config.CELL_SIZE)
-                    )
+                # Always convert pixel HQ position to grid coordinates for movement
+                hq_position = (
+                    int(hq_position[0] // utils_config.CELL_SIZE),
+                    int(hq_position[1] // utils_config.CELL_SIZE)
+                )
+                
+                # Check if agent is already at HQ
+                agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
+                agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
+                is_at_hq = (agent_grid_x == hq_position[0] and agent_grid_y == hq_position[1])
+                
                 already_defending = (
                     current_type_id == utils_config.TASK_TYPE_MAPPING["move_to"] and
                     current and current.get("target", {}).get("position") == hq_position
                 )
 
-                if not already_defending:
+                # If already at HQ or already defending, don't assign new task
+                if is_at_hq or already_defending:
+                    return current
+
+                if current:
+                    agent.current_task = None
+                    agent.update_task_state(utils_config.TaskState.NONE)
+                return self.assign_move_to_task(agent, hq_position, label="DefendHQ")
+
+            elif strategy in ["COLLECT_GOLD", "COLLECT_FOOD", "NO_PRIORITY"]:
+                # When HQ wants to collect resources, peacekeepers should secure the area
+                # by patrolling near resources or defending the HQ
+                
+                # Check if peacekeeper has an ongoing patrol or defend task
+                is_patrol_or_defend = (
+                    current_type_id in [utils_config.TASK_TYPE_MAPPING["move_to"], 
+                                       utils_config.TASK_TYPE_MAPPING["eliminate"]] and
+                    current and agent.current_task_state == utils_config.TaskState.ONGOING
+                )
+                
+                # Keep ongoing patrol/defend tasks
+                if is_patrol_or_defend:
+                    return current
+                
+                # Otherwise, assign to patrol/defend near resource areas or HQ
+                hq_position = self.home_base["position"]
+                hq_position = (
+                    int(hq_position[0] // utils_config.CELL_SIZE),
+                    int(hq_position[1] // utils_config.CELL_SIZE)
+                )
+                
+                # Check if already at HQ
+                agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
+                agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
+                is_at_hq = (agent_grid_x == hq_position[0] and agent_grid_y == hq_position[1])
+                
+                if not is_at_hq:
                     if current:
                         agent.current_task = None
                         agent.update_task_state(utils_config.TaskState.NONE)
                     return self.assign_move_to_task(agent, hq_position, label="DefendHQ")
-
-            elif strategy in ["COLLECT_GOLD", "COLLECT_FOOD", "NO_PRIORITY"]:
-                # Peacekeepers fallback to exploration
-                is_explore_move = (
-                    current_type_id == utils_config.TASK_TYPE_MAPPING["move_to"] and
-                    current and current.get("id", "").startswith("Explore-")
-                )
-                if is_explore_move and agent.current_task_state == utils_config.TaskState.ONGOING:
-                    return current
-                
-                if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(
-                        f"[DEBUG] Peacekeeper {agent.agent_id} - Assigning explore task (strategy: {strategy})",
-                        level=logging.DEBUG
-                    )
-                return self.assign_explore_task(agent)
+                else:
+                    # Already at HQ, keep current task if valid
+                    if current and agent.current_task_state == utils_config.TaskState.ONGOING:
+                        return current
+                    # Otherwise explore nearby
+                    return self.assign_explore_task(agent)
 
             return current  # fallback
 
@@ -1179,10 +1256,15 @@ class Faction():
         if action == "RECRUIT_PEACEKEEPER":
             Agent_cost = utils_config.Gold_Cost_for_Agent
             if self.gold_balance >= Agent_cost and len(self.agents) < utils_config.MAX_AGENTS:
-                self.gold_balance -= Agent_cost
-                self.recruit_agent("peacekeeper")
-                print(f"Faction {self.id} bought a Peacekeeper")
-                self.hq_step_rewards.append(+1.0)
+                new_agent = self.recruit_agent("peacekeeper")
+                if new_agent:
+                    print(f"Faction {self.id} bought a Peacekeeper")
+                    self.hq_step_rewards.append(+1.0)
+                else:
+                    logger.log_msg(f"[HQ EXECUTE] Failed to recruit peacekeeper: spawn failed.", level=logging.WARNING)
+                    self.current_strategy = None
+                    self.hq_step_rewards.append(-0.5)
+                    return retest_strategy()
             else:
                 reason = "Not enough gold" if self.gold_balance < Agent_cost else "Agent limit reached"
                 logger.log_msg(f"[HQ EXECUTE] Cannot recruit peacekeeper: {reason}.", level=logging.WARNING)
@@ -1194,10 +1276,15 @@ class Faction():
         elif action == "RECRUIT_GATHERER":
             Agent_cost = utils_config.Gold_Cost_for_Agent
             if self.gold_balance >= Agent_cost and len(self.agents) < utils_config.MAX_AGENTS:
-                self.gold_balance -= Agent_cost
-                self.recruit_agent("gatherer")
-                print(f"Faction {self.id} bought a Gatherer")
-                self.hq_step_rewards.append(+1.0)
+                new_agent = self.recruit_agent("gatherer")
+                if new_agent:
+                    print(f"Faction {self.id} bought a Gatherer")
+                    self.hq_step_rewards.append(+1.0)
+                else:
+                    logger.log_msg(f"[HQ EXECUTE] Failed to recruit gatherer: spawn failed.", level=logging.WARNING)
+                    self.current_strategy = None
+                    self.hq_step_rewards.append(-0.5)
+                    return retest_strategy()
             else:
                 reason = "Not enough gold" if self.gold_balance < Agent_cost else "Agent limit reached"
                 logger.log_msg(f"[HQ EXECUTE] Cannot recruit gatherer: {reason}.", level=logging.WARNING)
@@ -1437,6 +1524,11 @@ class Faction():
 
 
     def recruit_agent(self, role: str):
+        """
+        Recruit a new agent of the specified role.
+        Returns the created agent if successful, None if failed.
+        Gold is only deducted AFTER successful creation.
+        """
         try:
             cost = utils_config.Gold_Cost_for_Agent
 
@@ -1445,14 +1537,20 @@ class Faction():
                     logger.log_msg(
                         f"[HQ RECRUIT] Faction {self.id} lacks gold to recruit {role}.",
                         level=logging.WARNING)
-                return
+                return None
 
-            # Deduct cost
-            self.gold_balance -= cost
+            if len(self.agents) >= utils_config.MAX_AGENTS:
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ RECRUIT] Faction {self.id} cannot recruit: max agents reached ({len(self.agents)}/{utils_config.MAX_AGENTS}).",
+                        level=logging.WARNING)
+                return None
 
-            # Create agent
+            # Try to create the agent first before deducting gold
             new_agent = self.create_agent(role)
             if new_agent:
+                # Success! Deduct the cost and add to lists
+                self.gold_balance -= cost
                 self.agents.append(new_agent)  # Add to faction
                 self.game_manager.agents.append(new_agent)  # <=== Add to global agent list
 
@@ -1460,17 +1558,21 @@ class Faction():
                     logger.log_msg(
                         f"[HQ RECRUIT] Faction {self.id} recruited new {role} — Gold: {self.gold_balance}, Total agents: {len(self.agents)}",
                         level=logging.INFO)
+                
+                return new_agent
             else:
-                logger.log_msg(
-                    f"[HQ RECRUIT] Spawn failed: No agent created.",
-                    level=logging.WARNING)
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ RECRUIT] Spawn failed: No valid location found for {role}.",
+                        level=logging.WARNING)
+                return None
 
         except Exception as e:
-            logger.log_msg(
-                f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}",
-                level=logging.ERROR)
-            
-            raise(f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}")
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[HQ RECRUIT] Error recruiting {role}: {str(e)}\nTraceback: {traceback.format_exc()}",
+                    level=logging.ERROR)
+            return None
             
 
 
@@ -1481,7 +1583,7 @@ class Faction():
         try:
             spawn_x, spawn_y = self.home_base["position"]
 
-            from AGENT.agent_base import Peacekeeper, Gatherer
+            from AGENT.Agent_Types import Peacekeeper, Gatherer
             role_map = {
                 "peacekeeper": Peacekeeper,
                 "gatherer": Gatherer
@@ -1945,6 +2047,17 @@ class Faction():
             # Get base global state
             enhanced_state = self.global_state.copy()
             
+            # Always add agent count information (crucial for zero-agent case!)
+            enhanced_state["friendly_agent_count"] = len(self.agents)
+            enhanced_state["gatherer_count"] = len([a for a in self.agents if a.role == "gatherer"])
+            enhanced_state["peacekeeper_count"] = len([a for a in self.agents if a.role == "peacekeeper"])
+            enhanced_state["has_agents"] = 1.0 if len(self.agents) > 0 else 0.0
+            
+            # Add cost-benefit analysis (important for zero-agent case!)
+            enhanced_state["can_afford_recruit"] = 1.0 if self.gold_balance >= utils_config.Gold_Cost_for_Agent else 0.0
+            enhanced_state["can_afford_swap"] = 1.0 if self.gold_balance >= utils_config.Gold_Cost_for_Agent_Swap else 0.0
+            enhanced_state["gold_balance_norm"] = min(self.gold_balance / 1000.0, 2.0)
+            
             # Add swap-relevant context
             if len(self.agents) > 0:
                 composition = self.get_faction_composition()
@@ -1952,9 +2065,6 @@ class Faction():
                     comp = composition["composition"]
                     needs = composition["needs_analysis"]
                     
-                    # Add composition metrics
-                    enhanced_state["gatherer_count"] = comp["gatherers"]
-                    enhanced_state["peacekeeper_count"] = comp["peacekeepers"]
                     enhanced_state["unit_balance"] = abs(comp["gatherers"] - comp["peacekeepers"])
                     
                     # Add needs analysis
@@ -1971,16 +2081,38 @@ class Faction():
                     
                     if comp["peacekeepers"] < comp["gatherers"] and needs["defense_priority"] > 0.6:
                         enhanced_state["swap_to_peacekeeper_benefit"] = needs["defense_priority"]
-                    
-                    # Add cost-benefit analysis
-                    enhanced_state["can_afford_swap"] = 1.0 if self.gold_balance >= utils_config.Gold_Cost_for_Agent_Swap else 0.0
-                    enhanced_state["can_afford_recruit"] = 1.0 if self.gold_balance >= utils_config.Gold_Cost_for_Agent else 0.0
-                    
-                    # Add efficiency metrics
-                    efficiency_metrics = self.get_swap_efficiency_metrics()
-                    if efficiency_metrics:
-                        enhanced_state["swap_efficiency_score"] = efficiency_metrics.get("efficiency_score", 0.0)
-                        enhanced_state["swap_usage_rate"] = efficiency_metrics.get("swap_usage_rate", 0.0)
+            else:
+                # No agents: high priority to recruit!
+                enhanced_state["unit_balance"] = 0.0
+                enhanced_state["resource_priority"] = 0.5
+                enhanced_state["defense_priority"] = 0.5
+                enhanced_state["exploration_priority"] = 0.0
+                enhanced_state["swap_to_gatherer_benefit"] = 0.0
+                enhanced_state["swap_to_peacekeeper_benefit"] = 0.0
+            
+            # Add territory change as observation (not directive)
+            if self.territory_count and hasattr(self, 'previous_territory_count'):
+                territory_delta = self.territory_count - self.previous_territory_count
+                # Normalized: -1 = losing ground, 0 = stable, +1 = gaining ground
+                enhanced_state["territory_delta"] = max(-1.0, min(1.0, territory_delta / 10.0))
+            else:
+                enhanced_state["territory_delta"] = 0.0
+            
+            self.previous_territory_count = self.territory_count
+            
+            # Add raw distance observations (let network interpret significance)
+            enhanced_state["nearest_threat_distance"] = self.global_state.get("nearest_threat", {}).get("distance", float('inf'))
+            enhanced_state["nearest_resource_distance"] = self.global_state.get("nearest_resource", {}).get("distance", float('inf'))
+            
+            # Add efficiency metrics
+            if len(self.agents) > 0:
+                efficiency_metrics = self.get_swap_efficiency_metrics()
+                if efficiency_metrics:
+                    enhanced_state["swap_efficiency_score"] = efficiency_metrics.get("efficiency_score", 0.0)
+                    enhanced_state["swap_usage_rate"] = efficiency_metrics.get("swap_usage_rate", 0.0)
+            else:
+                enhanced_state["swap_efficiency_score"] = 0.0
+                enhanced_state["swap_usage_rate"] = 0.0
             
             return enhanced_state
             

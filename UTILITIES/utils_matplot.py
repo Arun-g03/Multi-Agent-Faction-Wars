@@ -54,12 +54,21 @@ class MatplotlibPlotter:
             return None
 
     def update_image_plot(self, name, fig=None, tensorboard_logger=None, step=0):
+        # Skip if plots are disabled
+        if not utils_config.ENABLE_PLOTS:
+            return
+            
         if fig is None:
             fig = plt.gcf()
 
         save_dir = self.image_dir
         if tensorboard_logger and hasattr(tensorboard_logger, "run_dir") and utils_config.ENABLE_TENSORBOARD:
             save_dir = tensorboard_logger.run_dir
+        
+        # Fallback to default directory if both are None
+        if save_dir is None:
+            save_dir = os.path.join("VISUALS", "PLOTS")
+        
         os.makedirs(save_dir, exist_ok=True)
 
         image_path = os.path.join(save_dir, f"{name}.png")
@@ -155,6 +164,9 @@ class MatplotlibPlotter:
     def plot_heatmap(self, data, name="heatmap", title=None,
                  tensorboard_logger=None, step=0, episode=None,
                  save_data=True, save_as="csv", xticks=None):
+        # Skip if plots are disabled
+        if not utils_config.ENABLE_PLOTS:
+            return
         """
         Plot a heatmap with custom X-axis labels (xticks).
         """
@@ -188,6 +200,11 @@ class MatplotlibPlotter:
         save_dir = self.image_dir
         if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
             save_dir = tensorboard_logger.run_dir  # Use the directory managed by TensorBoard
+        
+        # Fallback to default directory if both are None
+        if save_dir is None:
+            save_dir = os.path.join("VISUALS", "PLOTS")
+        
         os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
 
         self.update_image_plot(name=file_name, fig=fig, tensorboard_logger=tensorboard_logger, step=step)
@@ -205,6 +222,9 @@ class MatplotlibPlotter:
                 print(f"[Plotter] Failed to write CSV for {name}: {e}")
 
     def plot_victory_timeline(self, episodes, winner_ids, victory_types, tensorboard_logger=None):
+        # Skip if plots are disabled
+        if not utils_config.ENABLE_PLOTS:
+            return
         """
         Plots a per-episode timeline showing which faction won and how (e.g., resource, elimination),
         and saves a corresponding CSV file.
@@ -342,6 +362,10 @@ class MatplotlibPlotter:
             if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
                 save_dir = tensorboard_logger.run_dir  # Use TensorBoard's directory if available
             
+            # Fallback to default directory if both are None
+            if save_dir is None:
+                save_dir = os.path.join("VISUALS", "PLOTS")
+            
             os.makedirs(save_dir, exist_ok=True)  # Ensure the directory exists
 
             csv_filename = os.path.join(save_dir, f"{name}_Episode_{episodes[0]}.csv")
@@ -379,6 +403,10 @@ class MatplotlibPlotter:
 
 
     def plot_scalar_over_time(self, names, values_list, episodes, tensorboard_logger=None):
+        # Skip if plots are disabled
+        if not utils_config.ENABLE_PLOTS:
+            return
+            
         fig, ax = plt.subplots(figsize=(10, 5))
 
         # Pad value lists to match length of episodes
@@ -435,6 +463,11 @@ class MatplotlibPlotter:
         save_dir = self.image_dir
         if tensorboard_logger and hasattr(tensorboard_logger, "run_dir"):
             save_dir = tensorboard_logger.run_dir
+        
+        # Fallback to default directory if both are None
+        if save_dir is None:
+            save_dir = os.path.join("VISUALS", "PLOTS")
+        
         os.makedirs(save_dir, exist_ok=True)
 
         csv_name = "_".join(clean_names) + "_trend.csv"

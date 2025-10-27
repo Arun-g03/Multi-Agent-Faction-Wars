@@ -10,11 +10,16 @@ from NEURAL_NETWORK.HQ_Network import HQ_Network
 
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
 
+# Import role-specific behaviors
+from AGENT.Agent_Behaviours.core_actions import CoreActionsMixin
+from AGENT.Agent_Behaviours.gatherer_behaviours import GathererBehavioursMixin
+from AGENT.Agent_Behaviours.peacekeeper_behaviours import PeacekeeperBehavioursMixin
+
 
 logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)
 
 
-class AgentBehaviour:
+class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehavioursMixin):
     def __init__(
             self,
             agent,
@@ -26,6 +31,7 @@ class AgentBehaviour:
             current_episode):
         """
         Initialise the unified behavior class for agents.
+        Inherits from mixin classes to provide role-specific behaviors.
         :param agent: The agent instance.
         :param state_size: Size of the state vector.
         :param action_size: Number of actions available to the agent.
@@ -629,15 +635,27 @@ class AgentBehaviour:
 
         task = self.agent.current_task
         if not task or "target" not in task or "position" not in task["target"]:
+            logger.log_msg(f"[ERROR] Invalid move_to task for {self.agent.agent_id}: {task}", level=logging.ERROR)
             return utils_config.TaskState.FAILURE
 
         target_x, target_y = task["target"]["position"]
 
+        # Convert agent position to grid coords
         agent_cell_x = int(self.agent.x // utils_config.CELL_SIZE)
         agent_cell_y = int(self.agent.y // utils_config.CELL_SIZE)
+        
+        # Check if target is in world coordinates and convert to grid if needed
+        if target_x > 1000 or target_y > 1000:  # Likely in world/pixel coordinates
+            # Target is in world coordinates, convert to grid
+            target_cell_x = int(target_x // utils_config.CELL_SIZE)
+            target_cell_y = int(target_y // utils_config.CELL_SIZE)
+        else:
+            # Target is already in grid coordinates
+            target_cell_x = int(target_x)
+            target_cell_y = int(target_y)
 
-        dx = abs(agent_cell_x - target_x)
-        dy = abs(agent_cell_y - target_y)
+        dx = abs(agent_cell_x - target_cell_x)
+        dy = abs(agent_cell_y - target_cell_y)
 
         if dx == 0 and dy == 0:
             #print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
@@ -646,13 +664,13 @@ class AgentBehaviour:
         # Actually move the agent towards the target
         if dx > dy:
             # Move horizontally first
-            if agent_cell_x < target_x:
+            if agent_cell_x < target_cell_x:
                 self.move_right()
             else:
                 self.move_left()
         else:
             # Move vertically first
-            if agent_cell_y < target_y:
+            if agent_cell_y < target_cell_y:
                 self.move_down()
             else:
                 self.move_up()
@@ -1029,14 +1047,14 @@ class AgentBehaviour:
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.",
-                            print(f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}."),
                             level=logging.INFO)
+                    print(f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.")
                     if enemy.Health <= 0:
                         if utils_config.ENABLE_LOGGING:
                             logger.log_msg(
                                 f"{self.agent.role} eliminated nearby  {enemy.role}.",
-                                print(f"{self.agent.role} eliminated nearby  {enemy.role}."),
                                 level=logging.INFO)
+                        print(f"{self.agent.role} eliminated nearby  {enemy.role}.")
                     return utils_config.TaskState.ONGOING
 
         # Nothing in range — fail the task this step

@@ -1,12 +1,22 @@
 
 import subprocess
 import sys
-# Run the Start_up script to check/install dependencies before anything else
-startup_script = "UTILITIES\Startup_installer.py"
+import os
 
-# Prompt for headless mode before imports
+# Run the Start_up script to check/install dependencies FIRST
+startup_script = os.path.join("UTILITIES", "Startup_installer.py")
+
 print("[INFO] - Main.py ---- Starting the game...\n")
-print("Would you like to run in HEADLESS_MODE?")
+print("[INFO] Checking and installing dependencies...")
+
+# Run the startup installer BEFORE any other imports
+try:
+    result = subprocess.run([sys.executable, startup_script], check=True)
+except subprocess.CalledProcessError:
+    sys.exit("[ERROR] Failed to verify dependencies. Exiting.")
+
+# Prompt for headless mode after dependencies are installed
+print("\nWould you like to run in HEADLESS_MODE?")
 print("\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR BETTER PERFORMANCE\033[0m")
 
 print("\nEnter y for yes n for no: ", end="")
@@ -24,14 +34,7 @@ with open("UTILITIES/utils_config.py", "w") as f:
         else:
             f.write(line)
 
-# Temporarily disabled dependency checker for testing
-# try:
-#     result = subprocess.run([sys.executable, startup_script], check=True)
-# except subprocess.CalledProcessError:
-#     sys.exit("[ERROR] Failed to verify dependencies. Exiting.")
-
 # Continue with main program after startup script dependency check
-
 from SHARED.core_imports import *
 from GAME.game_manager import GameManager
 from RENDER.Game_Renderer import GameRenderer
