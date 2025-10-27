@@ -2,10 +2,10 @@
 Base class for agents.
     Contains the basic attributes and methods for all agents and agent specific attributes.
 """
+
 """Common Imports"""
 from SHARED.core_imports import *
 import UTILITIES.utils_config as utils_config
-
 
 
 """File Specific Imports"""
@@ -13,9 +13,8 @@ from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
 from AGENT.agent_behaviours import AgentBehaviour
+
 # Note: Peacekeeper and Gatherer are imported in agent_factions.py where they're actually used
-
-
 
 
 #       _                    _                             _ _     _                   _   _
@@ -60,6 +59,7 @@ def tint_sprite(sprite, tint_colour):
 
 class BaseAgent:
     """Base Agent class for agents in the game. Handles agent-specific logic."""
+
     try:
 
         # Part of the init is for the agent itself and part is for the agent's
@@ -85,7 +85,7 @@ class BaseAgent:
             state_size=utils_config.DEF_AGENT_STATE_SIZE,
             mode: str = "train",  # Default mode is "train".
             # Default network type is PPOModel.
-            network_type: str = "PPOModel"
+            network_type: str = "PPOModel",
         ):
             """
             Initialise the agent with a specific network model (e.g., PPO, DQN, etc.).
@@ -93,8 +93,8 @@ class BaseAgent:
             # Convert string network type to integer using
             # utils_config.NETWORK_TYPE_MAPPING
             network_type_int = utils_config.NETWORK_TYPE_MAPPING.get(
-                network_type, 1)  # Default to "none" if not found
-            
+                network_type, 1
+            )  # Default to "none" if not found
 
             # Agent-specific initialisation
             self.x: float = x
@@ -110,7 +110,11 @@ class BaseAgent:
             self.current_step = 0
 
             # Ensure a valid state size is always used
-            self.state_size = state_size if state_size is not None else utils_config.DEF_AGENT_STATE_SIZE
+            self.state_size = (
+                state_size
+                if state_size is not None
+                else utils_config.DEF_AGENT_STATE_SIZE
+            )
 
             self.communication_system = communication_system
             self.event_manager = event_manager
@@ -125,7 +129,7 @@ class BaseAgent:
                 network_type_int=network_type_int,
                 state_size=self.state_size,
                 action_size=len(self.role_actions),
-                AgentID=self.agent_id
+                AgentID=self.agent_id,
             )
 
             # Initialize the behavior object (AgentBehaviour inherits from mixins based on role)
@@ -136,13 +140,15 @@ class BaseAgent:
                 role_actions=role_actions,
                 event_manager=event_manager,
                 current_step=self.current_step,
-                current_episode=self.current_episode
+                current_episode=self.current_episode,
             )
 
             self.current_task = None  # Initialise the current task with None
             # Initialise the current task state with
             # utils_config.TaskState.NONE
-            self.current_task_state = utils_config.TaskState.NONE #Initialise the current task state with utils_config.TaskState.NONE
+            self.current_task_state = (
+                utils_config.TaskState.NONE
+            )  # Initialise the current task state with utils_config.TaskState.NONE
 
             # Initialise other components
             # Temporary experience buffer (for training, works like memory)
@@ -153,38 +159,29 @@ class BaseAgent:
     except Exception as e:
         raise (f"Error in BaseAgent initialisation: {e}")
 
-    def initialise_network(
-            self,
-            network_type_int,
-            state_size,
-            action_size,
-            AgentID):
+    def initialise_network(self, network_type_int, state_size, action_size, AgentID):
         """
         Initialise the network model based on the selected network type.
         """
         if network_type_int == utils_config.NETWORK_TYPE_MAPPING["PPOModel"]:
-            #print(f"\033[93mInitialising PPOModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")            
+            # print(f"\033[93mInitialising PPOModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")
             return PPOModel(
-                    AgentID=AgentID,
-                    state_size=state_size,
-                    action_size=action_size,
-                    training_mode=self.mode
+                AgentID=AgentID,
+                state_size=state_size,
+                action_size=action_size,
+                training_mode=self.mode,
             )
 
         elif network_type_int == utils_config.NETWORK_TYPE_MAPPING["DQNModel"]:
-            #print(f"\033[93mInitialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")            
+            # print(f"\033[93mInitialising DQNModel with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")
             return DQNModel(
-                state_size=state_size,
-                action_size=action_size,
-                AgentID=AgentID
+                state_size=state_size, action_size=action_size, AgentID=AgentID
             )
-            
+
         elif network_type_int == utils_config.NETWORK_TYPE_MAPPING["HQ_Network"]:
-            #print(f"\033[93mInitialising HQ_Network with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")
+            # print(f"\033[93mInitialising HQ_Network with state_size={state_size}, action_size={action_size} for AgentID={AgentID}\033[0m")
             return HQ_Network(
-                state_size=state_size,
-                action_size=action_size,
-                AgentID=AgentID
+                state_size=state_size, action_size=action_size, AgentID=AgentID
             )
 
         else:
@@ -195,40 +192,42 @@ class BaseAgent:
             grid_x = int(new_x // utils_config.CELL_SIZE)
             grid_y = int(new_y // utils_config.CELL_SIZE)
 
-            if 0 <= grid_x < len(
-                    self.terrain.grid) and 0 <= grid_y < len(
-                    self.terrain.grid[0]):
+            if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(
+                self.terrain.grid[0]
+            ):
                 tile = self.terrain.grid[grid_x][grid_y]
 
                 tile_type = None
                 if isinstance(tile, dict):
-                    tile_type = tile.get('type')
-                elif hasattr(tile, 'dtype') and 'type' in tile.dtype.names:
-                    tile_type = tile['type']
+                    tile_type = tile.get("type")
+                elif hasattr(tile, "dtype") and "type" in tile.dtype.names:
+                    tile_type = tile["type"]
 
-                return tile_type == 'land'
+                return tile_type == "land"
 
             else:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"[WARN] Out-of-bounds grid access: ({grid_x}, {grid_y})",
-                        level=logging.WARNING)
+                        level=logging.WARNING,
+                    )
                 return False
 
         except Exception as e:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[ERROR] Exception in can_move_to({new_x}, {new_y}): {repr(e)}",
-                    level=logging.ERROR)
+                    level=logging.ERROR,
+                )
             return False
 
         except Exception as e:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[ERROR] Exception in can_move_to({new_x}, {new_y}): {repr(e)}",
-                    level=logging.ERROR)
+                    level=logging.ERROR,
+                )
             return False
-
 
     def move(self, dx, dy, sub_tile_precision=utils_config.SUB_TILE_PRECISION):
         try:
@@ -252,14 +251,20 @@ class BaseAgent:
 
             if self.can_move_to(new_x, new_y):
                 # Mark old tile as faction-owned
-                if 0 <= current_grid_x < len(self.terrain.grid) and 0 <= current_grid_y < len(self.terrain.grid[0]):
-                    self.terrain.grid[current_grid_x][current_grid_y]['faction'] = self.faction.id
+                if 0 <= current_grid_x < len(
+                    self.terrain.grid
+                ) and 0 <= current_grid_y < len(self.terrain.grid[0]):
+                    self.terrain.grid[current_grid_x][current_grid_y][
+                        "faction"
+                    ] = self.faction.id
 
                 self.x = new_x
                 self.y = new_y
 
                 if utils_config.ENABLE_LOGGING:
-                    logger.log_msg(f"Agent {self.agent_id} ({self.role}) moved from ({old_x}, {old_y}) to ({new_x}, {new_y})")
+                    logger.log_msg(
+                        f"Agent {self.agent_id} ({self.role}) moved from ({old_x}, {old_y}) to ({new_x}, {new_y})"
+                    )
 
                 # Record recent positions to detect "stuck" agents
                 self.recent_positions = getattr(self, "recent_positions", [])
@@ -270,20 +275,24 @@ class BaseAgent:
                 if len(set(self.recent_positions)) <= 2:
                     logger.log_msg(
                         f"Agent {self.agent_id} ({self.role}) is likely stuck. Penalising.",
-                        level=logging.WARNING
+                        level=logging.WARNING,
                     )
                     self.Health -= 2
                     if self.Health <= 0:
-                        print(f"Agent {self.agent_id} ({self.role}) has died from being stuck.")
+                        print(
+                            f"Agent {self.agent_id} ({self.role}) has died from being stuck."
+                        )
 
                 # Mark new tile as faction-owned
-                if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(self.terrain.grid[0]):
-                    self.terrain.grid[grid_x][grid_y]['faction'] = self.faction.id
+                if 0 <= grid_x < len(self.terrain.grid) and 0 <= grid_y < len(
+                    self.terrain.grid[0]
+                ):
+                    self.terrain.grid[grid_x][grid_y]["faction"] = self.faction.id
             else:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Agent {self.agent_id} ({self.role}) attempted invalid move from ({old_x}, {old_y}) to ({new_x}, {new_y}).",
-                        level=logging.ERROR
+                        level=logging.ERROR,
                     )
 
         except Exception as e:
@@ -309,21 +318,22 @@ class BaseAgent:
         distance = ((agent_x - target_x) ** 2 + (agent_y - target_y) ** 2) ** 0.5
         return distance <= threshold
 
+    #    ____            __                        _   _            _            _       __         _                   _   _           __
+    #   |  _ \ ___ _ __ / _| ___  _ __ _ __ ___   | |_| |__   ___  | |_ __ _ ___| | __  / / __ ___ | | ___    __ _  ___| |_(_) ___  _ __\ \
+    #   | |_) / _ \ '__| |_ / _ \| '__| '_ ` _ \  | __| '_ \ / _ \ | __/ _` / __| |/ / | | '__/ _ \| |/ _ \  / _` |/ __| __| |/ _ \| '_ \| |
+    #   |  __/  __/ |  |  _| (_) | |  | | | | | | | |_| | | |  __/ | || (_| \__ \   <  | | | | (_) | |  __/ | (_| | (__| |_| | (_) | | | | |
+    #   |_|   \_\__, |\___|_| |_|\__|___/ | .__/ \___/|___/___/_|_.__/|_|\___|  \__,_|\___|\__|_|\___/|_| |_|___/
+    #           |___/                     |_|
 
-
-
-#    ____            __                        _   _            _            _       __         _                   _   _           __
-#   |  _ \ ___ _ __ / _| ___  _ __ _ __ ___   | |_| |__   ___  | |_ __ _ ___| | __  / / __ ___ | | ___    __ _  ___| |_(_) ___  _ __\ \
-#   | |_) / _ \ '__| |_ / _ \| '__| '_ ` _ \  | __| '_ \ / _ \ | __/ _` / __| |/ / | | '__/ _ \| |/ _ \  / _` |/ __| __| |/ _ \| '_ \| |
-#   |  __/  __/ |  |  _| (_) | |  | | | | | | | |_| | | |  __/ | || (_| \__ \   <  | | | | (_) | |  __/ | (_| | (__| |_| | (_) | | | | |
-#   |_|   \_\__, |\___|_| |_|\__|___/ | .__/ \___/|___/___/_|_.__/|_|\___|  \__,_|\___|\__|_|\___/|_| |_|___/
-#           |___/                     |_|
-
-    def perform_task(self, state, resource_manager, agents, current_step=None, current_episode=None):
+    def perform_task(
+        self, state, resource_manager, agents, current_step=None, current_episode=None
+    ):
         """
         Execute the current task using the behavior component.
         """
-        return self.behavior.perform_task(state, resource_manager, agents, current_step, current_episode)
+        return self.behavior.perform_task(
+            state, resource_manager, agents, current_step, current_episode
+        )
 
     def update_task_state(self, task_state):
         """
@@ -333,8 +343,8 @@ class BaseAgent:
         self.current_task_state = task_state
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
-                f"{self.role} task state updated to {task_state}.",
-                level=logging.DEBUG)
+                f"{self.role} task state updated to {task_state}.", level=logging.DEBUG
+            )
 
     def update(self, resource_manager, agents, hq_state, step=None, episode=None):
         """
@@ -352,21 +362,22 @@ class BaseAgent:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[TASK EXECUTION] Agent {self.agent_id} executing task: {self.current_task}",
-                    level=logging.DEBUG)
+                    level=logging.DEBUG,
+                )
 
             # Retrieve the agent's current state based on HQ state
-            state = self.get_state(
-                resource_manager, agents, self.faction, hq_state)
+            state = self.get_state(resource_manager, agents, self.faction, hq_state)
             if state is None:
                 raise RuntimeError(
-                    f"[CRITICAL] Agent {self.agent_id} received a None state from get_state")
+                    f"[CRITICAL] Agent {self.agent_id} received a None state from get_state"
+                )
 
             if utils_config.ENABLE_LOGGING:
                 # Split state for readability
                 core = state[:7]  # position, health, nearest threat/resource
-                task_one_hot = state[7:7 + len(utils_config.TASK_TYPE_MAPPING)]
+                task_one_hot = state[7 : 7 + len(utils_config.TASK_TYPE_MAPPING)]
                 # e.g., target_x, target_y, current_action_norm
-                task_info = state[7 + len(utils_config.TASK_TYPE_MAPPING):]
+                task_info = state[7 + len(utils_config.TASK_TYPE_MAPPING) :]
 
                 # Map task type index back to name (if any bit is 1)
                 if 1 not in task_one_hot:
@@ -374,10 +385,11 @@ class BaseAgent:
                 else:
                     try:
                         task_type_index = task_one_hot.index(1)
-                        task_type_name = list(utils_config.TASK_TYPE_MAPPING.keys())[task_type_index]
+                        task_type_name = list(utils_config.TASK_TYPE_MAPPING.keys())[
+                            task_type_index
+                        ]
                     except (ValueError, IndexError):
                         task_type_name = "none"
-
 
                 if utils_config.SUB_TILE_PRECISION:
                     # Sub-tile precision mode, showing world-based coordinates
@@ -402,82 +414,91 @@ class BaseAgent:
                     f" - {task_target_text}\n"
                     f" - Current Action Index: {int(task_info[2] * len(self.role_actions)) if task_info[2] >= 0 else 'None'}\n"
                     f" - Distance to Target (norm): {task_info[3]:.3f}\n",
-                    level=logging.DEBUG
+                    level=logging.DEBUG,
                 )
-
-
 
             # Execute the current task or decide on a new action
             reward, task_state = self.perform_task(
-                state, resource_manager, agents, 
-                current_episode=self.current_episode, 
-                current_step=self.current_step)
+                state,
+                resource_manager,
+                agents,
+                current_episode=self.current_episode,
+                current_step=self.current_step,
+            )
             # Update the task state based on execution
             self.update_task_state(task_state)
 
             # Observe the environment and report findings to the faction
-            self.observe(agents,
-                         {"position": self.faction.home_base["position"]},
-                         resource_manager)
+            self.observe(
+                agents,
+                {"position": self.faction.home_base["position"]},
+                resource_manager,
+            )
 
             # Log the task state and reward for centralised learning
             if task_state in [
-                    utils_config.TaskState.SUCCESS,
-                    utils_config.TaskState.FAILURE]:
+                utils_config.TaskState.SUCCESS,
+                utils_config.TaskState.FAILURE,
+            ]:
                 next_state = self.get_state(
-                    resource_manager, agents, self.faction, hq_state)
+                    resource_manager, agents, self.faction, hq_state
+                )
                 done = task_state in [
                     utils_config.TaskState.SUCCESS,
-                    utils_config.TaskState.FAILURE]
+                    utils_config.TaskState.FAILURE,
+                ]
 
                 # Report the agent's experience to the HQ
                 self.report_experience_to_hq(
-                    state, self.current_task, reward, next_state, done)
+                    state, self.current_task, reward, next_state, done
+                )
 
             # Handle health-related conditions
             if self.Health <= 0:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.role} has died and will be removed from the game.",
-                        level=logging.WARNING)
+                        level=logging.WARNING,
+                    )
                 print(f"{self.role} has died and will be removed from the game.")
 
         except Exception as e:
             traceback.print_exc()
-            raise RuntimeError(
-                f"An error occurred while updating the agent: {e}")
+            raise RuntimeError(f"An error occurred while updating the agent: {e}")
 
-
-#     ___  _                               _                 _                   _                                      _
-#    / _ \| |__  ___  ___ _ ____   _____  | | ___   ___ __ _| |   ___ _ ____   _(_)_ __ ___  _ __  _ __ ___   ___ _ __ | |_
-#   | | | | '_ \/ __|/ _ \ '__\ \ / / _ \ | |/ _ \ / __/ _` | |  / _ \ '_ \ \ / / | '__/ _ \| '_ \| '_ ` _ \ / _ \ '_ \| __|
-#   | |_| | |_) \__ \  __/ |   \ V /  __/ | | (_) | (_| (_| | | |  __/ | | \ V /| | | | (_) | | | | | | | | |  __/ | | | |_
-#    \___/|_.__/|___/\___|_|    \_/ \___| |_|\___/ \___\__,_|_|  \___|_| |_|\_/ |_|_|  \___/|_| |_|_| |_| |_|\___|_| |_|\__|
-#
-#                    _
-#     __ _ _ __   __| |
-#    / _` | '_ \ / _` |
-#   | (_| | | | | (_| |
-#    \__,_|_| |_|\__,_|
-#
-#                               _      __ _           _ _
-#     _ __ ___ _ __   ___  _ __| |_   / _(_)_ __   __| (_)_ __   __ _ ___
-#    | '__/ _ \ '_ \ / _ \| '__| __| | |_| | '_ \ / _` | | '_ \ / _` / __|
-#    | | |  __/ |_) | (_) | |  | |_  |  _| | | | | (_| | | | | | (_| \__ \
-#    |_|  \___| .__/ \___/|_|   \__| |_| |_|_| |_|\__,_|_|_| |_|\__, |___/
-#             |_|                                               |___/
+    #     ___  _                               _                 _                   _                                      _
+    #    / _ \| |__  ___  ___ _ ____   _____  | | ___   ___ __ _| |   ___ _ ____   _(_)_ __ ___  _ __  _ __ ___   ___ _ __ | |_
+    #   | | | | '_ \/ __|/ _ \ '__\ \ / / _ \ | |/ _ \ / __/ _` | |  / _ \ '_ \ \ / / | '__/ _ \| '_ \| '_ ` _ \ / _ \ '_ \| __|
+    #   | |_| | |_) \__ \  __/ |   \ V /  __/ | | (_) | (_| (_| | | |  __/ | | \ V /| | | | (_) | | | | | | | | |  __/ | | | |_
+    #    \___/|_.__/|___/\___|_|    \_/ \___| |_|\___/ \___\__,_|_|  \___|_| |_|\_/ |_|_|  \___/|_| |_|_| |_| |_|\___|_| |_|\__|
+    #
+    #                    _
+    #     __ _ _ __   __| |
+    #    / _` | '_ \ / _` |
+    #   | (_| | | | | (_| |
+    #    \__,_|_| |_|\__,_|
+    #
+    #                               _      __ _           _ _
+    #     _ __ ___ _ __   ___  _ __| |_   / _(_)_ __   __| (_)_ __   __ _ ___
+    #    | '__/ _ \ '_ \ / _ \| '__| __| | |_| | '_ \ / _` | | '_ \ / _` / __|
+    #    | | |  __/ |_) | (_) | |  | |_  |  _| | | | | (_| | | | | | (_| \__ \
+    #    |_|  \___| .__/ \___/|_|   \__| |_| |_|_| |_|\__,_|_|_| |_|\__, |___/
+    #             |_|                                               |___/
 
     def observe(self, all_agents, enemy_hq, resource_manager):
         """Observe and report threats and resources."""
         # Detect threats
-        observed_threats = self.detect_threats(all_agents, enemy_hq, current_step=self.current_step)
+        observed_threats = self.detect_threats(
+            all_agents, enemy_hq, current_step=self.current_step
+        )
 
         # Log all observed threats
         if observed_threats:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"Agent {self.agent_id} observed threats: {observed_threats}",
-                    level=logging.DEBUG)
+                    level=logging.DEBUG,
+                )
 
         for threat in observed_threats:
             # Ensure the threat is from a different faction
@@ -491,7 +512,8 @@ class BaseAgent:
             # Report threat to HQ using the communication system
             if self.communication_system:
                 self.communication_system.agent_to_hq(
-                    self, {"type": "threat", "data": threat})
+                    self, {"type": "threat", "data": threat}
+                )
 
         # Detect resources
         observed_resources = self.detect_resources(resource_manager)
@@ -500,13 +522,15 @@ class BaseAgent:
         for resource in observed_resources:
             if self.communication_system:
                 self.communication_system.agent_to_hq(
-                    self, {"type": "resource", "data": resource})
+                    self, {"type": "resource", "data": resource}
+                )
 
         # Log reported resources
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"Agent {self.agent_id} observed resources: {observed_resources}",
-                level=logging.DEBUG)
+                level=logging.DEBUG,
+            )
 
         """ # Debug logs
         if observed_threats:
@@ -514,19 +538,27 @@ class BaseAgent:
         if observed_resources:
             print(f"Agent {self.role} detected resources: {observed_resources}\n") """
 
-    def detect_resources(self, resource_manager, threshold=utils_config.Agent_field_of_view, current_step=None):
+    def detect_resources(
+        self,
+        resource_manager,
+        threshold=utils_config.Agent_field_of_view,
+        current_step=None,
+    ):
         """
         Optimised detection using squared distance, caching, and step throttling.
         Handles both grid-based and sub-tile precision modes.
         """
         Throttle_steps = 1
         current_step = getattr(self, "current_step", 0)
-        if hasattr(self, "last_resource_check_step") and current_step - self.last_resource_check_step < Throttle_steps:
+        if (
+            hasattr(self, "last_resource_check_step")
+            and current_step - self.last_resource_check_step < Throttle_steps
+        ):
             return getattr(self, "cached_detected_resources", [])
 
         self.last_resource_check_step = current_step
 
-        threshold_sq = threshold ** 2
+        threshold_sq = threshold**2
         detected_resources = []
 
         for resource in resource_manager.resources:
@@ -535,8 +567,12 @@ class BaseAgent:
 
             if utils_config.SUB_TILE_PRECISION:
                 # Use precise x/y distance
-                dx = (resource.grid_x * utils_config.CELL_SIZE + resource.subtile_offset_x) - self.x
-                dy = (resource.grid_y * utils_config.CELL_SIZE + resource.subtile_offset_y) - self.y
+                dx = (
+                    resource.grid_x * utils_config.CELL_SIZE + resource.subtile_offset_x
+                ) - self.x
+                dy = (
+                    resource.grid_y * utils_config.CELL_SIZE + resource.subtile_offset_y
+                ) - self.y
             else:
                 # Use grid cell snapping
                 agent_grid_x = self.x // utils_config.CELL_SIZE
@@ -550,8 +586,6 @@ class BaseAgent:
         self.cached_detected_resources = detected_resources
         return detected_resources
 
-
-
     def detect_threats(self, all_agents, enemy_hq, current_step=None):
         """
         Detect threats (enemy agents or HQs) within local view — supports grid and sub-tile precision modes.
@@ -559,7 +593,10 @@ class BaseAgent:
         current_step = current_step or getattr(self, "current_step", 0)
         throttle_steps = 1
 
-        if hasattr(self, "last_threat_check_step") and current_step - self.last_threat_check_step < throttle_steps:
+        if (
+            hasattr(self, "last_threat_check_step")
+            and current_step - self.last_threat_check_step < throttle_steps
+        ):
             return getattr(self, "cached_detected_threats", [])
 
         self.last_threat_check_step = current_step
@@ -567,13 +604,18 @@ class BaseAgent:
 
         # View radius is always in pixels
         perception_radius_px = self.local_view * utils_config.CELL_SIZE
-        radius_sq = perception_radius_px ** 2
+        radius_sq = perception_radius_px**2
 
         # === Detect enemy agents ===
         for agent in all_agents:
-            if not hasattr(agent, "agent_id") or not isinstance(agent.agent_id, utils_config.AgentIDStruc):
+            if not hasattr(agent, "agent_id") or not isinstance(
+                agent.agent_id, utils_config.AgentIDStruc
+            ):
                 continue
-            if agent.agent_id == self.agent_id or agent.agent_id.faction_id == self.faction.id:
+            if (
+                agent.agent_id == self.agent_id
+                or agent.agent_id.faction_id == self.faction.id
+            ):
                 continue
 
             # Distance logic — grid or precise
@@ -593,18 +635,20 @@ class BaseAgent:
             if dx * dx + dy * dy > radius_sq:
                 continue
 
-            threats.append({
-                "id": agent.agent_id,
-                "faction": agent.agent_id.faction_id,
-                "type": f"agent.{agent.role}",
-                "location": (agent.x, agent.y),
-            })
+            threats.append(
+                {
+                    "id": agent.agent_id,
+                    "faction": agent.agent_id.faction_id,
+                    "type": f"agent.{agent.role}",
+                    "location": (agent.x, agent.y),
+                }
+            )
 
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"Agent {self.agent_id} detected threat: AgentID {agent.agent_id}, "
                     f"Faction {agent.agent_id.faction_id}, at location ({agent.x}, {agent.y}).",
-                    level=logging.DEBUG
+                    level=logging.DEBUG,
                 )
 
         # === Detect enemy HQ ===
@@ -623,44 +667,61 @@ class BaseAgent:
                 dy = (hq_gy - self_gy) * utils_config.CELL_SIZE
 
             if dx * dx + dy * dy <= radius_sq:
-                threats.append({
-                    "id": utils_config.AgentIDStruc(faction_id=enemy_hq["faction_id"], agent_id="HQ"),
-                    "faction": enemy_hq["faction_id"],
-                    "type": "Faction HQ",
-                    "location": enemy_hq["position"],
-                })
+                threats.append(
+                    {
+                        "id": utils_config.AgentIDStruc(
+                            faction_id=enemy_hq["faction_id"], agent_id="HQ"
+                        ),
+                        "faction": enemy_hq["faction_id"],
+                        "type": "Faction HQ",
+                        "location": enemy_hq["position"],
+                    }
+                )
 
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Agent {self.agent_id} detected enemy HQ at location {enemy_hq['position']}.",
-                        level=logging.DEBUG
+                        level=logging.DEBUG,
                     )
 
         self.cached_detected_threats = threats
         return threats
 
-
-
-
-#                                    _                                _         _        _
-#     __ _  ___ _ __   ___ _ __ __ _| |_ ___    __ _  __ _  ___ _ __ | |_   ___| |_ __ _| |_ ___
-#    / _` |/ _ \ '_ \ / _ \ '__/ _` | __/ _ \  / _` |/ _` |/ _ \ '_ \| __| / __| __/ _` | __/ _ \
-#   | (_| |  __/ | | |  __/ | | (_| | ||  __/ | (_| | (_| |  __/ | | | |_  \__ \ || (_| | ||  __/
-#    \__, |\___|_| |_|\___|_|  \__,_|\__\___|  \__,_|\__, |\___|_| |_|\__| |___/\__\__,_|\__\___|
-#    |___/                                           |___/
+    #                                    _                                _         _        _
+    #     __ _  ___ _ __   ___ _ __ __ _| |_ ___    __ _  __ _  ___ _ __ | |_   ___| |_ __ _| |_ ___
+    #    / _` |/ _ \ '_ \ / _ \ '__/ _` | __/ _ \  / _` |/ _` |/ _ \ '_ \| __| / __| __/ _` | __/ _ \
+    #   | (_| |  __/ | | |  __/ | | (_| | ||  __/ | (_| | (_| |  __/ | | | |_  \__ \ || (_| | ||  __/
+    #    \__, |\___|_| |_|\___|_|  \__,_|\__\___|  \__,_|\__, |\___|_| |_|\__| |___/\__\__,_|\__\___|
+    #    |___/                                           |___/
 
     def get_state(self, resource_manager, agents, faction, hq_state=None):
         if hq_state is None:
-            raise ValueError(f"[ERROR] hq_state is None for agent {self.role} in faction {self.faction.id}!")
+            raise ValueError(
+                f"[ERROR] hq_state is None for agent {self.role} in faction {self.faction.id}!"
+            )
 
         # === Perception Phase ===
-        perceived_threats = self.detect_threats(agents, hq_state, current_step=self.current_step)
+        perceived_threats = self.detect_threats(
+            agents, hq_state, current_step=self.current_step
+        )
         perceived_resources = self.detect_resources(resource_manager)
 
         # Update nearest known threat/resource once per step
         if getattr(self, "last_state_step", -1) != self.current_step:
-            self.nearest_threat = find_closest_actor(perceived_threats, entity_type="threat", requester=self) if perceived_threats else None
-            self.nearest_resource = find_closest_actor(perceived_resources, entity_type="resource", requester=self) if perceived_resources else None
+            self.nearest_threat = (
+                find_closest_actor(
+                    perceived_threats, entity_type="threat", requester=self
+                )
+                if perceived_threats
+                else None
+            )
+            self.nearest_resource = (
+                find_closest_actor(
+                    perceived_resources, entity_type="resource", requester=self
+                )
+                if perceived_resources
+                else None
+            )
             self.last_state_step = self.current_step
 
         nearest_threat = self.nearest_threat
@@ -674,7 +735,7 @@ class BaseAgent:
             # Proximity: closer = higher value
             threat_proximity = 1.0 / (1.0 + threat_distance / 150.0)
         else:
-            threat_distance = float('inf')
+            threat_distance = float("inf")
             threat_proximity = 0.0
 
         if nearest_resource:
@@ -684,7 +745,7 @@ class BaseAgent:
             # Proximity: closer = higher value
             resource_proximity = 1.0 / (1.0 + resource_distance / 200.0)
         else:
-            resource_distance = float('inf')
+            resource_distance = float("inf")
             resource_proximity = 0.0
 
         # Calculate distance to HQ (important for "return home" behaviors)
@@ -707,42 +768,58 @@ class BaseAgent:
 
         # === Core Agent Features ===
         core_state = [
-            pos_x,                    # X position (normalized)
-            pos_y,                    # Y position (normalized)
-            self.Health / 100,        # Normalized health
-            threat_proximity,         # How close is nearest threat (0-1, higher=closer)
-            threat_distance / 1000.0 if threat_distance < float('inf') else -1,  # Raw distance (normalized)
-            resource_proximity,       # How close is nearest resource (0-1, higher=closer)
-            resource_distance / 1000.0 if resource_distance < float('inf') else -1,  # Raw distance (normalized)
-            hq_proximity,             # How close to home base (0-1, higher=closer)
+            pos_x,  # X position (normalized)
+            pos_y,  # Y position (normalized)
+            self.Health / 100,  # Normalized health
+            threat_proximity,  # How close is nearest threat (0-1, higher=closer)
+            (
+                threat_distance / 1000.0 if threat_distance < float("inf") else -1
+            ),  # Raw distance (normalized)
+            resource_proximity,  # How close is nearest resource (0-1, higher=closer)
+            (
+                resource_distance / 1000.0 if resource_distance < float("inf") else -1
+            ),  # Raw distance (normalized)
+            hq_proximity,  # How close to home base (0-1, higher=closer)
         ]
 
         # === Role Awareness ===
         # One-hot encoding for role (gatherer vs peacekeeper)
         role_vector = [
             1.0 if self.role == "gatherer" else 0.0,
-            1.0 if self.role == "peacekeeper" else 0.0
+            1.0 if self.role == "peacekeeper" else 0.0,
         ]
 
         # === Task One-Hot Encoding ===
         one_hot_task = [0] * len(utils_config.TASK_TYPE_MAPPING)
         if self.current_task:
-            task_type_index = utils_config.TASK_TYPE_MAPPING.get(self.current_task.get("type", "none"))
+            task_type_index = utils_config.TASK_TYPE_MAPPING.get(
+                self.current_task.get("type", "none")
+            )
             if task_type_index is not None:
                 one_hot_task[task_type_index] = 1
 
         # === Task-Specific Info ===
         # Normalised task target position
-        task_target = self.current_task.get("target", {}).get("position", (-1, -1)) if self.current_task else (-1, -1)
+        task_target = (
+            self.current_task.get("target", {}).get("position", (-1, -1))
+            if self.current_task
+            else (-1, -1)
+        )
 
-        task_target_x = task_target[0] / utils_config.WORLD_SCALE_X if task_target[0] >= 0 else -1
-        task_target_y = task_target[1] / utils_config.WORLD_SCALE_Y if task_target[1] >= 0 else -1
-
-
+        task_target_x = (
+            task_target[0] / utils_config.WORLD_SCALE_X if task_target[0] >= 0 else -1
+        )
+        task_target_y = (
+            task_target[1] / utils_config.WORLD_SCALE_Y if task_target[1] >= 0 else -1
+        )
 
         # Normalised action index (or -1 if unset)
         current_action = getattr(self, "current_action", -1)
-        if current_action is None or not isinstance(current_action, int) or current_action < 0:
+        if (
+            current_action is None
+            or not isinstance(current_action, int)
+            or current_action < 0
+        ):
             current_action_norm = -1
         else:
             current_action_norm = current_action / len(self.role_actions)
@@ -754,7 +831,7 @@ class BaseAgent:
         else:
             current_pos = (
                 int(self.x // utils_config.CELL_SIZE),
-                int(self.y // utils_config.CELL_SIZE)
+                int(self.y // utils_config.CELL_SIZE),
             )
 
         safe_target = (-1, -1)
@@ -782,23 +859,25 @@ class BaseAgent:
             task_urgency = max(0.0, 1.0 - (norm_dist / 5.0))  # Normalize to 0-1
 
         # Task progress: are we getting closer to goal?
-        if hasattr(self, 'previous_task_distance') and norm_dist > 0:
-            task_progress = max(-1.0, min(1.0, (self.previous_task_distance - norm_dist) / 2.0))
+        if hasattr(self, "previous_task_distance") and norm_dist > 0:
+            task_progress = max(
+                -1.0, min(1.0, (self.previous_task_distance - norm_dist) / 2.0)
+            )
         else:
             task_progress = 0.0
-        
+
         # Store current distance for next iteration
-        if not hasattr(self, 'previous_task_distance'):
+        if not hasattr(self, "previous_task_distance"):
             self.previous_task_distance = 0.0
         self.previous_task_distance = norm_dist if norm_dist > 0 else 0.0
 
         task_info = [
-            task_target_x,           # Task target X (normalized)
-            task_target_y,        # Task target Y (normalized)
+            task_target_x,  # Task target X (normalized)
+            task_target_y,  # Task target Y (normalized)
             current_action_norm,  # Current action index (normalized)
-            norm_dist,             # Distance to task target (normalized)
-            task_urgency,         # How urgent is this task (0-1, higher=more urgent)
-            task_progress         # Are we making progress? (-1 to 1)
+            norm_dist,  # Distance to task target (normalized)
+            task_urgency,  # How urgent is this task (0-1, higher=more urgent)
+            task_progress,  # Are we making progress? (-1 to 1)
         ]
 
         # === Environmental Context ===
@@ -807,17 +886,14 @@ class BaseAgent:
         resource_count_norm = min(len(perceived_resources) / 10.0, 1.0)
 
         context_vector = [
-            threat_count_norm,       # Total threats in view (0-1)
-            resource_count_norm      # Total resources in view (0-1)
+            threat_count_norm,  # Total threats in view (0-1)
+            resource_count_norm,  # Total resources in view (0-1)
         ]
 
         # === Final State Vector ===
         state = core_state + role_vector + one_hot_task + task_info + context_vector
 
-        
-
         return state
-
 
     def update_detection_range(self):
         """
@@ -831,15 +907,12 @@ class BaseAgent:
 
         self.detection_range_squared = detection_range * detection_range
 
-
     #                                      _             _          _           _              __         _                   _   _               __
     #    _ __ ___   __ _ _ __    _ __ ___ | | ___  ___  | |_ ___   (_)_ __   __| | _____  __  / / __ ___ | | ___    __ _  ___| |_(_) ___  _ __  __\ \
     #   | '_ ` _ \ / _` | '_ \  | '__/ _ \| |/ _ \/ __| | __/ _ \  | | '_ \ / _` |/ _ \ \/ / | | '__/ _ \| |/ _ \  / _` |/ __| __| |/ _ \| '_ \/ __| |
     #   | | | | | | (_| | |_) | | | | (_) | |  __/\__ \ | || (_) | | | | | | (_| |  __/>  <  | | | | (_) | |  __/ | (_| | (__| |_| | (_) | | | \__ \ |
     #   |_| |_| |_|\__,_| .__/  |_|  \___/|_|\___||___/  \__\___/  |_|_| |_|\__,_|\___/_/\_\ | |_|  \___/|_|\___|  \__,_|\___|\__|_|\___/|_| |_|___/ |
     #                   |_|                                                                   \_\                                                 /_/
-
-    
 
     def report_experience_to_hq(self, state, action, reward, next_state, done):
         """
@@ -850,7 +923,7 @@ class BaseAgent:
             "action": action,
             "reward": reward,
             "next_state": next_state,
-            "done": done
+            "done": done,
         }
         self.faction.receive_experience(experience)
 

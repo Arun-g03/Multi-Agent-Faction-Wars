@@ -13,7 +13,7 @@ from SHARED.core_imports import *
 
 class CoreActionsMixin:
     """Mixin class providing common actions for all agent types."""
-    
+
     def move_up(self):
         """Move the agent up by one cell."""
         self.agent.move(0, -1)
@@ -41,8 +41,8 @@ class CoreActionsMixin:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} healed using an apple. Health: {self.agent.Health}, Food balance: {self.agent.faction.food_balance}.",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
             return utils_config.TaskState.SUCCESS
-        
-        return utils_config.TaskState.FAILURE
 
+        return utils_config.TaskState.FAILURE

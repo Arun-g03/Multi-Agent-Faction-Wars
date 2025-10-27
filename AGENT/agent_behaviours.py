@@ -1,4 +1,5 @@
 """Common Imports"""
+
 from SHARED.core_imports import *
 import UTILITIES.utils_config as utils_config
 
@@ -19,16 +20,19 @@ from AGENT.Agent_Behaviours.peacekeeper_behaviours import PeacekeeperBehavioursM
 logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)
 
 
-class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehavioursMixin):
+class AgentBehaviour(
+    CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehavioursMixin
+):
     def __init__(
-            self,
-            agent,
-            state_size,
-            action_size,
-            role_actions,
-            event_manager,
-            current_step,
-            current_episode):
+        self,
+        agent,
+        state_size,
+        action_size,
+        role_actions,
+        event_manager,
+        current_step,
+        current_episode,
+    ):
         """
         Initialise the unified behavior class for agents.
         Inherits from mixin classes to provide role-specific behaviors.
@@ -45,21 +49,19 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         self.event_manager = event_manager
         # Get valid actions for the agent's role
         self.role_actions = utils_config.ROLE_ACTIONS_MAP[agent.role]
-        
 
         self.target = None
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"initialised behavior for {self.agent.role} with actions: {self.role_actions}.",
-                level=logging.DEBUG)
-        
+                level=logging.DEBUG,
+            )
 
-
-#      _                _              _                  _        _        _
-#     /_\  __ _ ___ _ _| |_   _ _  ___| |___ __ _____ _ _| |__  __| |_  ___(_)__ ___
-#    / _ \/ _` / -_) ' \  _| | ' \/ -_)  _\ V  V / _ \ '_| / / / _| ' \/ _ \ / _/ -_)
-#   /_/ \_\__, \___|_||_\__| |_||_\___|\__|\_/\_/\___/_| |_\_\ \__|_||_\___/_\__\___|
-#         |___/
+    #      _                _              _                  _        _        _
+    #     /_\  __ _ ___ _ _| |_   _ _  ___| |___ __ _____ _ _| |__  __| |_  ___(_)__ ___
+    #    / _ \/ _` / -_) ' \  _| | ' \/ -_)  _\ V  V / _ \ '_| / / / _| ' \/ _ \ / _/ -_)
+    #   /_/ \_\__, \___|_||_\__| |_||_\___|\__|\_/\_/\___/_| |_\_\ \__|_||_\___/_\__\___|
+    #         |___/
 
     def perform_action(self, action_index, state, resource_manager, agents):
         """
@@ -68,7 +70,8 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"Starting perform_action for agent {self.agent.role}.",
-                level=logging.DEBUG)
+                level=logging.DEBUG,
+            )
 
         role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
         action = role_actions[action_index]
@@ -76,13 +79,15 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"Action selected: {action}. Validating action existence.",
-                level=logging.DEBUG)
+                level=logging.DEBUG,
+            )
 
         if hasattr(self, action):
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"Action '{action}' found. Dynamically determining arguments.",
-                    level=logging.DEBUG)
+                    level=logging.DEBUG,
+                )
             self.agent.current_action = action_index
             action_method = getattr(self, action)
 
@@ -101,29 +106,36 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"Action '{action}' not implemented for agent {self.agent.role}.",
-                level=logging.WARNING)
+                level=logging.WARNING,
+            )
         self.agent.current_action = -1
         return utils_config.TaskState.INVALID
 
-
-#    ___          _           _         _   _                   _                           __   _   _          _           _
-#   | __|_ ____ _| |_  _ __ _| |_ ___  | |_| |_  ___   ___ _  _| |_ __ ___ _ __  ___   ___ / _| | |_| |_  ___  | |_ __ _ __| |__
-#   | _|\ V / _` | | || / _` |  _/ -_) |  _| ' \/ -_) / _ \ || |  _/ _/ _ \ '  \/ -_) / _ \  _| |  _| ' \/ -_) |  _/ _` (_-< / /
-#   |___|\_/\__,_|_|\_,_\__,_|\__\___|  \__|_||_\___| \___/\_,_|\__\__\___/_|_|_\___| \___/_|    \__|_||_\___|  \__\__,_/__/_\_\
-#
-    def perform_task(self, state, resource_manager, agents, current_step, current_episode):
+    #    ___          _           _         _   _                   _                           __   _   _          _           _
+    #   | __|_ ____ _| |_  _ __ _| |_ ___  | |_| |_  ___   ___ _  _| |_ __ ___ _ __  ___   ___ / _| | |_| |_  ___  | |_ __ _ __| |__
+    #   | _|\ V / _` | | || / _` |  _/ -_) |  _| ' \/ -_) / _ \ || |  _/ _/ _ \ '  \/ -_) / _ \  _| |  _| ' \/ -_) |  _/ _` (_-< / /
+    #   |___|\_/\__,_|_|\_,_\__,_|\__\___|  \__|_||_\___| \___/\_,_|\__\__\___/_|_|_\___| \___/_|    \__|_||_\___|  \__\__,_/__/_\_\
+    #
+    def perform_task(
+        self, state, resource_manager, agents, current_step, current_episode
+    ):
         self.current_step = current_step
         self.current_episode = current_episode
 
         if state is None:
-            raise RuntimeError(f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task")
+            raise RuntimeError(
+                f"[CRITICAL] Agent {self.agent.agent_id} received a None state in perform_task"
+            )
 
         # === Check and clear invalid task ===
         if self.agent.current_task:
             task_type = self.agent.current_task.get("type")
             task_target = self.agent.current_task.get("target")
             if not self.is_task_valid(task_type, task_target, resource_manager, agents):
-                logger.log_msg(f"[TASK INVALIDATED] Agent {self.agent.agent_id} {self.agent.role} dropping invalid task: {self.agent.current_task}", level=logging.WARNING)
+                logger.log_msg(
+                    f"[TASK INVALIDATED] Agent {self.agent.agent_id} {self.agent.role} dropping invalid task: {self.agent.current_task}",
+                    level=logging.WARNING,
+                )
                 self.agent.current_task = None
                 self.agent.update_task_state(utils_config.TaskState.NONE)
 
@@ -132,16 +144,20 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[DEBUG] {self.agent.role} {self.agent.agent_id} has no task, acting independently",
-                    level=logging.DEBUG
+                    level=logging.DEBUG,
                 )
             valid_indices = self.get_valid_action_indices(resource_manager, agents)
-            action_index, log_prob, value = self.ai.choose_action(state, valid_indices=valid_indices)
+            action_index, log_prob, value = self.ai.choose_action(
+                state, valid_indices=valid_indices
+            )
 
             self.agent.current_action = action_index
             self.agent.log_prob = log_prob
             self.agent.value = value
 
-            task_state = self.perform_action(action_index, state, resource_manager, agents)
+            task_state = self.perform_action(
+                action_index, state, resource_manager, agents
+            )
             action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][action_index]
 
             reward = self.assign_reward(
@@ -151,25 +167,42 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 action=action,
                 target_pos=(0, 0),
                 current_pos=(self.agent.x, self.agent.y),
-                is_independent=True
+                is_independent=True,
             )
 
-            logger.log_msg(f"[SELF] Agent {self.agent.role} acting independently with action '{action}'.", level=logging.INFO)
+            logger.log_msg(
+                f"[SELF] Agent {self.agent.role} acting independently with action '{action}'.",
+                level=logging.INFO,
+            )
 
-            self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
+            self.agent.ai.store_transition(
+                state,
+                action_index,
+                log_prob,
+                reward,
+                value,
+                0,
+                task_state
+                in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE],
+            )
             return reward, task_state
 
         # === Task is valid and ongoing ===
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"[DEBUG] {self.agent.role} {self.agent.agent_id} executing task: {self.agent.current_task}",
-                level=logging.DEBUG
+                level=logging.DEBUG,
             )
         self.agent.current_task["state"] = utils_config.TaskState.ONGOING
-        logger.log_msg(f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}", level=logging.INFO)
+        logger.log_msg(
+            f"[TASK] Agent {self.agent.role} performing task: {self.agent.current_task}",
+            level=logging.INFO,
+        )
 
         task_type = self.agent.current_task.get("type", "unknown")
-        target_position = self.agent.current_task.get("target", {}).get("position", (0, 0))
+        target_position = self.agent.current_task.get("target", {}).get(
+            "position", (0, 0)
+        )
         current_position = (self.agent.x, self.agent.y)
 
         # === Call Task Handler ===
@@ -181,24 +214,27 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"[DEBUG] {self.agent.role} {self.agent.agent_id} calling task handler: {expected_method}",
-                        level=logging.DEBUG
+                        level=logging.DEBUG,
                     )
                 task_state = task_handler(state, resource_manager, agents)
             else:
                 logger.log_msg(
                     f"[ERROR] Task handler {expected_method} not found for {self.agent.role} {self.agent.agent_id}",
-                    level=logging.ERROR
+                    level=logging.ERROR,
                 )
                 task_state = utils_config.TaskState.FAILURE
         else:
             logger.log_msg(
                 f"[ERROR] No task method mapping found for task type '{task_type}' for {self.agent.role} {self.agent.agent_id}",
-                level=logging.ERROR
+                level=logging.ERROR,
             )
             task_state = utils_config.TaskState.FAILURE
 
         # === Handle completed task immediately ===
-        if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+        if task_state in [
+            utils_config.TaskState.SUCCESS,
+            utils_config.TaskState.FAILURE,
+        ]:
 
             agent_id = self.agent.agent_id
             task_id = self.agent.current_task["id"]
@@ -213,20 +249,30 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 action="task_completed",
                 target_pos=target_position,
                 current_pos=current_position,
-                is_independent=False
+                is_independent=False,
             )
 
             self.agent.current_task["state"] = utils_config.TaskState.NONE
-            logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
-            
+            logger.log_msg(
+                f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.",
+                level=logging.INFO,
+            )
 
             log_prob = self.agent.log_prob
             if log_prob is None:
-                log_prob = torch.tensor([0.0], device=self.agent.ai.device)  # 👈 wrapped
+                log_prob = torch.tensor(
+                    [0.0], device=self.agent.ai.device
+                )  # 👈 wrapped
 
-            self.agent.ai.store_transition(state, 0, log_prob, reward, self.agent.value if self.agent.value is not None else 0.0, 0.0, True)
-
-
+            self.agent.ai.store_transition(
+                state,
+                0,
+                log_prob,
+                reward,
+                self.agent.value if self.agent.value is not None else 0.0,
+                0.0,
+                True,
+            )
 
             return reward, task_state
 
@@ -240,8 +286,14 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         actual_action = utils_config.ROLE_ACTIONS_MAP[self.agent.role][action_index]
 
         # === Gating check: action mismatch with expected method ===
-        if expected_method != actual_action and task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
-            logger.log_msg(f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_action}' but expected '{expected_method}' for task '{task_type}'.", level=logging.INFO)
+        if expected_method != actual_action and task_state in [
+            utils_config.TaskState.SUCCESS,
+            utils_config.TaskState.FAILURE,
+        ]:
+            logger.log_msg(
+                f"[TASK-GATE] Agent {self.agent.agent_id} did '{actual_action}' but expected '{expected_method}' for task '{task_type}'.",
+                level=logging.INFO,
+            )
             task_state = utils_config.TaskState.ONGOING
 
         reward = self.assign_reward(
@@ -251,10 +303,13 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             action=actual_action,
             target_pos=target_position,
             current_pos=current_position,
-            is_independent=False
+            is_independent=False,
         )
 
-        if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+        if task_state in [
+            utils_config.TaskState.SUCCESS,
+            utils_config.TaskState.FAILURE,
+        ]:
             agent_id = self.agent.agent_id
             task_id = self.agent.current_task["id"]
 
@@ -262,31 +317,69 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if task_id in self.agent.faction.assigned_tasks:
                 self.agent.faction.assigned_tasks[task_id][agent_id] = task_state
             self.agent.current_task["state"] = utils_config.TaskState.NONE
-            logger.log_msg(f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.", level=logging.INFO)
-            
+            logger.log_msg(
+                f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.",
+                level=logging.INFO,
+            )
 
-        self.agent.ai.store_transition(state, action_index, log_prob, reward, value, 0, task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE])
+        self.agent.ai.store_transition(
+            state,
+            action_index,
+            log_prob,
+            reward,
+            value,
+            0,
+            task_state
+            in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE],
+        )
 
         # === Optional: Behavior Debug Block ===
         if utils_config.ENABLE_LOGGING:
-            logger.log_msg("="*60, level=logging.INFO)
+            logger.log_msg("=" * 60, level=logging.INFO)
             logger.log_msg(f"Agent Decision Summary", level=logging.INFO)
-            logger.log_msg(f"Agent ID      : {self.agent.agent_id or 'None'}", level=logging.INFO)
-            logger.log_msg(f"Role          : {self.agent.role or 'None'}", level=logging.INFO)
-            logger.log_msg(f"Position      : ({getattr(self.agent, 'x', 'None'):.1f}, {getattr(self.agent, 'y', 'None'):.1f})", level=logging.INFO)
-            logger.log_msg(f"Health        : {self.agent.Health or 'None'}", level=logging.INFO)
+            logger.log_msg(
+                f"Agent ID      : {self.agent.agent_id or 'None'}", level=logging.INFO
+            )
+            logger.log_msg(
+                f"Role          : {self.agent.role or 'None'}", level=logging.INFO
+            )
+            logger.log_msg(
+                f"Position      : ({getattr(self.agent, 'x', 'None'):.1f}, {getattr(self.agent, 'y', 'None'):.1f})",
+                level=logging.INFO,
+            )
+            logger.log_msg(
+                f"Health        : {self.agent.Health or 'None'}", level=logging.INFO
+            )
             logger.log_msg(f"Task Type     : {task_type or 'None'}", level=logging.INFO)
-            logger.log_msg(f"Task State    : {task_state.name if task_state else 'None'}", level=logging.INFO)
-            logger.log_msg(f"Action        : {actual_action or 'None'}", level=logging.INFO)
-            logger.log_msg(f"Target Pos    : {target_position or 'None'}", level=logging.INFO)
-            logger.log_msg(f"Reward        : {reward if reward is not None else 'None'}", level=logging.INFO)
-            logger.log_msg(f"Log Prob      : {self.agent.log_prob if hasattr(self.agent, 'log_prob') else 'None'}", level=logging.INFO)
-            logger.log_msg(f"Value Est.    : {self.agent.value if hasattr(self.agent, 'value') else 'None'}", level=logging.INFO)
-            logger.log_msg(f"Done?         : {task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE] if task_state else 'None'}", level=logging.INFO)
-            logger.log_msg("="*60, level=logging.INFO)
+            logger.log_msg(
+                f"Task State    : {task_state.name if task_state else 'None'}",
+                level=logging.INFO,
+            )
+            logger.log_msg(
+                f"Action        : {actual_action or 'None'}", level=logging.INFO
+            )
+            logger.log_msg(
+                f"Target Pos    : {target_position or 'None'}", level=logging.INFO
+            )
+            logger.log_msg(
+                f"Reward        : {reward if reward is not None else 'None'}",
+                level=logging.INFO,
+            )
+            logger.log_msg(
+                f"Log Prob      : {self.agent.log_prob if hasattr(self.agent, 'log_prob') else 'None'}",
+                level=logging.INFO,
+            )
+            logger.log_msg(
+                f"Value Est.    : {self.agent.value if hasattr(self.agent, 'value') else 'None'}",
+                level=logging.INFO,
+            )
+            logger.log_msg(
+                f"Done?         : {task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE] if task_state else 'None'}",
+                level=logging.INFO,
+            )
+            logger.log_msg("=" * 60, level=logging.INFO)
 
         return reward, task_state
-
 
     def get_valid_action_indices(self, resource_manager, agents):
         role_actions = utils_config.ROLE_ACTIONS_MAP[self.agent.role]
@@ -301,13 +394,15 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         for i, action in enumerate(role_actions):
             if action == "mine_gold":
                 resources = self.agent.detect_resources(
-                    resource_manager, threshold=utils_config.Agent_Interact_Range)
+                    resource_manager, threshold=utils_config.Agent_Interact_Range
+                )
                 if any(r.__class__.__name__ == "GoldLump" for r in resources):
                     valid_indices.add(i)
 
             elif action == "forage_apple":
                 resources = self.agent.detect_resources(
-                    resource_manager, threshold=utils_config.Agent_Interact_Range)
+                    resource_manager, threshold=utils_config.Agent_Interact_Range
+                )
                 if any(r.__class__.__name__ == "AppleTree" for r in resources):
                     valid_indices.add(i)
 
@@ -316,8 +411,7 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                     valid_indices.add(i)
 
             elif action in ["eliminate_threat", "patrol"]:
-                threats = self.agent.detect_threats(
-                    agents, enemy_hq={"faction_id": -1})
+                threats = self.agent.detect_threats(agents, enemy_hq={"faction_id": -1})
                 if threats:
                     valid_indices.add(i)
 
@@ -339,13 +433,20 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
         if task_type == "gather":
             for res in resource_manager.resources:
-                if hasattr(res, "grid_x") and (res.grid_x, res.grid_y) == position and not res.is_depleted():
+                if (
+                    hasattr(res, "grid_x")
+                    and (res.grid_x, res.grid_y) == position
+                    and not res.is_depleted()
+                ):
                     return True
             return False
 
         if task_type == "eliminate":
             for agent in agents:
-                if getattr(agent, "agent_id", None) == target.get("id") and agent.Health > 0:
+                if (
+                    getattr(agent, "agent_id", None) == target.get("id")
+                    and agent.Health > 0
+                ):
                     return True
             return False
 
@@ -355,12 +456,12 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
         if task_type == "move_to":
             position = target.get("position")
-            
+
             # Guard: position must be a valid (x, y) tuple
             if not position or not isinstance(position, tuple) or len(position) != 2:
                 logger.log_msg(
                     f"[INVALID] move_to task rejected due to missing/invalid position: {position}",
-                    level=logging.WARNING
+                    level=logging.WARNING,
                 )
                 return False
 
@@ -370,29 +471,36 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 grid_y = int(position[1])
 
                 if (
-                    0 <= grid_x < len(terrain.grid) and
-                    0 <= grid_y < len(terrain.grid[0]) and
-                    terrain.grid[grid_x][grid_y]["type"] == "land"
+                    0 <= grid_x < len(terrain.grid)
+                    and 0 <= grid_y < len(terrain.grid[0])
+                    and terrain.grid[grid_x][grid_y]["type"] == "land"
                 ):
                     return True
                 else:
                     logger.log_msg(
                         f"[INVALID] move_to out of bounds or non-land: ({grid_x}, {grid_y})",
-                        level=logging.WARNING
+                        level=logging.WARNING,
                     )
-                    return True ##########
+                    return True  ##########
             except Exception as e:
                 logger.log_msg(
                     f"[EXCEPTION] Validating move_to task failed: {e}",
-                    level=logging.ERROR
+                    level=logging.ERROR,
                 )
                 return False
 
-
-
         return False  # Default to invalid
 
-    def assign_reward(self, agent, task_type, task_state, action, target_pos, current_pos, is_independent=False):
+    def assign_reward(
+        self,
+        agent,
+        task_type,
+        task_state,
+        action,
+        target_pos,
+        current_pos,
+        is_independent=False,
+    ):
         reward = 0.0
         dist = self.calculate_distance(current_pos, target_pos)
 
@@ -432,7 +540,7 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             reward = {
                 utils_config.TaskState.FAILURE: -0.2,
                 utils_config.TaskState.ONGOING: 0.0,
-                utils_config.TaskState.INVALID: -0.3
+                utils_config.TaskState.INVALID: -0.3,
             }.get(task_state, -0.1)
 
         # === Log Normalised Reward ===
@@ -440,40 +548,37 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             try:
                 episode = getattr(agent.faction, "episode", 0)
                 faction_id = agent.faction.id
-                suffix = "independent" if is_independent else f"{task_type}_{task_state.name}"
-                tensorboard_logger.log_scalar(f"Faction_{faction_id}/Task_{suffix}", reward, episode)
+                suffix = (
+                    "independent"
+                    if is_independent
+                    else f"{task_type}_{task_state.name}"
+                )
+                tensorboard_logger.log_scalar(
+                    f"Faction_{faction_id}/Task_{suffix}", reward, episode
+                )
             except Exception as e:
-                logger.log_msg(f"[TensorBoard] Failed to log reward: {e}", level=logging.WARNING)
+                logger.log_msg(
+                    f"[TensorBoard] Failed to log reward: {e}", level=logging.WARNING
+                )
 
         return reward
 
-
-
     def shape_action_bonus(self, task_type, action):
         if task_type == "eliminate":
-            return 0.3 if action == "eliminate_threat" else 0.1 if action.startswith("move") else 0.0
+            return (
+                0.3
+                if action == "eliminate_threat"
+                else 0.1 if action.startswith("move") else 0.0
+            )
         if task_type == "gather":
-            return 0.3 if action in ["mine_gold", "forage_apple"] else 0.1 if action.startswith("move") else 0.0
+            return (
+                0.3
+                if action in ["mine_gold", "forage_apple"]
+                else 0.1 if action.startswith("move") else 0.0
+            )
         if task_type in ["move_to", "explore"]:
             return 0.1 if action.startswith("move") else 0.0
         return 0.0
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def calculate_distance(self, pos1, pos2):
         """
@@ -493,9 +598,11 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
         if hasattr(self.agent, "previous_position"):
             distance_to_previous = self.calculate_distance(
-                self.agent.previous_position, target_position)
+                self.agent.previous_position, target_position
+            )
             distance_to_current = self.calculate_distance(
-                current_position, target_position)
+                current_position, target_position
+            )
 
             # Backtracking if current distance is larger than the previous one
             return distance_to_current > distance_to_previous
@@ -508,14 +615,12 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         """
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
-                f"Agent {self.agent.role} executing eliminate task.",
-                level=logging.INFO)
+                f"Agent {self.agent.role} executing eliminate task.", level=logging.INFO
+            )
 
         task = self.agent.current_task
         if not task or "target" not in task:
-            logger.log_msg(
-                f"Invalid eliminate task: {task}.",
-                level=logging.WARNING)
+            logger.log_msg(f"Invalid eliminate task: {task}.", level=logging.WARNING)
             return utils_config.TaskState.FAILURE
 
         target_data = task["target"]
@@ -525,12 +630,12 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         if self.agent.is_near(target_position):
             logger.log_msg(
                 f"{self.agent.role} is in range to eliminate target at {target_position}.",
-                level=logging.INFO)
+                level=logging.INFO,
+            )
             return self.eliminate_threat(agents)
 
         # Otherwise, ongoing
         return utils_config.TaskState.ONGOING
-
 
     def handle_gather_task(self, state, resource_manager, agents):
         """
@@ -538,43 +643,48 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         """
         task = self.agent.current_task
         if not task or "target" not in task:
-            logger.warning(
-                f"{self.agent.role} has an invalid gather task: {task}.")
+            logger.warning(f"{self.agent.role} has an invalid gather task: {task}.")
             return utils_config.TaskState.FAILURE
 
         target_data = task["target"]
         if not isinstance(target_data, dict) or "position" not in target_data:
             logger.warning(
-                f"{self.agent.role} received a malformed gather target: {target_data}.")
+                f"{self.agent.role} received a malformed gather target: {target_data}."
+            )
             return utils_config.TaskState.FAILURE
 
         target_position = target_data["position"]
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} handling gather task. Target position: {target_position}",
-                level=logging.INFO)
+                level=logging.INFO,
+            )
 
         # Find the actual resource object at the target position
         resource_obj = next(
-            (res for res in resource_manager.resources
-             if (res.grid_x, res.grid_y) == target_position and not res.is_depleted()),
-            None
+            (
+                res
+                for res in resource_manager.resources
+                if (res.grid_x, res.grid_y) == target_position and not res.is_depleted()
+            ),
+            None,
         )
 
         if not resource_obj:
             logger.warning(
-                f"{self.agent.role} could not resolve a valid resource object at {target_position}.")
+                f"{self.agent.role} could not resolve a valid resource object at {target_position}."
+            )
             return utils_config.TaskState.FAILURE
 
         # Move toward the target if not in range
-        if not self.agent.is_near(
-                (resource_obj.x, resource_obj.y), threshold=3):
+        if not self.agent.is_near((resource_obj.x, resource_obj.y), threshold=3):
             dx = resource_obj.x - self.agent.x
             dy = resource_obj.y - self.agent.y
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} moving towards resource at ({resource_obj.x}, {resource_obj.y}) (dx: {dx}, dy: {dy}).",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
             return self.move_to_target(dx, dy)
 
         # Gather from the object
@@ -582,7 +692,8 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} gathering from resource at {target_position}.",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
             resource_obj.gather(1)
             self.agent.faction.food_balance += 1  # Optional if AppleTree
             return utils_config.TaskState.SUCCESS
@@ -591,34 +702,34 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} mining gold at {target_position}.",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
             resource_obj.mine()
             self.agent.faction.gold_balance += 1
             return utils_config.TaskState.SUCCESS
 
         logger.warning(
-            f"{self.agent.role} found resource at {target_position} but cannot interact with it.")
+            f"{self.agent.role} found resource at {target_position} but cannot interact with it."
+        )
         return utils_config.TaskState.FAILURE
 
     def handle_explore_task(self, state, resource_manager, agents):
-
         """
         Handle exploration by dynamically moving to unexplored areas.
         """
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
-                f"{self.agent.role} executing explore task.",
-                level=logging.INFO)
+                f"{self.agent.role} executing explore task.", level=logging.INFO
+            )
 
         unexplored_cells = self.find_unexplored_areas()
         if unexplored_cells:
             # Select a random unexplored cell
             target_cell = random.choice(unexplored_cells)
             target_position = (
-                target_cell[0] *
-                utils_config.CELL_SIZE,
-                target_cell[1] *
-                utils_config.CELL_SIZE)
+                target_cell[0] * utils_config.CELL_SIZE,
+                target_cell[1] * utils_config.CELL_SIZE,
+            )
 
             # Move dynamically towards the target position
             dx = target_position[0] - self.agent.x
@@ -627,15 +738,18 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
-                f"{self.agent.role} found no unexplored areas.",
-                level=logging.WARNING)
+                f"{self.agent.role} found no unexplored areas.", level=logging.WARNING
+            )
         return utils_config.TaskState.FAILURE
 
     def handle_move_to_task(self, state, resource_manager, agents):
 
         task = self.agent.current_task
         if not task or "target" not in task or "position" not in task["target"]:
-            logger.log_msg(f"[ERROR] Invalid move_to task for {self.agent.agent_id}: {task}", level=logging.ERROR)
+            logger.log_msg(
+                f"[ERROR] Invalid move_to task for {self.agent.agent_id}: {task}",
+                level=logging.ERROR,
+            )
             return utils_config.TaskState.FAILURE
 
         target_x, target_y = task["target"]["position"]
@@ -643,7 +757,7 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         # Convert agent position to grid coords
         agent_cell_x = int(self.agent.x // utils_config.CELL_SIZE)
         agent_cell_y = int(self.agent.y // utils_config.CELL_SIZE)
-        
+
         # Check if target is in world coordinates and convert to grid if needed
         if target_x > 1000 or target_y > 1000:  # Likely in world/pixel coordinates
             # Target is in world coordinates, convert to grid
@@ -658,7 +772,7 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         dy = abs(agent_cell_y - target_cell_y)
 
         if dx == 0 and dy == 0:
-            #print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
+            # print(f"[MoveToTask] Agent at ({self.agent.agent_id}{agent_cell_x},{agent_cell_y}) is ON to target ({target_x},{target_y}). Task SUCCESS.")
             return utils_config.TaskState.SUCCESS
 
         # Actually move the agent towards the target
@@ -674,12 +788,8 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 self.move_down()
             else:
                 self.move_up()
-        
+
         return utils_config.TaskState.ONGOING
-
-
-
-
 
     def move_to_target(self, dx, dy):
         """
@@ -695,17 +805,16 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 self.move_down()
             else:
                 self.move_up()
-        
+
         # Return ONGOING since we're still moving towards the target
         return utils_config.TaskState.ONGOING
 
-
-#    ____  _                        _      _        _   _
-#   / ___|| |__   __ _ _ __ ___  __| |    / \   ___| |_(_) ___  _ __  ___
-#   \___ \| '_ \ / _` | '__/ _ \/ _` |   / _ \ / __| __| |/ _ \| '_ \/ __|
-#    ___) | | | | (_| | | |  __/ (_| |  / ___ \ (__| |_| | (_) | | | \__ \
-#   |____/|_| |_|\__,_|_|  \___|\__,_| /_/   \_\___|\__|_|\___/|_| |_|___/
-#
+    #    ____  _                        _      _        _   _
+    #   / ___|| |__   __ _ _ __ ___  __| |    / \   ___| |_(_) ___  _ __  ___
+    #   \___ \| '_ \ / _` | '__/ _ \/ _` |   / _ \ / __| __| |/ _ \| '_ \/ __|
+    #    ___) | | | | (_| | | |  __/ (_| |  / ___ \ (__| |_| | (_) | | | \__ \
+    #   |____/|_| |_|\__,_|_|  \___|\__,_| /_/   \_\___|\__|_|\___/|_| |_|___/
+    #
 
     def move_up(self):
         self.agent.move(0, -1)
@@ -730,13 +839,15 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} healed with an apple. Health is now {self.agent.Health}.",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
 
         else:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} attempted to heal, but no food available.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
 
     def explore(self):
         """
@@ -751,12 +862,15 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[EXPLORE] No target set for agent {self.agent.agent_id}",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.INVALID
 
         target_x, target_y = self.agent.current_task["target"]["position"]
-        world_x, world_y = target_x * \
-            utils_config.CELL_SIZE, target_y * utils_config.CELL_SIZE
+        world_x, world_y = (
+            target_x * utils_config.CELL_SIZE,
+            target_y * utils_config.CELL_SIZE,
+        )
 
         dx = world_x - self.agent.x
         dy = world_y - self.agent.y
@@ -768,7 +882,8 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[EXPLORE COMPLETE] Agent {self.agent.agent_id} reached ({target_x}, {target_y})",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
             return utils_config.TaskState.SUCCESS
 
         # Decide direction based on distance
@@ -782,13 +897,15 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[EXPLORE] Agent {self.agent.agent_id} exploring toward ({target_x}, {target_y}) via '{action}'",
-                    level=logging.DEBUG)
+                    level=logging.DEBUG,
+                )
             return utils_config.TaskState.ONGOING
         else:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[EXPLORE ERROR] Agent {self.agent.agent_id} cannot perform '{action}'",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE
 
     # Utility methods
@@ -810,26 +927,25 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 if (
                     0 <= x < len(self.agent.terrain.grid)
                     and 0 <= y < len(self.agent.terrain.grid[0])
-                    and self.agent.terrain.grid[x][y]["faction"] != self.agent.faction.id
+                    and self.agent.terrain.grid[x][y]["faction"]
+                    != self.agent.faction.id
                 ):
                     unexplored.append((x, y))
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} identified unexplored areas: {unexplored}.",
-                level=logging.DEBUG
+                level=logging.DEBUG,
             )
 
         return unexplored
 
-
-
-#     ____       _   _                             _        _   _
-#    / ___| __ _| |_| |__   ___ _ __ ___ _ __     / \   ___| |_(_) ___  _ __  ___
-#   | |  _ / _` | __| '_ \ / _ \ '__/ _ \ '__|   / _ \ / __| __| |/ _ \| '_ \/ __|
-#   | |_| | (_| | |_| | | |  __/ | |  __/ |     / ___ \ (__| |_| | (_) | | | \__ \
-#    \____|\__,_|\__|_| |_|\___|_|  \___|_|    /_/   \_\___|\__|_|\___/|_| |_|___/
-#
+    #     ____       _   _                             _        _   _
+    #    / ___| __ _| |_| |__   ___ _ __ ___ _ __     / \   ___| |_(_) ___  _ __  ___
+    #   | |  _ / _` | __| '_ \ / _ \ '__/ _ \ '__|   / _ \ / __| __| |/ _ \| '_ \/ __|
+    #   | |_| | (_| | |_| | | |  __/ | |  __/ |     / ___ \ (__| |_| | (_) | | | \__ \
+    #    \____|\__,_|\__|_| |_|\___|_|  \___|_|    /_/   \_\___|\__|_|\___/|_| |_|___/
+    #
 
     def mine_gold(self):
         """
@@ -844,18 +960,18 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
         # Detect valid gold lumps within range
         gold_resources = [
-            res for res in self.agent.detect_resources(
-                self.agent.resource_manager,
-                threshold=grid_radius) if isinstance(
-                res,
-                GoldLump) and not res.is_depleted()]
+            res
+            for res in self.agent.detect_resources(
+                self.agent.resource_manager, threshold=grid_radius
+            )
+            if isinstance(res, GoldLump) and not res.is_depleted()
+        ]
 
         # Visual debug: draw search range and target (if any)
-        
+
         if gold_resources:
             gold_lump = gold_resources[0]
 
-            
             # In range → mine
             if self.agent.is_near(gold_lump, interact_radius):
                 gold_lump.mine()
@@ -864,22 +980,26 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} at {self.agent.position} mined gold at ({gold_lump.x}, {gold_lump.y}). "
-                        f"Gold balance: {self.agent.faction.gold_balance}.", level=logging.INFO)
-                               
+                        f"Gold balance: {self.agent.faction.gold_balance}.",
+                        level=logging.INFO,
+                    )
+
                     return utils_config.TaskState.SUCCESS
 
             # Not close enough
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} saw gold at ({gold_lump.x}, {gold_lump.y}) but is out of range. Mining failed.",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )
             return utils_config.TaskState.FAILURE
 
         # No gold detected
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} found no gold within range to mine.",
-                level=logging.WARNING)
+                level=logging.WARNING,
+            )
         return utils_config.TaskState.FAILURE
 
     def forage_apple(self):
@@ -887,46 +1007,48 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         Attempt to forage apples from nearby trees.
         """
         apple_trees = [
-            resource for resource in self.agent.detect_resources(
-                self.agent.resource_manager,
-                threshold=5) if isinstance(
-                resource,
-                AppleTree) and not resource.is_depleted()]
+            resource
+            for resource in self.agent.detect_resources(
+                self.agent.resource_manager, threshold=5
+            )
+            if isinstance(resource, AppleTree) and not resource.is_depleted()
+        ]
 
         if apple_trees:
             tree = apple_trees[0]  # Select the nearest apple tree
             if self.agent.is_near(
-                    tree,
-                    utils_config.Agent_Interact_Range *
-                    utils_config.CELL_SIZE):
+                tree, utils_config.Agent_Interact_Range * utils_config.CELL_SIZE
+            ):
                 tree.gather(1)  # Gather 1 apple
                 self.agent.faction.food_balance += 1
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} foraged an apple. Food balance: {self.agent.faction.food_balance}.",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
                 return utils_config.TaskState.SUCCESS
             else:
                 # Not in range to forage — let the agent learn from failure
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} is not near apple tree at ({tree.x}, {tree.y}). Letting policy handle it.",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
                 return utils_config.TaskState.FAILURE
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} found no apple trees nearby to forage.",
-                level=logging.WARNING)
+                level=logging.WARNING,
+            )
         return utils_config.TaskState.FAILURE
 
-
-#    ____                     _                                  _        _   _
-#   |  _ \ ___  __ _  ___ ___| | _____  ___ _ __   ___ _ __     / \   ___| |_(_) ___  _ __  ___
-#   | |_) / _ \/ _` |/ __/ _ \ |/ / _ \/ _ \ '_ \ / _ \ '__|   / _ \ / __| __| |/ _ \| '_ \/ __|
-#   |  __/  __/ (_| | (_|  __/   <  __/  __/ |_) |  __/ |     / ___ \ (__| |_| | (_) | | | \__ \
-#   |_|   \___|\__,_|\___\___|_|\_\___|\___| .__/ \___|_|    /_/   \_\___|\__|_|\___/|_| |_|___/
-#
+    #    ____                     _                                  _        _   _
+    #   |  _ \ ___  __ _  ___ ___| | _____  ___ _ __   ___ _ __     / \   ___| |_(_) ___  _ __  ___
+    #   | |_) / _ \/ _` |/ __/ _ \ |/ / _ \/ _ \ '_ \ / _ \ '__|   / _ \ / __| __| |/ _ \| '_ \/ __|
+    #   |  __/  __/ (_| | (_|  __/   <  __/  __/ |_) |  __/ |     / ___ \ (__| |_| | (_) | | | \__ \
+    #   |_|   \___|\__,_|\___\___|_|\_\___|\___| .__/ \___|_|    /_/   \_\___|\__|_|\___/|_| |_|___/
+    #
 
     def patrol(self):
         """
@@ -938,12 +1060,14 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         threats = self.agent.faction.provide_state().get("threats", [])
 
         # Filter out friendly threats before calling find_closest_actor()
-        valid_threats = [t for t in threats if t.get(
-            "faction") != self.agent.faction.id]
+        valid_threats = [
+            t for t in threats if t.get("faction") != self.agent.faction.id
+        ]
 
         # Call find_closest_actor() correctly without an 'exclude' argument
         threat = find_closest_actor(
-            valid_threats, entity_type="threat", requester=self.agent)
+            valid_threats, entity_type="threat", requester=self.agent
+        )
 
         if threat:
             # Get the threat's location and ID
@@ -966,29 +1090,32 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} is patrolling towards threat ID {threat_id} at ({target_x}, {target_y}) using action '{action}'.",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
                 return utils_config.TaskState.ONGOING
             else:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} could not execute movement action '{action}' while patrolling towards threat ID {threat_id}.",
-                        level=logging.WARNING)
-                return utils_config.TaskState.FAILURE  # Penalise for missing movement action
+                        level=logging.WARNING,
+                    )
+                return (
+                    utils_config.TaskState.FAILURE
+                )  # Penalise for missing movement action
         else:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} found no threats to patrol towards.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE  # Failure when no threats are found
 
-
-#    ___ _ _       _           _         _____ _                 _
-#   | __| (_)_ __ (_)_ _  __ _| |_ ___  |_   _| |_  _ _ ___ __ _| |_
-#   | _|| | | '  \| | ' \/ _` |  _/ -_)   | | | ' \| '_/ -_) _` |  _|
-#   |___|_|_|_|_|_|_|_||_\__,_|\__\___|   |_| |_||_|_| \___\__,_|\__|
-#
+    #    ___ _ _       _           _         _____ _                 _
+    #   | __| (_)_ __ (_)_ _  __ _| |_ ___  |_   _| |_  _ _ ___ __ _| |_
+    #   | _|| | | '  \| | ' \/ _` |  _/ -_)   | | | ' \| '_/ -_) _` |  _|
+    #   |___|_|_|_|_|_|_|_||_\__,_|\__\___|   |_| |_||_|_| \___\__,_|\__|
+    #
     # Attack logic for peacekeepers
-
 
     def eliminate_threat(self, agents):
         """
@@ -1001,7 +1128,8 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} has no valid task assigned for elimination.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE
 
         threat = task.get("target")
@@ -1009,7 +1137,8 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} could not find a valid threat in the task.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE
 
         assigned_position = threat["position"]
@@ -1017,20 +1146,23 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
         # Step 1: Try to attack the assigned threat if within combat range
         if self.agent.is_near(
-                assigned_position,
-                threshold=utils_config.Agent_Interact_Range *
-                utils_config.CELL_SIZE):
-            target_agent = next(
-                (a for a in agents if a.agent_id == assigned_id), None)
+            assigned_position,
+            threshold=utils_config.Agent_Interact_Range * utils_config.CELL_SIZE,
+        ):
+            target_agent = next((a for a in agents if a.agent_id == assigned_id), None)
             if target_agent and target_agent.faction.id != self.agent.faction.id:
                 self.event_manager.trigger_attack_animation(
-                    position=(target_agent.x, target_agent.y), duration=200)
+                    position=(target_agent.x, target_agent.y), duration=200
+                )
                 target_agent.Health -= 10
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",
-                        level=logging.INFO)
-                print(f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.")
+                        level=logging.INFO,
+                    )
+                print(
+                    f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}."
+                )
                 if target_agent.Health <= 0:
                     self.report_threat_eliminated(threat)
                     return utils_config.TaskState.SUCCESS
@@ -1039,21 +1171,29 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
 
             # Step 2: Attack any other enemy agent within combat range
             for enemy in agents:
-                if (enemy.faction.id != self.agent.faction.id and self.agent.is_near(
-                        (enemy.x, enemy.y), threshold=utils_config.Agent_Interact_Range * utils_config.CELL_SIZE)):
+                if enemy.faction.id != self.agent.faction.id and self.agent.is_near(
+                    (enemy.x, enemy.y),
+                    threshold=utils_config.Agent_Interact_Range
+                    * utils_config.CELL_SIZE,
+                ):
                     self.event_manager.trigger_attack_animation(
-                        position=(enemy.x, enemy.y), duration=200)
+                        position=(enemy.x, enemy.y), duration=200
+                    )
                     enemy.Health -= 10
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.",
-                            level=logging.INFO)
-                    print(f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.")
+                            level=logging.INFO,
+                        )
+                    print(
+                        f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}."
+                    )
                     if enemy.Health <= 0:
                         if utils_config.ENABLE_LOGGING:
                             logger.log_msg(
                                 f"{self.agent.role} eliminated nearby  {enemy.role}.",
-                                level=logging.INFO)
+                                level=logging.INFO,
+                            )
                         print(f"{self.agent.role} eliminated nearby  {enemy.role}.")
                     return utils_config.TaskState.ONGOING
 
@@ -1061,10 +1201,9 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} could not reach assigned threat and found no enemies in attack range.",
-                level=logging.INFO)
+                level=logging.INFO,
+            )
         return utils_config.TaskState.FAILURE
-
-    
 
     def clean_resolved_threats(self):
         """
@@ -1072,14 +1211,16 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         """
         before_cleanup = len(self.agent.faction.global_state["threats"])
         self.agent.faction.global_state["threats"] = [
-            threat for threat in self.agent.faction.global_state.get("threats", [])
+            threat
+            for threat in self.agent.faction.global_state.get("threats", [])
             if threat.get("is_active", True)  # Keep only active threats
         ]
         after_cleanup = len(self.agent.faction.global_state["threats"])
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} cleaned resolved threats. Before: {before_cleanup}, After: {after_cleanup}.",
-                level=logging.INFO)
+                level=logging.INFO,
+            )
 
     def report_threat_eliminated(self, threat):
         """
@@ -1093,27 +1234,28 @@ class AgentBehaviour(CoreActionsMixin, GathererBehavioursMixin, PeacekeeperBehav
         if not isinstance(threat, dict):
             logger.warning(
                 f"Invalid threat format passed to report_threat_eliminated: {threat}",
-                level=logging.WARNING)
+                level=logging.WARNING,
+            )
             return
 
         # Mark the threat as inactive in the global state based on the unique
         # ID
-        for global_threat in self.agent.faction.global_state.get(
-                "threats", []):
-            if global_threat.get("id") == threat.get(
-                    "id"):  # Compare using unique ID
+        for global_threat in self.agent.faction.global_state.get("threats", []):
+            if global_threat.get("id") == threat.get("id"):  # Compare using unique ID
                 global_threat["is_active"] = False
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} reported threat ID {threat['id']} at {threat.get('location')} as eliminated.",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
                 break  # Stop iteration once the matching threat is found
         else:
             # Log if the threat was not found in the global state
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"Threat ID {threat.get('id')} not found in global state during elimination report.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
 
         # Clean up resolved threats
         self.clean_resolved_threats()

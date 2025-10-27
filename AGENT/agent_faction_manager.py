@@ -1,4 +1,5 @@
 """Common Imports"""
+
 from SHARED.core_imports import *
 
 """File Specific Imports"""
@@ -7,11 +8,8 @@ import UTILITIES.utils_config as utils_config
 from UTILITIES.utils_helpers import (
     profile_function,
     find_closest_actor,
-    generate_random_colour
+    generate_random_colour,
 )
-
-
-
 
 
 logger = Logger(log_file="agent_faction_manager.txt", log_level=logging.DEBUG)
@@ -36,28 +34,30 @@ class FactionManager:
         for faction in self.factions:
             if not isinstance(faction, Faction):
                 logger.log_msg(
-                    f"[ERROR] Invalid faction: {faction}", level=logging.ERROR)
+                    f"[ERROR] Invalid faction: {faction}", level=logging.ERROR
+                )
                 continue
             if faction.network is None:
                 logger.log_msg(
-                    f"[ERROR] Faction {faction.id} has no network.",
-                    level=logging.ERROR)
+                    f"[ERROR] Faction {faction.id} has no network.", level=logging.ERROR
+                )
                 continue
 
             faction.update(resource_manager, agents)
 
     def reset_factions(
-            self,
-            faction_count,
-            resource_manager,
-            agents,
-            game_manager,
-            state_size=utils_config.DEF_AGENT_STATE_SIZE,
-            action_size= len(utils_config.HQ_STRATEGY_OPTIONS),
-            role_size=5,
-            local_state_size=10,
-            global_state_size=16,
-            network_type="HQNetwork"):
+        self,
+        faction_count,
+        resource_manager,
+        agents,
+        game_manager,
+        state_size=utils_config.DEF_AGENT_STATE_SIZE,
+        action_size=len(utils_config.HQ_STRATEGY_OPTIONS),
+        role_size=5,
+        local_state_size=10,
+        global_state_size=16,
+        network_type="HQNetwork",
+    ):
         """
         Fully reset the list of factions and assign agents.
         """
@@ -72,7 +72,8 @@ class FactionManager:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[DEBUG] Creating {name} with network type: {network_type}",
-                    level=logging.DEBUG)
+                    level=logging.DEBUG,
+                )
 
             try:
                 new_faction = Faction(
@@ -88,29 +89,33 @@ class FactionManager:
                     local_state_size=local_state_size,
                     global_state_size=global_state_size,
                     network_type=network_type,
-                    mode="train"
+                    mode="train",
                 )
 
                 if new_faction.network is None:
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"[ERROR] Faction {new_faction.id} failed to Initialise network.",
-                            level=logging.ERROR)
+                            level=logging.ERROR,
+                        )
                     raise RuntimeError(
-                        f"[ERROR] Faction {new_faction.id} failed to Initialise network.")
+                        f"[ERROR] Faction {new_faction.id} failed to Initialise network."
+                    )
 
                 self.factions.append(new_faction)
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"[INFO] Successfully created {name} (ID: {new_faction.id})",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
 
             except Exception as e:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
-                        f"[ERROR] Failed to create {name}: {e}",
-                        level=logging.ERROR)
+                        f"[ERROR] Failed to create {name}: {e}", level=logging.ERROR
+                    )
                 import traceback
+
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(traceback.format_exc(), level=logging.ERROR)
 
@@ -125,4 +130,5 @@ class FactionManager:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"[DEBUG] {faction.name} Initialised with {len(faction.agents)} agents.",
-                    level=logging.INFO)
+                    level=logging.INFO,
+                )

@@ -1,4 +1,3 @@
-
 from enum import Enum
 from collections import namedtuple
 
@@ -33,8 +32,6 @@ ENABLE_PLOTS = False
 """Enable plot and CSV generation for visualization and analysis"""
 
 
-
-
 #    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ _____ ___ _   _  ____ ____
 #   | ____|  _ \_ _/ ___| / _ \|  _ \| ____| / ___|| ____|_   _|_   _|_ _| \ | |/ ___/ ___|
 #   |  _| | |_) | |\___ \| | | | | | |  _|   \___ \|  _|   | |   | |  | ||  \| | |  _\___ \
@@ -46,7 +43,7 @@ ENABLE_PLOTS = False
 # Customise as needed!
 # More training equals better results... probably.
 
-EPISODES_LIMIT = 30 
+EPISODES_LIMIT = 30
 """How many episodes or games to train for"""
 
 STEPS_PER_EPISODE = 20000
@@ -59,47 +56,47 @@ STEPS_PER_EPISODE = 20000
 
 # Learning Rate Configuration
 INITIAL_LEARNING_RATE_PPO = 3e-4  # Optimal PPO learning rate
-INITIAL_LEARNING_RATE_HQ = 1e-4   # HQ network learning rate
-MIN_LEARNING_RATE = 1e-6          # Minimum learning rate
-LEARNING_RATE_DECAY = 0.95        # Learning rate decay factor
-LEARNING_RATE_STEP_SIZE = 500     # Steps between LR updates
+INITIAL_LEARNING_RATE_HQ = 1e-4  # HQ network learning rate
+MIN_LEARNING_RATE = 1e-6  # Minimum learning rate
+LEARNING_RATE_DECAY = 0.95  # Learning rate decay factor
+LEARNING_RATE_STEP_SIZE = 500  # Steps between LR updates
 
 # Training Optimization
-BATCH_SIZE = 64                   # Training batch size
-MIN_MEMORY_SIZE = 128             # Minimum memory before training
-GAE_LAMBDA = 0.95                 # GAE lambda parameter
-VALUE_LOSS_COEFF = 0.5           # Value function loss coefficient
-ENTROPY_COEFF = 0.01             # Entropy bonus coefficient
-GRADIENT_CLIP_NORM = 0.5         # Gradient clipping norm
-PPO_CLIP_RATIO = 0.2             # PPO clip ratio
+BATCH_SIZE = 64  # Training batch size
+MIN_MEMORY_SIZE = 128  # Minimum memory before training
+GAE_LAMBDA = 0.95  # GAE lambda parameter
+VALUE_LOSS_COEFF = 0.5  # Value function loss coefficient
+ENTROPY_COEFF = 0.01  # Entropy bonus coefficient
+GRADIENT_CLIP_NORM = 0.5  # Gradient clipping norm
+PPO_CLIP_RATIO = 0.2  # PPO clip ratio
 
 # Curriculum Learning
 ENABLE_CURRICULUM_LEARNING = True
 CURRICULUM_DIFFICULTY_STEPS = [5, 10, 15, 20, 25]  # Episodes to increase difficulty
 INITIAL_RESOURCE_SPAWN_RATE = 0.3  # Start with fewer resources
-FINAL_RESOURCE_SPAWN_RATE = 1.0    # End with normal spawn rate
+FINAL_RESOURCE_SPAWN_RATE = 1.0  # End with normal spawn rate
 
 # Experience Replay
 ENABLE_EXPERIENCE_REPLAY = True
-REPLAY_BUFFER_SIZE = 10000        # Experience replay buffer size
-PRIORITY_REPLAY_ALPHA = 0.6       # Priority replay alpha
-PRIORITY_REPLAY_BETA = 0.4        # Priority replay beta
+REPLAY_BUFFER_SIZE = 10000  # Experience replay buffer size
+PRIORITY_REPLAY_ALPHA = 0.6  # Priority replay alpha
+PRIORITY_REPLAY_BETA = 0.4  # Priority replay beta
 
 # Multi-Agent Training
 ENABLE_MULTI_AGENT_TRAINING = True
-INTER_AGENT_COMMUNICATION = True   # Allow agents to share experiences
-FACTION_COORDINATION_BONUS = 0.1   # Bonus for coordinated actions
+INTER_AGENT_COMMUNICATION = True  # Allow agents to share experiences
+FACTION_COORDINATION_BONUS = 0.1  # Bonus for coordinated actions
 
 # Training Monitoring
 ENABLE_TRAINING_MONITORING = True
-SAVE_CHECKPOINT_EVERY = 5         # Save checkpoint every N episodes
-EVALUATION_FREQUENCY = 3          # Evaluate performance every N episodes
-EARLY_STOPPING_PATIENCE = 10      # Episodes without improvement before stopping
+SAVE_CHECKPOINT_EVERY = 5  # Save checkpoint every N episodes
+EVALUATION_FREQUENCY = 3  # Evaluate performance every N episodes
+EARLY_STOPPING_PATIENCE = 10  # Episodes without improvement before stopping
 
 # Advanced Loss Functions
-USE_HUBER_LOSS = True             # Use Huber loss for value function
-USE_FOCAL_LOSS = False            # Use focal loss for policy (experimental)
-LOSS_NORMALIZATION = True         # Normalize losses for stability
+USE_HUBER_LOSS = True  # Use Huber loss for value function
+USE_FOCAL_LOSS = False  # Use focal loss for policy (experimental)
+LOSS_NORMALIZATION = True  # Normalize losses for stability
 
 # ===== END ADVANCED TRAINING CONFIGURATION =====
 
@@ -174,22 +171,20 @@ else:
     WORLD_SCALE_Y = GRID_HEIGHT
 
 
-
 # Perlin Noise Settings
 # If RandomiseTerrainBool is set to false, the seed will use Terrain_Seed
-RandomiseTerrainBool = True # Customise as needed!
-Terrain_Seed = 65   # Customise as needed, 65 is a good default seed in
+RandomiseTerrainBool = True  # Customise as needed!
+Terrain_Seed = 65  # Customise as needed, 65 is a good default seed in
 # combination with the current perlin noise settings
 
 
 # colours
 # General colours used in the game
 GREEN = (34, 139, 34)  # Land
-BLUE = (30, 144, 255)     # Water
+BLUE = (30, 144, 255)  # Water
 RED = (255, 0, 0)  # Red
 APPLE_TREE_colour = (0, 255, 0)  # A brighter green for apple trees
 GOLD_colour = (255, 215, 0)  # Gold colour
-
 
 
 Grass_Texture_Path = "RENDER\IMAGES\Grass Tiles/Grass 001.png"  # Grass texture path
@@ -210,7 +205,7 @@ WaterAnimationToggle = False  # Toggle water animation #Turn off for performance
 # Perlin Noise Parameters
 # Together, these parameters control the terrain's appearance.
 # Good as default
-NOISE_SCALE = 100 
+NOISE_SCALE = 100
 """Higher values create larger features, lower values create smaller features Customise as needed!"""
 # Higher values add more detail, lower values create smoother terrain #
 # Customise as needed!
@@ -225,17 +220,25 @@ NOISE_LACUNARITY = 1.5
 WATER_COVERAGE = 0.3
 
 # Resource Parameters
-TREE_DENSITY = 0.05# Density of apple trees on land # Customise as needed!  #DEFAULT 0.05
+TREE_DENSITY = (
+    0.05  # Density of apple trees on land # Customise as needed!  #DEFAULT 0.05
+)
 # Time in seconds for an apple tree to regrow an apple # Customise as needed!
-APPLE_REGEN_TIME = 20 #DEFAULT 20
+APPLE_REGEN_TIME = 20  # DEFAULT 20
 # Probability of spawning a gold zone # Customise as needed!
-GOLD_ZONE_PROBABILITY = 0.05 #Default 0.05
-GOLD_SPAWN_DENSITY = 0.03  #Default 0.03 # Density of gold in gold zones # Customise as needed!
+GOLD_ZONE_PROBABILITY = 0.05  # Default 0.05
+GOLD_SPAWN_DENSITY = (
+    0.03  # Default 0.03 # Density of gold in gold zones # Customise as needed!
+)
 
-Apple_Base_quantity = 5  #default 5 # Base quantity of apples on a tree # Customise as needed!
-GoldLump_base_quantity = 5  #default 5 # Base quantity of gold in a gold zone # Customise as needed!
+Apple_Base_quantity = (
+    5  # default 5 # Base quantity of apples on a tree # Customise as needed!
+)
+GoldLump_base_quantity = (
+    5  # default 5 # Base quantity of gold in a gold zone # Customise as needed!
+)
 
-RESOURCE_VICTORY_TARGET_RATIO = 0.7 
+RESOURCE_VICTORY_TARGET_RATIO = 0.7
 """
 Percentage of resources needed to win an episode.
 Calculated based on the total resources spawned at the start of the episode.
@@ -245,7 +248,9 @@ Default 0.7
 # File paths for resource images
 # Okay as is
 # Tree image path
-TREE_IMAGE_PATH = "RENDER\IMAGES\\PixelFlush - Pixel Tree Mega Pack\\pngs\\Apple Tree.png"
+TREE_IMAGE_PATH = (
+    "RENDER\IMAGES\\PixelFlush - Pixel Tree Mega Pack\\pngs\\Apple Tree.png"
+)
 GOLD_IMAGE_PATH = "RENDER\IMAGES\\Gold.png"  # Gold image path
 # Scale of the gold lump image, needed to match the image size with the
 # interactable area
@@ -272,14 +277,15 @@ class TaskState(Enum):
     TaskState Enum is used to track the state of a task and uses several keywords to track the progress of a task.
 
     WARNING: DO NOT MODIFY! Changing these values may break functionality.
-       """
-    NONE = "none"            # No task assigned
-    ONGOING = "ongoing"      # Task is actively being executed
-    PENDING = "pending"      # Task is assigned but not started
-    SUCCESS = "success"      # Task completed successfully
-    FAILURE = "failure"      # Task failed
+    """
+
+    NONE = "none"  # No task assigned
+    ONGOING = "ongoing"  # Task is actively being executed
+    PENDING = "pending"  # Task is assigned but not started
+    SUCCESS = "success"  # Task completed successfully
+    FAILURE = "failure"  # Task failed
     INTERRUPTED = "interrupted"  # Task was interrupted
-    BLOCKED = "blocked"      # Task cannot proceed
+    BLOCKED = "blocked"  # Task cannot proceed
     ABANDONED = "abandoned"  # Task was abandoned
     # Task is not valid or cannot be executed (e.g. invalid parameters,
     # unsupported action type for task)
@@ -287,13 +293,7 @@ class TaskState(Enum):
     UNASSIGNED = "unassigned"  # A Task is ready to be picked up
 
 
-TASK_TYPE_MAPPING = {
-    "none": 0,
-    "gather": 1,
-    "eliminate": 2,
-    "explore": 3,
-    "move_to": 4
-}
+TASK_TYPE_MAPPING = {"none": 0, "gather": 1, "eliminate": 2, "explore": 3, "move_to": 4}
 """
 Define task type mappings to an integer value.
 
@@ -305,7 +305,6 @@ NETWORK_TYPE_MAPPING: dict = {
     "PPOModel": 1,
     "DQNModel": 2,
     "HQ_Network": 3,
-
 }
 """
 Mapping of network types to their corresponding interger IDs.
@@ -353,7 +352,7 @@ ROLE_ACTIONS_MAP = {
         "mine_gold",
         "forage_apple",
         "heal_with_apple",
-        "explore"
+        "explore",
     ],
     "peacekeeper": [
         "move_up",
@@ -363,9 +362,8 @@ ROLE_ACTIONS_MAP = {
         "patrol",
         "heal_with_apple",
         "eliminate_threat",
-        "explore"
+        "explore",
     ],
-
 }
 """
 Core actions that can be performed by each role.
@@ -379,22 +377,22 @@ STATE_FEATURES_MAP = {
         "HQ_health",
         "gold_balance",
         "food_balance",
-        "resource_count",   # Total resources
-        "threat_count",     # Total threats
+        "resource_count",  # Total resources
+        "threat_count",  # Total threats
     ],
     "local_perception": [
         "position_x",
         "position_y",
         "health",
         "nearby_resource_count",  # Count of nearby resources
-        "nearby_threat_count"     # Count of nearby threats
+        "nearby_threat_count",  # Count of nearby threats
     ],
     "task_features": [
-        "task_type",        # Encoded task type
-        "task_target_x",    # Target X position
-        "task_target_y",    # Target Y position
-        "current_action"    # Current action
-    ]
+        "task_type",  # Encoded task type
+        "task_target_x",  # Target X position
+        "task_target_y",  # Target Y position
+        "current_action",  # Current action
+    ],
 }
 """
 State features mapping structure for the agent.
@@ -419,14 +417,18 @@ Agent_Interact_Range = 2  # Agent interact range, Anything inside will be intera
 
 
 # File paths for agent images
-Peacekeeper_PNG = 'RENDER\IMAGES\peacekeeper.png'  # Path to peacekeeper image
-Gatherer_PNG = 'RENDER\IMAGES\gatherer.png'  # Path to gatherer image
+Peacekeeper_PNG = "RENDER\IMAGES\peacekeeper.png"  # Path to peacekeeper image
+Gatherer_PNG = "RENDER\IMAGES\gatherer.png"  # Path to gatherer image
 
 Gold_Cost_for_Agent = 10  # Gold cost for an agent
-Gold_Cost_for_Agent_Swap = 5  # Gold cost for swapping an existing agent to a different role
+Gold_Cost_for_Agent_Swap = (
+    5  # Gold cost for swapping an existing agent to a different role
+)
 
 
-DEF_AGENT_STATE_SIZE = 18 + len(TASK_TYPE_MAPPING)  # Updated to support enhanced state: 8 core + 2 role + N task one-hot + 6 task info + 2 context
+DEF_AGENT_STATE_SIZE = 18 + len(
+    TASK_TYPE_MAPPING
+)  # Updated to support enhanced state: 8 core + 2 role + N task one-hot + 6 task info + 2 context
 
 """
 State size breakdown:
@@ -451,7 +453,7 @@ HQ_Agent_Spawn_Radius = 5  # Radius around HQ to spawn agents
 Faction_PNG = "RENDER\IMAGES\\castle-7440761_1280.png"
 
 # Team Composition
-FACTON_COUNT = 3 # Number of factons # Customise as needed!
+FACTON_COUNT = 3  # Number of factons # Customise as needed!
 # Initial number of gatherers for a single faction # Customise as needed!
 INITAL_GATHERER_COUNT = 2
 # Initial number of peacekeepers for a single faction # Customise as needed!
@@ -506,7 +508,7 @@ def create_task(self, task_type, target, task_id=None):
     task = {
         "type": task_type,
         "target": target,
-        "state": TaskState.PENDING  # Track the task's lifecycle from assignment
+        "state": TaskState.PENDING,  # Track the task's lifecycle from assignment
     }
     if task_id:
         task["id"] = task_id

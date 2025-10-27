@@ -1,23 +1,22 @@
-
-
 """
 THis file should control the episodic win rules and conditions
 
 """
+
 """Common Imports"""
 from SHARED.core_imports import *
+
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
 
 
+FACTION_GOAL = {"gold_collection": 400, "food_collection": 400}
 
-FACTION_GOAL = {
-    'gold_collection': 400,
-    'food_collection': 400
-}
 
-def calculate_resource_victory_targets(resources, faction_count=1, target_ratio=utils_config.RESOURCE_VICTORY_TARGET_RATIO):
+def calculate_resource_victory_targets(
+    resources, faction_count=1, target_ratio=utils_config.RESOURCE_VICTORY_TARGET_RATIO
+):
     """
     Dynamically calculates resource-based victory conditions based on spawned resources.
 
@@ -36,15 +35,15 @@ def calculate_resource_victory_targets(resources, faction_count=1, target_ratio=
     gold_target = int(total_gold * target_ratio)
     food_target = int(total_food * target_ratio)
 
-    FACTION_GOAL['gold_collection'] = gold_target
-    FACTION_GOAL['food_collection'] = food_target
+    FACTION_GOAL["gold_collection"] = gold_target
+    FACTION_GOAL["food_collection"] = food_target
 
-    print(f"""[Victory Targets]
+    print(
+        f"""[Victory Targets]
     - Gold Collection Target: {gold_target} of {total_gold} total ({(gold_target / total_gold * 100):.1f}%)
     - Food Collection Target: {food_target} of {total_food} total ({(food_target / total_food * 100):.1f}%)
-    \n""")
-
-
+    \n"""
+    )
 
 
 # Number of steps without meaningful activity to trigger a dynamic event
@@ -62,8 +61,10 @@ def check_victory(factions):
 
     # Check resource-based victory
     for faction in factions:
-        if faction.gold_balance >= FACTION_GOAL['gold_collection'] or \
-           faction.food_balance >= FACTION_GOAL['food_collection']:
+        if (
+            faction.gold_balance >= FACTION_GOAL["gold_collection"]
+            or faction.food_balance >= FACTION_GOAL["food_collection"]
+        ):
             print("\n\nResource victory!\n\n")
             return faction  # Return the winning faction
 
@@ -78,5 +79,3 @@ def check_victory(factions):
         return None  # Draw/stalemate
 
     return None  # No winner yet
-
-

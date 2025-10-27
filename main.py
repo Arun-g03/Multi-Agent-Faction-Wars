@@ -1,4 +1,3 @@
-
 import subprocess
 import sys
 import os
@@ -17,11 +16,13 @@ except subprocess.CalledProcessError:
 
 # Prompt for headless mode after dependencies are installed
 print("\nWould you like to run in HEADLESS_MODE?")
-print("\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR BETTER PERFORMANCE\033[0m")
+print(
+    "\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR BETTER PERFORMANCE\033[0m"
+)
 
 print("\nEnter y for yes n for no: ", end="")
 user_input = input().strip().lower()
-headless_response = user_input == 'y'
+headless_response = user_input == "y"
 
 # Inject HEADLESS_MODE before utils_config is imported
 with open("UTILITIES/utils_config.py", "r") as f:
@@ -40,23 +41,25 @@ from GAME.game_manager import GameManager
 from RENDER.Game_Renderer import GameRenderer
 from RENDER.MainMenu_Renderer import MenuRenderer
 import UTILITIES.utils_config as utils_config
+
 if utils_config.ENABLE_TENSORBOARD:
     from SHARED.core_imports import tensorboard_logger
 
 
 class MainGame:
     def __init__(self):
-        self.MainTITLE = "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
-        
-       
-        
+        self.MainTITLE = (
+            "Multi-agent competitive and cooperative strategy (MACCS) - Main Menu"
+        )
 
     def main(self):
         """Main function to run the game."""
         try:
             # Initialise pygame
             pygame.init()
-            screen = pygame.display.set_mode((utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT))
+            screen = pygame.display.set_mode(
+                (utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT)
+            )
             pygame.display.set_caption(self.MainTITLE)
             clock = pygame.time.Clock()
 
@@ -99,7 +102,7 @@ class MainGame:
                                 screen=screen,
                                 mode=config["mode"],
                                 load_existing=config.get("load_existing", False),
-                                models_to_load=config.get("models", {})
+                                models_to_load=config.get("models", {}),
                             )
                         except Exception as e:
                             print(f"[ERROR] Failed to start game: {e}")
@@ -118,7 +121,7 @@ class MainGame:
                             resources=game_manager.resource_manager.resources,
                             factions=game_manager.faction_manager.factions,
                             agents=game_manager.agents,
-                            camera=game_manager.camera
+                            camera=game_manager.camera,
                         )
 
                         print("[INFO] Switching to GameRenderer...")
@@ -130,30 +133,45 @@ class MainGame:
                     try:
                         if game_manager and game_renderer:
                             if utils_config.HEADLESS_MODE and pygame.display.get_init():
-                                print("[INFO] HEADLESS_MODE is active — closing display.")
+                                print(
+                                    "[INFO] HEADLESS_MODE is active — closing display."
+                                )
                                 pygame.display.quit()  # Disable rendering from this point on
 
                             game_running = game_manager.run()
 
                             if not game_running:
-                                print("\033[91m[INFO] Exiting game after run() stopped.\033[0m")
+                                print(
+                                    "\033[91m[INFO] Exiting game after run() stopped.\033[0m"
+                                )
 
                                 # Reinit display before returning to menu
-                                if utils_config.HEADLESS_MODE and not pygame.display.get_init():
-                                    print("[INFO] Reinitializing display to return to main menu...")
+                                if (
+                                    utils_config.HEADLESS_MODE
+                                    and not pygame.display.get_init()
+                                ):
+                                    print(
+                                        "[INFO] Reinitializing display to return to main menu..."
+                                    )
                                     pygame.display.init()
-                                    screen = pygame.display.set_mode((utils_config.SCREEN_WIDTH, utils_config.SCREEN_HEIGHT))
+                                    screen = pygame.display.set_mode(
+                                        (
+                                            utils_config.SCREEN_WIDTH,
+                                            utils_config.SCREEN_HEIGHT,
+                                        )
+                                    )
                                     pygame.display.set_caption(self.MainTITLE)
                                     clock = pygame.time.Clock()
-                                    menu_renderer = MenuRenderer(screen)  # Re-create with new screen
+                                    menu_renderer = MenuRenderer(
+                                        screen
+                                    )  # Re-create with new screen
 
                                 print("[INFO] Returning to main menu.")
                                 is_menu = True
                                 is_game = False
                                 game_manager = None
                                 game_renderer = None
-                                continue  #Jump back to top of while loop
-
+                                continue  # Jump back to top of while loop
 
                             game_renderer.render(
                                 game_manager.camera,
@@ -172,10 +190,11 @@ class MainGame:
                                 clock.tick(0)
 
                         else:
-                            print("[ERROR] GameManager or GameRenderer missing. Returning to menu.")
+                            print(
+                                "[ERROR] GameManager or GameRenderer missing. Returning to menu."
+                            )
                             is_menu = True
                             is_game = False
-
 
                     except SystemExit:
                         print("Whoops - SystemExit - Main.py")
@@ -200,11 +219,6 @@ class MainGame:
             traceback.print_exc()
             cleanup(QUIT=True)
 
-            
-
-        
-
-
     def start_game(
         self,
         screen,
@@ -213,8 +227,8 @@ class MainGame:
         # True  → load .pth files you picked in the menu
         load_existing=False,
         # dict of paths → {"Agents": "...", "HQ": "...", …}
-        models_to_load=None
-                            ):
+        models_to_load=None,
+    ):
         """
         Initialise and start the game.
 
@@ -229,8 +243,7 @@ class MainGame:
                 screen=screen,
                 mode=mode,
                 load_existing=load_existing,
-                models=models_to_load or {}      # keep an empty dict if None
-            
+                models=models_to_load or {},  # keep an empty dict if None
             )
 
             # ── call its own initialise routine ──────────────────────────────────
@@ -244,7 +257,6 @@ class MainGame:
             traceback.print_exc()
             return None
 
-    
 
 # Run the main function with profiling if enabled
 if __name__ == "__main__":

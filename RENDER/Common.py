@@ -1,11 +1,10 @@
 import pygame
 
 # Constants for the menu screen
-MENU_FONT = "Segoe UI"         # Clean, modern UI font for menus
-GAME_FONT = "Roboto"   # Pixel-style retro font, great for in-game HUDs
-CREDITS_FONT = "Georgia"       # Serif font for a formal, readable credit roll
-SETTINGS_FONT = "Verdana"      # Clean sans-serif, easy to read in settings screens
-
+MENU_FONT = "Segoe UI"  # Clean, modern UI font for menus
+GAME_FONT = "Roboto"  # Pixel-style retro font, great for in-game HUDs
+CREDITS_FONT = "Georgia"  # Serif font for a formal, readable credit roll
+SETTINGS_FONT = "Verdana"  # Clean sans-serif, easy to read in settings screens
 
 
 # Define some reusable colours
@@ -19,6 +18,7 @@ DARK_GREY = (50, 50, 50)
 DARK_GREEN = (0, 100, 0)
 
 FONT_CACHE = {}
+
 
 def get_font(size, font_name=GAME_FONT, bold=False):
     """
@@ -34,6 +34,7 @@ def get_font(size, font_name=GAME_FONT, bold=False):
 
 
 TEXT_SURFACE_CACHE = {}
+
 
 def get_text_surface(text, font_name, size, color):
     cache_key = (text, font_name, size, color)

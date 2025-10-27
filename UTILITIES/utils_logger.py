@@ -2,18 +2,14 @@ from SHARED.core_imports import *
 import UTILITIES.utils_config as utils_config
 
 
-
 class Logger:
     def __init__(
-            self,
-            log_file,
-            log_level=logging.INFO,
-            log_to_console=False,
-            clear_logs=True):
-        
-        
+        self, log_file, log_level=logging.INFO, log_to_console=False, clear_logs=True
+    ):
 
-        self.enabled = getattr(utils_config, "ENABLE_LOGGING")  # Default safe fallback: True
+        self.enabled = getattr(
+            utils_config, "ENABLE_LOGGING"
+        )  # Default safe fallback: True
 
         if not self.enabled:
             # Logging is disabled globally: create a dummy logger
@@ -40,9 +36,11 @@ class Logger:
         self.log_level = log_level
 
         if clear_logs:
-            open(self.log_file, 'w').close()
-            open(error_log_file, 'w').close()
-            print(f"Logger initialised. General logs will be saved to: {os.path.abspath(self.log_file)}")
+            open(self.log_file, "w").close()
+            open(error_log_file, "w").close()
+            print(
+                f"Logger initialised. General logs will be saved to: {os.path.abspath(self.log_file)}"
+            )
             print(f"Error logs will be saved to: {os.path.abspath(error_log_file)}")
 
         self.logger.setLevel(self.log_level)
@@ -51,8 +49,7 @@ class Logger:
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setLevel(self.log_level)
         file_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
-            "%Y-%m-%d %H:%M:%S"
+            "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
         )
         file_handler.setFormatter(file_formatter)
 
@@ -60,8 +57,7 @@ class Logger:
         error_file_handler = logging.FileHandler(error_log_file)
         error_file_handler.setLevel(logging.ERROR)  # Only capture ERROR and CRITICAL
         error_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
-            "%Y-%m-%d %H:%M:%S"
+            "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
         )
         error_file_handler.setFormatter(error_formatter)
 
@@ -72,16 +68,12 @@ class Logger:
             console_handler = logging.StreamHandler()
             console_handler.setLevel(self.log_level)
             console_formatter = logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(message)s",
-                "%Y-%m-%d %H:%M:%S"
+                "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
             )
             console_handler.setFormatter(console_formatter)
             self.logger.addHandler(console_handler)
 
         self.logger.info("Logger initialised and log file cleared.")
-
-    
-
 
     def log_msg(self, message, level=logging.INFO):
         """
@@ -103,4 +95,3 @@ class Logger:
                 self.logger.critical(message)
         except Exception as e:
             raise Exception(f"Logging error: {str(e)}")
-

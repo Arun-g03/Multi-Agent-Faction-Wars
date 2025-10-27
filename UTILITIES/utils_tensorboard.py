@@ -11,13 +11,14 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class TensorBoardLogger:
-    """ This class handles the TensorBoard logging and visualisation. 
-        It is a singleton class and can be accessed using the instance() method.
+    """This class handles the TensorBoard logging and visualisation.
+    It is a singleton class and can be accessed using the instance() method.
 
-        It manages ensures that only one TensorBoard process is running at a time.
-        It also provides a default name for tensorboard runs if no name is provided.
-    
+    It manages ensures that only one TensorBoard process is running at a time.
+    It also provides a default name for tensorboard runs if no name is provided.
+
     """
+
     _instances = {}
     _default_run_name = None
     tensorboard_process = None
@@ -38,10 +39,8 @@ class TensorBoardLogger:
             instance = super().__new__(cls)
             instance._init_writer(log_dir, run_name)
             cls._instances[instance_key] = instance
-                    
 
         return cls._instances[instance_key]
-
 
     @classmethod
     def set_default_run_name(cls, run_name=None):
@@ -79,8 +78,6 @@ class TensorBoardLogger:
     def log_scalar(self, name, value, step):
         self._safe_log(lambda: self.writer.add_scalar(name, value, step))
 
-    
-
     def log_distribution(self, name, values, step):
         """
         Log a distribution (e.g., weights, activations) to TensorBoard.
@@ -96,8 +93,6 @@ class TensorBoardLogger:
         except Exception as e:
             print(f"[TensorBoard] Error logging distribution '{name}': {e}")
 
-
-
     def log_image(self, name, image_tensor, step):
         """
         Log images to TensorBoard (e.g., visualisations, game frames).
@@ -105,13 +100,14 @@ class TensorBoardLogger:
         if not utils_config.ENABLE_TENSORBOARD:
             return
         if image_tensor is None:
-            print(f"[TensorBoard WARNING] Skipping image log for '{name}' — image_tensor is None.")
+            print(
+                f"[TensorBoard WARNING] Skipping image log for '{name}' — image_tensor is None."
+            )
             return
         try:
             self._safe_log(lambda: self.writer.add_image(name, image_tensor, step))
         except Exception as e:
             print(f"[TensorBoard] Error logging image '{name}': {e}")
-
 
     def log_text(self, name, text, step):
         self._safe_log(lambda: self.writer.add_text(name, text, step))
@@ -122,13 +118,11 @@ class TensorBoardLogger:
         :param hparam_dict: Dictionary of hyperparameter names and values
         :param metric_dict: Dictionary of metric names and values (optional)
         """
+
         def safe_hparam_log():
             self.writer.add_hparams(hparam_dict, metric_dict or {})
-            
+
         self._safe_log(safe_hparam_log)
-
-
-    
 
     def _safe_log(self, log_func):
         if not utils_config.ENABLE_TENSORBOARD:
@@ -146,11 +140,11 @@ class TensorBoardLogger:
         :param input_sample: A sample input tensor to trace the model.
         :param name: The tag name under which to log the model graph.
         """
+
         def safe_add_graph():
             self.writer.add_graph(model, input_sample)
-        
-        self._safe_log(safe_add_graph)
 
+        self._safe_log(safe_add_graph)
 
     def close(self):
         if not utils_config.ENABLE_TENSORBOARD:
@@ -173,10 +167,12 @@ class TensorBoardLogger:
                 self.tensorboard_process = subprocess.Popen(
                     ["tensorboard", f"--logdir={abs_log_path}", f"--port={port}"],
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 )
                 time.sleep(2)
-                webbrowser.open(f"http://localhost:6006/?darkMode=true#timeseries&reloadInterval=5")
+                webbrowser.open(
+                    f"http://localhost:6006/?darkMode=true#timeseries&reloadInterval=5"
+                )
             except Exception as e:
                 print(f"[TensorBoard ERROR] Failed to launch: {e}")
 
@@ -219,38 +215,64 @@ class TensorBoardLogger:
                 except Exception as e:
                     print(f"[TensorBoard ERROR] Failed to delete folder {root}: {e}")
 
-
     def log_strategy_distribution(self, tensorboard_logger, step):
         if not self.strategy_history:
             return
 
         try:
             # Map strategies to integer indices for histogram
-            strategy_to_idx = {strategy: idx for idx, strategy in enumerate(utils_config.HQ_STRATEGY_OPTIONS)}
-            indices = [strategy_to_idx.get(s, -1) for s in self.strategy_history if s in strategy_to_idx]
+            strategy_to_idx = {
+                strategy: idx
+                for idx, strategy in enumerate(utils_config.HQ_STRATEGY_OPTIONS)
+            }
+            indices = [
+                strategy_to_idx.get(s, -1)
+                for s in self.strategy_history
+                if s in strategy_to_idx
+            ]
 
             if indices:
                 tensorboard_logger.log_distribution(
                     name=f"Faction_{self.id}/HQ_Strategy_Distribution",
                     values=indices,
-                    step=step
+                    step=step,
                 )
         except Exception as e:
             print(f"[TensorBoard] Failed to log HQ strategy distribution: {e}")
 
 
-
-
 class DummyTensorBoardLogger:
     """A no-op/placeholder logger that silently ignores all calls if TensorBoard is disabled."""
-    def log_scalar(self, *args, **kwargs): pass
-    def log_distribution(self, *args, **kwargs): pass
-    def log_image(self, *args, **kwargs): pass
-    def log_text(self, *args, **kwargs): pass
-    def log_hparams(self, *args, **kwargs): pass
-    def log_model(self, *args, **kwargs): pass
-    def run_tensorboard(self, *args, **kwargs): pass
-    def stop_tensorboard(self, *args, **kwargs): pass
-    def cleanup_event_files(self, *args, **kwargs): pass
-    def close(self, *args, **kwargs): pass
-    def log_strategy_distribution(self, *args, **kwargs): pass
+
+    def log_scalar(self, *args, **kwargs):
+        pass
+
+    def log_distribution(self, *args, **kwargs):
+        pass
+
+    def log_image(self, *args, **kwargs):
+        pass
+
+    def log_text(self, *args, **kwargs):
+        pass
+
+    def log_hparams(self, *args, **kwargs):
+        pass
+
+    def log_model(self, *args, **kwargs):
+        pass
+
+    def run_tensorboard(self, *args, **kwargs):
+        pass
+
+    def stop_tensorboard(self, *args, **kwargs):
+        pass
+
+    def cleanup_event_files(self, *args, **kwargs):
+        pass
+
+    def close(self, *args, **kwargs):
+        pass
+
+    def log_strategy_distribution(self, *args, **kwargs):
+        pass

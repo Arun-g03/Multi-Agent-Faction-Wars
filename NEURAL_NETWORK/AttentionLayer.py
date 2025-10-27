@@ -1,8 +1,9 @@
 """Common Imports"""
+
 from SHARED.core_imports import *
+
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-
 
 
 logger = Logger(log_file="AttentionLayer.txt", log_level=logging.DEBUG)
@@ -14,7 +15,6 @@ logger = Logger(log_file="AttentionLayer.txt", log_level=logging.DEBUG)
 #    / ___ \ |_| ||  __/ | | | |_| | (_) | | | | | |__| (_| | |_| |  __/ |
 #   /_/   \_\__|\__\___|_| |_|\__|_|\___/|_| |_| |_____\__,_|\__, |\___|_|
 #                                                            |___/
-
 
 
 class AttentionLayer(nn.Module):
@@ -38,11 +38,11 @@ class AttentionLayer(nn.Module):
         key = self.key(x)
         value = self.value(x)
 
-        attention_scores = torch.matmul(
-            query, key.transpose(-2, -1)) / (key.size(-1) ** 0.5)
+        attention_scores = torch.matmul(query, key.transpose(-2, -1)) / (
+            key.size(-1) ** 0.5
+        )
         attention_weights = torch.softmax(attention_scores, dim=-1)
 
         # Apply attention weights to value
         attention_output = torch.matmul(attention_weights, value)
         return attention_output
-

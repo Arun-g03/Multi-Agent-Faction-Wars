@@ -1,4 +1,5 @@
 """Common Imports"""
+
 from SHARED.core_imports import *
 
 """File Specific Imports"""
@@ -17,11 +18,11 @@ logger = Logger(log_file="utils_helpers.txt", log_level=logging.DEBUG)
 
 
 def profile_function(
-        func,
-        output_file=f"Profiling_Stats/profile_output_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.prof",
-        *
-        args,
-        **kwargs):
+    func,
+    output_file=f"Profiling_Stats/profile_output_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.prof",
+    *args,
+    **kwargs,
+):
     """
     Profiles a function and saves both execution time and function call reports.
     - The nested function `_save_profile_results` handles sorting & saving.
@@ -31,6 +32,7 @@ def profile_function(
 
     # Create the Profiling_Stats directory if it doesn't exist
     import os
+
     os.makedirs("Profiling_Stats", exist_ok=True)
 
     profiler = cProfile.Profile()
@@ -85,11 +87,12 @@ def find_closest_actor(entities, entity_type=None, requester=None):
         requester_name = getattr(requester, "role", "HQ")
         logger.log_msg(
             f"{requester_name} found no valid {entity_type or 'actor'}.",
-            level=logging.WARNING)
+            level=logging.WARNING,
+        )
         return None
 
     closest_entity = None
-    min_distance = float('inf')
+    min_distance = float("inf")
 
     requester_x = getattr(requester, "x", None)
     requester_y = getattr(requester, "y", None)
@@ -106,12 +109,11 @@ def find_closest_actor(entities, entity_type=None, requester=None):
                 continue  # Skip invalid entries
         except Exception as e:
             logger.log_msg(
-                f"Skipping invalid entity: {entity}. Error: {e}",
-                level=logging.WARNING)
+                f"Skipping invalid entity: {entity}. Error: {e}", level=logging.WARNING
+            )
             continue
 
-        dist = ((requester_x - entity_x) ** 2 +
-                (requester_y - entity_y) ** 2) ** 0.5
+        dist = ((requester_x - entity_x) ** 2 + (requester_y - entity_y) ** 2) ** 0.5
         if dist < min_distance:
             min_distance = dist
             closest_entity = entity
@@ -120,7 +122,8 @@ def find_closest_actor(entities, entity_type=None, requester=None):
         requester_name = getattr(requester, "role", "HQ")
         logger.log_msg(
             f"{requester_name} found closest {entity_type}: {closest_entity}",
-            level=logging.INFO)
+            level=logging.INFO,
+        )
 
     return closest_entity
 
@@ -150,8 +153,7 @@ def generate_random_colour(used_colours=None, min_distance=100):
 
     def euclidean_distance(colour1, colour2):
         """Calculate the Euclidean distance between two RGB colours."""
-        return math.sqrt(
-            sum((c1 - c2) ** 2 for c1, c2 in zip(colour1, colour2)))
+        return math.sqrt(sum((c1 - c2) ** 2 for c1, c2 in zip(colour1, colour2)))
 
     def is_valid_colour(colour):
         """Ensure the colour is not too dark, too bright, or grassy green."""
@@ -170,29 +172,29 @@ def generate_random_colour(used_colours=None, min_distance=100):
 
     while True:
         # Generate a random colour
-        colour = (random.randint(0, 255), random.randint(
-            0, 255), random.randint(0, 255))
+        colour = (
+            random.randint(0, 255),
+            random.randint(0, 255),
+            random.randint(0, 255),
+        )
 
         # Ensure the colour is valid and distinct
-        if (is_valid_colour(colour) and all(euclidean_distance(
-                colour, used) >= min_distance for used in used_colours)):
+        if is_valid_colour(colour) and all(
+            euclidean_distance(colour, used) >= min_distance for used in used_colours
+        ):
             used_colours.append(colour)  # Add to the list of used colours
             return colour
 
 
-
-
-
 def cleanup(QUIT):
-        """
-        Clean up resources and exit the game.
-        """
-        if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
+    """
+    Clean up resources and exit the game.
+    """
+    if utils_config.ENABLE_TENSORBOARD:
+        tensorboard_logger.stop_tensorboard()  # Kill TensorBoard if running
 
+    if QUIT:
+        pygame.quit()
 
-        if QUIT:
-            pygame.quit()
-            
-            print("[INFO] - MainMenu_Renderer ---- Game closed successfully.")
-            sys.exit()  # Ensure the system fully exits when quitting the game
+        print("[INFO] - MainMenu_Renderer ---- Game closed successfully.")
+        sys.exit()  # Ensure the system fully exits when quitting the game

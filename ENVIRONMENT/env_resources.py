@@ -1,9 +1,9 @@
 """Common Imports"""
+
 from SHARED.core_imports import *
+
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-
-
 
 
 class ResourceManager:
@@ -16,9 +16,6 @@ class ResourceManager:
         self.gold_count = 0
         self.apple_tree_count = 0
         self.generate_resources()
-        
-            
-        
 
         """The current episode"""
 
@@ -30,13 +27,14 @@ class ResourceManager:
     #
 
     def generate_resources(
-            self,
-            add_trees=0,
-            add_gold_lumps=0,
-            tree_density=None,
-            gold_zone_probability=None,
-            gold_spawn_density=None,
-            episode=0):
+        self,
+        add_trees=0,
+        add_gold_lumps=0,
+        tree_density=None,
+        gold_zone_probability=None,
+        gold_spawn_density=None,
+        episode=0,
+    ):
         """
         Generate resources (trees and gold lumps) either dynamically (specific amounts) or via density and probability for startup.
         :param add_trees: Number of trees to add dynamically.
@@ -50,9 +48,19 @@ class ResourceManager:
         self.gold_count = 0
 
         # Use default density/probability if not provided (for startup)
-        tree_density = tree_density if tree_density is not None else utils_config.TREE_DENSITY
-        gold_zone_probability = gold_zone_probability if gold_zone_probability is not None else utils_config.GOLD_ZONE_PROBABILITY
-        gold_spawn_density = gold_spawn_density if gold_spawn_density is not None else utils_config.GOLD_SPAWN_DENSITY
+        tree_density = (
+            tree_density if tree_density is not None else utils_config.TREE_DENSITY
+        )
+        gold_zone_probability = (
+            gold_zone_probability
+            if gold_zone_probability is not None
+            else utils_config.GOLD_ZONE_PROBABILITY
+        )
+        gold_spawn_density = (
+            gold_spawn_density
+            if gold_spawn_density is not None
+            else utils_config.GOLD_SPAWN_DENSITY
+        )
 
         # Track how many resources have been added
         added_trees = 0
@@ -68,7 +76,7 @@ class ResourceManager:
                 cell = self.terrain.grid[x][y]
 
                 # Ensure the cell is valid for placing a resource
-                if cell['type'] == 'land' and not cell['occupied']:
+                if cell["type"] == "land" and not cell["occupied"]:
                     # Check bounds (prevent placing outside the world grid)
                     if not (0 <= x < grid_width and 0 <= y < grid_height):
                         continue
@@ -77,16 +85,16 @@ class ResourceManager:
                     if add_trees > 0 and added_trees < add_trees:
                         self.resources.append(
                             AppleTree(
-                                x *
-                                utils_config.CELL_SIZE,
-                                y *
-                                utils_config.CELL_SIZE,
+                                x * utils_config.CELL_SIZE,
+                                y * utils_config.CELL_SIZE,
                                 x,
                                 y,
                                 self.terrain,
-                                self))
-                        cell['occupied'] = True
-                        cell['resource_type'] = 'apple_tree'
+                                self,
+                            )
+                        )
+                        cell["occupied"] = True
+                        cell["resource_type"] = "apple_tree"
                         self.apple_tree_count += 1
                         added_trees += 1
                         continue
@@ -94,17 +102,16 @@ class ResourceManager:
                     # Add specific number of gold lumps
                     if add_gold_lumps > 0 and added_gold_lumps < add_gold_lumps:
                         gold_lump = GoldLump(
-                            x *
-                            utils_config.CELL_SIZE,
-                            y *
-                            utils_config.CELL_SIZE,
+                            x * utils_config.CELL_SIZE,
+                            y * utils_config.CELL_SIZE,
                             x,
                             y,
                             self.terrain,
-                            self)
+                            self,
+                        )
                         self.resources.append(gold_lump)
-                        cell['occupied'] = True
-                        cell['resource_type'] = 'gold_lump'
+                        cell["occupied"] = True
+                        cell["resource_type"] = "gold_lump"
                         self.gold_count += 1
                         added_gold_lumps += 1
                         continue
@@ -113,49 +120,58 @@ class ResourceManager:
                     if add_trees == 0 and random.random() < tree_density:
                         self.resources.append(
                             AppleTree(
-                                x *
-                                utils_config.CELL_SIZE,
-                                y *
-                                utils_config.CELL_SIZE,
+                                x * utils_config.CELL_SIZE,
+                                y * utils_config.CELL_SIZE,
                                 x,
                                 y,
                                 self.terrain,
-                                self))
-                        cell['occupied'] = True
-                        cell['resource_type'] = 'apple_tree'
+                                self,
+                            )
+                        )
+                        cell["occupied"] = True
+                        cell["resource_type"] = "apple_tree"
                         self.apple_tree_count += 1
 
-                    elif add_gold_lumps == 0 and random.random() < gold_zone_probability:
+                    elif (
+                        add_gold_lumps == 0 and random.random() < gold_zone_probability
+                    ):
                         # Generate gold lumps in a zone
                         for dx in range(-2, 3):
                             for dy in range(-2, 3):
                                 nx, ny = x + dx, y + dy
-                                if 0 <= nx < grid_width and 0 <= ny < grid_height:  # Bounds check
+                                if (
+                                    0 <= nx < grid_width and 0 <= ny < grid_height
+                                ):  # Bounds check
                                     gold_cell = self.terrain.grid[nx][ny]
-                                    if gold_cell['type'] == 'land' and not gold_cell['occupied']:
+                                    if (
+                                        gold_cell["type"] == "land"
+                                        and not gold_cell["occupied"]
+                                    ):
                                         if random.random() < gold_spawn_density:
                                             gold_lump = GoldLump(
-                                                nx *
-                                                utils_config.CELL_SIZE,
-                                                ny *
-                                                utils_config.CELL_SIZE,
+                                                nx * utils_config.CELL_SIZE,
+                                                ny * utils_config.CELL_SIZE,
                                                 nx,
                                                 ny,
                                                 self.terrain,
-                                                self)
+                                                self,
+                                            )
                                             self.resources.append(gold_lump)
-                                            gold_cell['occupied'] = True
-                                            gold_cell['resource_type'] = 'gold_lump'
+                                            gold_cell["occupied"] = True
+                                            gold_cell["resource_type"] = "gold_lump"
                                             self.gold_count += 1
 
         # Log to TensorBoard
         print(
-            f"Generated {self.apple_tree_count} apple trees and {self.gold_count} gold lumps.")
+            f"Generated {self.apple_tree_count} apple trees and {self.gold_count} gold lumps."
+        )
         if utils_config.ENABLE_TENSORBOARD:
-            tensorboard_logger.log_scalar("Resources/AppleTrees_Added",
-                                           self.apple_tree_count, episode)
             tensorboard_logger.log_scalar(
-                "Resources/GoldLumps_Added", self.gold_count, episode)
+                "Resources/AppleTrees_Added", self.apple_tree_count, episode
+            )
+            tensorboard_logger.log_scalar(
+                "Resources/GoldLumps_Added", self.gold_count, episode
+            )
 
     #    _   _           _       _          __    _                    _  __       _            _      _           ___
     #   | | | |_ __   __| | __ _| |_ ___   / /___| | ___  __ _ _ __   (_)/ _|   __| | ___ _ __ | | ___| |_ ___  __| \ \
@@ -166,10 +182,13 @@ class ResourceManager:
 
     def update(self):
         """Update resources, removing any that are depleted."""
-        for resource in self.resources[:]:  # Iterate over a copy to avoid mutation during iteration
+        for resource in self.resources[
+            :
+        ]:  # Iterate over a copy to avoid mutation during iteration
             if resource.is_depleted():
                 print(
-                    f"Depleted resource detected at ({resource.grid_x}, {resource.grid_y}). Removing...")
+                    f"Depleted resource detected at ({resource.grid_x}, {resource.grid_y}). Removing..."
+                )
                 resource.remove_from_terrain()
 
 
@@ -182,15 +201,7 @@ class ResourceManager:
 
 
 class AppleTree:
-    def __init__(
-            self,
-            x,
-            y,
-            grid_x,
-            grid_y,
-            terrain,
-            resource_manager,
-            quantity=10):
+    def __init__(self, x, y, grid_x, grid_y, terrain, resource_manager, quantity=10):
         """
         Initialise an apple tree with a given quantity of apples.
         :param x: X position of the tree.
@@ -215,10 +226,13 @@ class AppleTree:
         # Load the sprite sheet
         if not utils_config.HEADLESS_MODE:
             sprite_sheet = pygame.image.load(
-                utils_config.TREE_IMAGE_PATH).convert_alpha()
+                utils_config.TREE_IMAGE_PATH
+            ).convert_alpha()
 
             # Dimensions of the sprite sheet and individual sprites
-            sprite_width = sprite_sheet.get_width() // 6  # Assuming 6 frames horizontally
+            sprite_width = (
+                sprite_sheet.get_width() // 6
+            )  # Assuming 6 frames horizontally
             sprite_height = sprite_sheet.get_height()
 
             # Extract the final tree (6th frame)
@@ -230,7 +244,10 @@ class AppleTree:
     def update(self):
         """Update the tree's apple quantity based on regeneration time."""
         current_time = time.time()
-        if current_time - self.last_regen_time >= utils_config.APPLE_REGEN_TIME and self.quantity < self.max_quantity:  # 10 seconds
+        if (
+            current_time - self.last_regen_time >= utils_config.APPLE_REGEN_TIME
+            and self.quantity < self.max_quantity
+        ):  # 10 seconds
             self.quantity += 1
             self.last_regen_time = current_time
 
@@ -244,12 +261,12 @@ class AppleTree:
         if self.quantity > 0:
             gathered = min(amount, self.quantity)
             self.quantity -= gathered
-            
+
             if self.is_depleted():
-                """ print(
-                    "\033[92m" +
-                    f"Apple Tree at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain." +
-                    "\033[0m") """
+                """print(
+                "\033[92m" +
+                f"Apple Tree at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain." +
+                "\033[0m")"""
                 self.remove_from_terrain()
 
             return gathered
@@ -257,7 +274,8 @@ class AppleTree:
             # Final backup to remove resource if it still exists
             if self.is_depleted():
                 print(
-                    f"Apple Tree at ({self.grid_x}, {self.grid_y}) is depleted but still present. Removing from terrain.")
+                    f"Apple Tree at ({self.grid_x}, {self.grid_y}) is depleted but still present. Removing from terrain."
+                )
                 self.remove_from_terrain()
             return 0
 
@@ -276,12 +294,13 @@ class AppleTree:
         # Ensure resource is actually depleted
         if self.quantity > 0:
             print(
-                f"Error: Trying to remove Apple Tree at ({self.grid_x}, {self.grid_y}) before depletion.")
+                f"Error: Trying to remove Apple Tree at ({self.grid_x}, {self.grid_y}) before depletion."
+            )
             return  # Abort removal if the resource is not depleted
 
         # Update the terrain grid
-        self.terrain.grid[self.grid_x][self.grid_y]['occupied'] = False
-        self.terrain.grid[self.grid_x][self.grid_y]['resource_type'] = None
+        self.terrain.grid[self.grid_x][self.grid_y]["occupied"] = False
+        self.terrain.grid[self.grid_x][self.grid_y]["resource_type"] = None
 
         # Remove the tree from the resource manager
         if self in self.resource_manager.resources:
@@ -293,7 +312,8 @@ class AppleTree:
             #     "\033[0m")
         else:
             print(
-                f"Apple Tree at ({self.grid_x}, {self.grid_y}) not found in resource manager.")
+                f"Apple Tree at ({self.grid_x}, {self.grid_y}) not found in resource manager."
+            )
 
     def render(self, screen, camera):
         """
@@ -307,7 +327,12 @@ class AppleTree:
         screen_x, screen_y = camera.apply((self.x, self.y))
 
         # Calculate the final size of the tree
-        final_size = int(utils_config.CELL_SIZE * utils_config.SCALING_FACTOR * camera.zoom * utils_config.Tree_Scale_Img)
+        final_size = int(
+            utils_config.CELL_SIZE
+            * utils_config.SCALING_FACTOR
+            * camera.zoom
+            * utils_config.Tree_Scale_Img
+        )
         tree_image_scaled = pygame.transform.scale(self.image, (final_size, final_size))
 
         # Offset to align stump
@@ -316,8 +341,6 @@ class AppleTree:
 
         # Draw tree image at corrected position
         screen.blit(tree_image_scaled, (screen_x - offset_x, screen_y - offset_y))
-
-
 
 
 #     ____       _     _   _                             ____ _
@@ -329,15 +352,7 @@ class AppleTree:
 
 
 class GoldLump:
-    def __init__(
-            self,
-            x,
-            y,
-            grid_x,
-            grid_y,
-            terrain,
-            resource_manager,
-            quantity=5):
+    def __init__(self, x, y, grid_x, grid_y, terrain, resource_manager, quantity=5):
         """
         Initialise a gold lump with a given quantity of gold.
         :param x: X position of the gold lump.
@@ -357,30 +372,29 @@ class GoldLump:
 
         if not utils_config.HEADLESS_MODE:
             # Load and scale the gold image
-            self.image = pygame.image.load(
-                utils_config.GOLD_IMAGE_PATH).convert_alpha()
+            self.image = pygame.image.load(utils_config.GOLD_IMAGE_PATH).convert_alpha()
             # Scale to 3% of screen height
             image_size = int(utils_config.SCREEN_HEIGHT * 0.03)
-            self.image = pygame.transform.scale(
-                self.image, (image_size, image_size))
+            self.image = pygame.transform.scale(self.image, (image_size, image_size))
 
     def mine(self, credit_callback=None):
         """Mine gold from the lump and credit it using the provided callback."""
         if self.quantity > 0:
             self.quantity -= 1
-            
+
             if credit_callback:
                 credit_callback(1)  # Credit the mined gold to the faction
 
             if self.is_depleted():
-                #print(f"Gold Lump at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain.")
+                # print(f"Gold Lump at ({self.grid_x}, {self.grid_y}) is now depleted. Removing from terrain.")
                 self.remove_from_terrain()
             return 1
         else:
             # Final backup to remove resource if it still exists
             if self.is_depleted():
                 print(
-                    f"Gold Lump at ({self.grid_x}, {self.grid_y}) is depleted but still present. Removing from terrain.")
+                    f"Gold Lump at ({self.grid_x}, {self.grid_y}) is depleted but still present. Removing from terrain."
+                )
                 self.remove_from_terrain()
         return 0
 
@@ -398,17 +412,19 @@ class GoldLump:
         # Ensure resource is actually depleted
         if self.quantity > 0:
             print(
-                f"Error: Trying to remove Gold Lump at ({self.grid_x}, {self.grid_y}) before depletion.")
+                f"Error: Trying to remove Gold Lump at ({self.grid_x}, {self.grid_y}) before depletion."
+            )
             return  # Abort removal if the resource is not depleted
 
-        self.terrain.grid[self.grid_x][self.grid_y]['occupied'] = False
-        self.terrain.grid[self.grid_x][self.grid_y]['resource_type'] = None
+        self.terrain.grid[self.grid_x][self.grid_y]["occupied"] = False
+        self.terrain.grid[self.grid_x][self.grid_y]["resource_type"] = None
         if self in self.resource_manager.resources:
             self.resource_manager.resources.remove(self)
             # print(f"\033[31mResource successfully removed: Gold Lump at ({self.grid_x}, {self.grid_y})\033[0m")
         else:
             raise RuntimeError(
-                f"Gold Lump at ({self.grid_x}, {self.grid_y}) not found in resource manager.")
+                f"Gold Lump at ({self.grid_x}, {self.grid_y}) not found in resource manager."
+            )
 
     def render(self, screen, camera):
         """
@@ -423,10 +439,10 @@ class GoldLump:
 
         # Calculate the final size
         final_size = int(
-            utils_config.CELL_SIZE *
-            utils_config.SCALING_FACTOR *
-            camera.zoom *
-            utils_config.GoldLump_Scale_Img
+            utils_config.CELL_SIZE
+            * utils_config.SCALING_FACTOR
+            * camera.zoom
+            * utils_config.GoldLump_Scale_Img
         )
         gold_image_scaled = pygame.transform.scale(self.image, (final_size, final_size))
 
@@ -435,8 +451,6 @@ class GoldLump:
         offset_y = final_size // 2
 
         screen.blit(gold_image_scaled, (screen_x - offset_x, screen_y - offset_y))
-
-
 
 
 # class Boulder:

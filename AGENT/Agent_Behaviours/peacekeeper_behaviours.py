@@ -14,7 +14,7 @@ logger = Logger(log_file="behavior_log.txt", log_level=logging.DEBUG)
 
 class PeacekeeperBehavioursMixin:
     """Mixin class providing peacekeeper-specific behaviors."""
-    
+
     def patrol(self):
         """
         Patrol towards the nearest threat.
@@ -23,12 +23,14 @@ class PeacekeeperBehavioursMixin:
         threats = self.agent.faction.provide_state().get("threats", [])
 
         # Filter out friendly threats before calling find_closest_actor()
-        valid_threats = [t for t in threats if t.get(
-            "faction") != self.agent.faction.id]
+        valid_threats = [
+            t for t in threats if t.get("faction") != self.agent.faction.id
+        ]
 
         # Call find_closest_actor() correctly without an 'exclude' argument
         threat = find_closest_actor(
-            valid_threats, entity_type="threat", requester=self.agent)
+            valid_threats, entity_type="threat", requester=self.agent
+        )
 
         if threat:
             # Get the threat's location and ID
@@ -51,19 +53,24 @@ class PeacekeeperBehavioursMixin:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} is patrolling towards threat ID {threat_id} at ({target_x}, {target_y}) using action '{action}'.",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
                 return utils_config.TaskState.ONGOING
             else:
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} could not execute movement action '{action}' while patrolling towards threat ID {threat_id}.",
-                        level=logging.WARNING)
-                return utils_config.TaskState.FAILURE  # Penalise for missing movement action
+                        level=logging.WARNING,
+                    )
+                return (
+                    utils_config.TaskState.FAILURE
+                )  # Penalise for missing movement action
         else:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} found no threats to patrol towards.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE  # Failure when no threats are found
 
     def eliminate_threat(self, agents):
@@ -77,7 +84,8 @@ class PeacekeeperBehavioursMixin:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} has no valid task assigned for elimination.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE
 
         threat = task.get("target")
@@ -85,7 +93,8 @@ class PeacekeeperBehavioursMixin:
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"{self.agent.role} could not find a valid threat in the task.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
             return utils_config.TaskState.FAILURE
 
         assigned_position = threat["position"]
@@ -93,20 +102,23 @@ class PeacekeeperBehavioursMixin:
 
         # Step 1: Try to attack the assigned threat if within combat range
         if self.agent.is_near(
-                assigned_position,
-                threshold=utils_config.Agent_Interact_Range *
-                utils_config.CELL_SIZE):
-            target_agent = next(
-                (a for a in agents if a.agent_id == assigned_id), None)
+            assigned_position,
+            threshold=utils_config.Agent_Interact_Range * utils_config.CELL_SIZE,
+        ):
+            target_agent = next((a for a in agents if a.agent_id == assigned_id), None)
             if target_agent and target_agent.faction.id != self.agent.faction.id:
                 self.event_manager.trigger_attack_animation(
-                    position=(target_agent.x, target_agent.y), duration=200)
+                    position=(target_agent.x, target_agent.y), duration=200
+                )
                 target_agent.Health -= 10
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",
-                        level=logging.INFO)
-                print(f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.")
+                        level=logging.INFO,
+                    )
+                print(
+                    f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}."
+                )
                 if target_agent.Health <= 0:
                     self.report_threat_eliminated(threat)
                     return utils_config.TaskState.SUCCESS
@@ -115,21 +127,29 @@ class PeacekeeperBehavioursMixin:
 
             # Step 2: Attack any other enemy agent within combat range
             for enemy in agents:
-                if (enemy.faction.id != self.agent.faction.id and self.agent.is_near(
-                        (enemy.x, enemy.y), threshold=utils_config.Agent_Interact_Range * utils_config.CELL_SIZE)):
+                if enemy.faction.id != self.agent.faction.id and self.agent.is_near(
+                    (enemy.x, enemy.y),
+                    threshold=utils_config.Agent_Interact_Range
+                    * utils_config.CELL_SIZE,
+                ):
                     self.event_manager.trigger_attack_animation(
-                        position=(enemy.x, enemy.y), duration=200)
+                        position=(enemy.x, enemy.y), duration=200
+                    )
                     enemy.Health -= 10
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.",
-                            level=logging.INFO)
-                    print(f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}.")
+                            level=logging.INFO,
+                        )
+                    print(
+                        f"{self.agent.role} attacked {enemy.role} (ID: {enemy.agent_id}) at ({enemy.x}, {enemy.y}). Health now {enemy.Health}."
+                    )
                     if enemy.Health <= 0:
                         if utils_config.ENABLE_LOGGING:
                             logger.log_msg(
                                 f"{self.agent.role} eliminated nearby  {enemy.role}.",
-                                level=logging.INFO)
+                                level=logging.INFO,
+                            )
                         print(f"{self.agent.role} eliminated nearby  {enemy.role}.")
                     return utils_config.TaskState.ONGOING
 
@@ -137,7 +157,8 @@ class PeacekeeperBehavioursMixin:
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} could not reach assigned threat and found no enemies in attack range.",
-                level=logging.INFO)
+                level=logging.INFO,
+            )
         return utils_config.TaskState.FAILURE
 
     def report_threat_eliminated(self, threat):
@@ -150,26 +171,27 @@ class PeacekeeperBehavioursMixin:
         if not isinstance(threat, dict):
             logger.log_msg(
                 f"Invalid threat format passed to report_threat_eliminated: {threat}",
-                level=logging.WARNING)
+                level=logging.WARNING,
+            )
             return
 
         # Mark the threat as inactive in the global state based on the unique ID
-        for global_threat in self.agent.faction.global_state.get(
-                "threats", []):
-            if global_threat.get("id") == threat.get(
-                    "id"):  # Compare using unique ID
+        for global_threat in self.agent.faction.global_state.get("threats", []):
+            if global_threat.get("id") == threat.get("id"):  # Compare using unique ID
                 global_threat["is_active"] = False
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"{self.agent.role} reported threat ID {threat['id']} at {threat.get('location')} as eliminated.",
-                        level=logging.INFO)
+                        level=logging.INFO,
+                    )
                 break  # Stop iteration once the matching threat is found
         else:
             # Log if the threat was not found in the global state
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
                     f"Threat ID {threat.get('id')} not found in global state during elimination report.",
-                    level=logging.WARNING)
+                    level=logging.WARNING,
+                )
 
         # Clean up resolved threats
         self.clean_resolved_threats()
@@ -180,12 +202,13 @@ class PeacekeeperBehavioursMixin:
         """
         before_cleanup = len(self.agent.faction.global_state["threats"])
         self.agent.faction.global_state["threats"] = [
-            threat for threat in self.agent.faction.global_state.get("threats", [])
+            threat
+            for threat in self.agent.faction.global_state.get("threats", [])
             if threat.get("is_active", True)  # Keep only active threats
         ]
         after_cleanup = len(self.agent.faction.global_state["threats"])
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"{self.agent.role} cleaned resolved threats. Before: {before_cleanup}, After: {after_cleanup}.",
-                level=logging.INFO)
-
+                level=logging.INFO,
+            )

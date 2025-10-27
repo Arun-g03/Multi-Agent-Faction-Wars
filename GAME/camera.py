@@ -2,19 +2,20 @@ class Camera:
     """Game camera class for controlling the viewport."""
 
     def __init__(
-            self,
-            WORLD_WIDTH,
-            WORLD_HEIGHT,
-            SCREEN_WIDTH,
-            SCREEN_HEIGHT,
-            restrict_bounds=False):
+        self,
+        WORLD_WIDTH,
+        WORLD_HEIGHT,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        restrict_bounds=False,
+    ):
         self.x = 0
         self.y = 0
         self.zoom = 1.0
         self.WORLD_WIDTH = WORLD_WIDTH
         self.WORLD_HEIGHT = WORLD_HEIGHT
-        self.screen_width = SCREEN_WIDTH   # Fix: lowercase
-        self.screen_height = SCREEN_HEIGHT # Fix: lowercase
+        self.screen_width = SCREEN_WIDTH  # Fix: lowercase
+        self.screen_height = SCREEN_HEIGHT  # Fix: lowercase
         self.speed = 30
         self.restrict_bounds = restrict_bounds  # Flag to toggle bounds restriction
 
@@ -26,8 +27,12 @@ class Camera:
         self.y += dy
 
         if self.restrict_bounds:
-            self.x = max(0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
-            self.y = max(0, min(self.WORLD_HEIGHT - self.screen_height / self.zoom, self.y))
+            self.x = max(
+                0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x)
+            )
+            self.y = max(
+                0, min(self.WORLD_HEIGHT - self.screen_height / self.zoom, self.y)
+            )
 
     def apply(self, position):
         """Transform world coordinates to screen coordinates relative to the camera."""
@@ -64,5 +69,9 @@ class Camera:
 
         # 4. Bounds check if enabled
         if self.restrict_bounds:
-            self.x = max(0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x))
-            self.y = max(0, min(self.WORLD_HEIGHT - self.screen_height / self.zoom, self.y))
+            self.x = max(
+                0, min(self.WORLD_WIDTH - self.screen_width / self.zoom, self.x)
+            )
+            self.y = max(
+                0, min(self.WORLD_HEIGHT - self.screen_height / self.zoom, self.y)
+            )
