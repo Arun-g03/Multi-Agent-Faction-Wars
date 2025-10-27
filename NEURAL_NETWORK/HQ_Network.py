@@ -32,11 +32,13 @@ class HQ_Network(nn.Module):
         use_dropout=True,
         hidden_size=256,
         AgentID=None,
+        faction_id=None,
     ):
         super().__init__()
         # Store AgentID for consistency with other network models
         self.AgentID = AgentID
-
+        self.faction_id = faction_id
+        
         # Initialise the device to use (CPU or GPU) default to Training_device if none
         if device is None:
             device = Training_device
@@ -50,6 +52,11 @@ class HQ_Network(nn.Module):
         self.use_attention = use_attention
         self.use_dropout = use_dropout
         self.hidden_size = hidden_size
+
+        # Use faction_id as a seed offset to ensure different initial weights for different HQs
+        if faction_id is not None:
+            # Set a deterministic seed based on faction ID
+            torch.manual_seed(42 + faction_id)  # Base seed 42 + faction_id offset
 
         # Compute total input size dynamically
         total_input_size = state_size + role_size + local_state_size + global_state_size
@@ -103,6 +110,10 @@ class HQ_Network(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size // 4, 1),
         )
+        
+        # Reset seed back to original after initialization to avoid affecting other HQs
+        if faction_id is not None:
+            torch.manual_seed(torch.initial_seed())
 
         # Enhanced optimizer with configuration-based parameters
         self.optimizer = optim.AdamW(
@@ -439,9 +450,39 @@ class HQ_Network(nn.Module):
                         level=logging.INFO,
                     )
 
-            # 5. Select strategy with highest probability
+            # 5. Select strategy - add exploration for untrained networks
+            # Check if network is trained (has memory entries or total_updates > 0)
+            is_trained = len(self.hq_memory) > 0 or self.total_updates > 0
+            
+            logger.log_msg(
+                f"[STRATEGY_SELECT] Memory size: {len(self.hq_memory)}, Total updates: {self.total_updates}, is_trained: {is_trained}",
+                level=logging.INFO
+            )
+            
+            # Add noise to logits if untrained to prevent all HQs picking same strategy
+            if not is_trained:
+                # Add significant random noise to encourage exploration during initial training
+                # Use a higher noise scale to ensure different HQs pick different strategies
+                noise = torch.randn_like(logits) * 2.0  # Increased from 0.5 to 2.0
+                logits = logits + noise
+                logger.log_msg(
+                    f"[EXPLORATION] Adding significant noise. Logits before: {logits_list[:3]}... After: {logits.squeeze(0).tolist()[:3]}...",
+                    level=logging.INFO
+                )
+            else:
+                logger.log_msg(
+                    "[STRATEGY_SELECT] Network is trained, using deterministic selection",
+                    level=logging.INFO
+                )
+            
+            # Select with deterministic argmax for trained, with noise for untrained
             action_index = torch.argmax(logits).item()
             selected_strategy = self.strategy_labels[action_index]
+            
+            logger.log_msg(
+                f"[STRATEGY_SELECT] Selected strategy: {selected_strategy} (index: {action_index})",
+                level=logging.INFO
+            )
 
             # 6. Store memory for training
             self.add_memory(state, role, local_state, global_state_vec, action_index)

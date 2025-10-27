@@ -867,10 +867,11 @@ class AgentBehaviour(
             return utils_config.TaskState.INVALID
 
         target_x, target_y = self.agent.current_task["target"]["position"]
-        world_x, world_y = (
-            target_x * utils_config.CELL_SIZE,
-            target_y * utils_config.CELL_SIZE,
-        )
+        
+        # Explore targets are in GRID coordinates
+        # Convert grid target to world coordinates for distance calculation
+        world_x = target_x * utils_config.CELL_SIZE
+        world_y = target_y * utils_config.CELL_SIZE
 
         dx = world_x - self.agent.x
         dy = world_y - self.agent.y

@@ -512,7 +512,7 @@ class BaseAgent:
             # Report threat to HQ using the communication system
             if self.communication_system:
                 self.communication_system.agent_to_hq(
-                    self, {"type": "threat", "data": threat}
+                    self, {"type": "threat", "data": threat}, current_step=self.current_step
                 )
 
         # Detect resources
@@ -522,7 +522,7 @@ class BaseAgent:
         for resource in observed_resources:
             if self.communication_system:
                 self.communication_system.agent_to_hq(
-                    self, {"type": "resource", "data": resource}
+                    self, {"type": "resource", "data": resource}, current_step=self.current_step
                 )
 
         # Log reported resources
@@ -880,6 +880,39 @@ class BaseAgent:
             task_progress,  # Are we making progress? (-1 to 1)
         ]
 
+        # === Local Terrain Awareness ===
+        # Sample nearby tiles to understand traversability (N, S, E, W, NE, NW, SE, SW)
+        grid_x = int(self.x // utils_config.CELL_SIZE)
+        grid_y = int(self.y // utils_config.CELL_SIZE)
+        terrain_awareness = []
+        
+        # Check 8 directions: N, S, E, W, NE, NW, SE, SW
+        directions = [
+            (0, -1),   # North
+            (0, 1),    # South
+            (1, 0),    # East
+            (-1, 0),   # West
+            (1, -1),   # NorthEast
+            (-1, -1),  # NorthWest
+            (1, 1),    # SouthEast
+            (-1, 1),   # SouthWest
+        ]
+        
+        for dx, dy in directions:
+            check_x = grid_x + dx
+            check_y = grid_y + dy
+            
+            # Check if the tile is valid and traversable
+            if (0 <= check_x < len(self.terrain.grid) and 
+                0 <= check_y < len(self.terrain.grid[0])):
+                tile = self.terrain.grid[check_x][check_y]
+                tile_type = tile.get("type", "water") if isinstance(tile, dict) else "water"
+                # 1.0 = traversable (land), 0.0 = water
+                terrain_awareness.append(1.0 if tile_type == "land" else 0.0)
+            else:
+                # Out of bounds = not traversable
+                terrain_awareness.append(0.0)
+
         # === Environmental Context ===
         # How many threats/resources perceived (not just nearest)
         threat_count_norm = min(len(perceived_threats) / 5.0, 1.0)
@@ -891,7 +924,7 @@ class BaseAgent:
         ]
 
         # === Final State Vector ===
-        state = core_state + role_vector + one_hot_task + task_info + context_vector
+        state = core_state + role_vector + one_hot_task + task_info + context_vector + terrain_awareness
 
         return state
 

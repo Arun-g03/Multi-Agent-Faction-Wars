@@ -426,9 +426,9 @@ Gold_Cost_for_Agent_Swap = (
 )
 
 
-DEF_AGENT_STATE_SIZE = 18 + len(
+DEF_AGENT_STATE_SIZE = 26 + len(
     TASK_TYPE_MAPPING
-)  # Updated to support enhanced state: 8 core + 2 role + N task one-hot + 6 task info + 2 context
+)  # Updated to support enhanced state: 8 core + 2 role + N task one-hot + 6 task info + 2 context + 8 terrain awareness
 
 """
 State size breakdown:
@@ -437,6 +437,7 @@ State size breakdown:
 - Task one-hot: len(TASK_TYPE_MAPPING)
 - Task info (6): target_x, target_y, action_norm, norm_dist, task_urgency, task_progress
 - Context (2): threat_count_norm, resource_count_norm
+- Terrain awareness (8): N, S, E, W, NE, NW, SE, SW traversability (1.0 = land, 0.0 = water)
 """
 
 

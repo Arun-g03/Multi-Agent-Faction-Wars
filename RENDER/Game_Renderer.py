@@ -28,6 +28,7 @@ class GameRenderer:
     def __init__(self, screen, terrain, resources, factions, agents, camera=None):
         pygame.font.init()  # Initialise the font module
         self.screen = screen  # Use the screen passed as argument
+        self.terrain = terrain  # Store terrain to access max_traversable_tiles
         pygame.display.set_caption(Game_Title)
         # Use cached font for displaying faction IDs on bases
         self.font = get_font(24)
@@ -305,6 +306,10 @@ class GameRenderer:
                         gatherer_count = sum(
                             1 for agent in faction.agents if agent.role == "gatherer"
                         )
+                        
+                        # Calculate ownership percentage
+                        max_tiles = self.terrain.max_traversable_tiles
+                        ownership_pct = (faction.territory_count / max_tiles * 100) if max_tiles > 0 else 0.0
 
                         # Display all metrics in the tooltip
 
@@ -319,6 +324,7 @@ class GameRenderer:
                             f"Food: {faction.food_balance}\n"
                             f"Peacekeepers: {peacekeeper_count}\n"
                             f"Gatherers: {gatherer_count}\n"
+                            f"World Ownership: {ownership_pct:.1f}% ({faction.territory_count}/{max_tiles})\n"
                             f"Current Strategy: {faction.current_strategy}\n"
                             f"HQ Location: {x, y}"
                         )

@@ -24,6 +24,8 @@ class Terrain:
             lacunarity=utils_config.NOISE_LACUNARITY,
         )
         self.grid = self.smooth_noise_map(self.grid)
+        # Calculate total traversable tiles (land tiles) for percentage calculations
+        self.max_traversable_tiles = self.get_traversable_tile_count()
 
     def ensure_connected_land(self, grid, min_land_ratio=0.6):
         """
@@ -151,6 +153,14 @@ class Terrain:
                     grid[i][j]["type"] = "land"
 
         return grid
+
+    def get_traversable_tile_count(self):
+        """
+        Count the total number of traversable (land) tiles in the world.
+        This is used to calculate ownership percentages.
+        """
+        land_count = np.count_nonzero(self.grid["type"] == "land")
+        return land_count
 
     #    ____                       _                      _
     #   |  _ \ _ __ __ ___      __ | |_ ___ _ __ _ __ __ _(_)_ __

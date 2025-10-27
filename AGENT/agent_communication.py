@@ -142,9 +142,9 @@ class CommunicationSystem:
                 level=logging.INFO,
             )
 
-    def agent_to_hq(self, agent, report):
+    def agent_to_hq(self, agent, report, current_step=None):
         faction = agent.faction  # Assuming agents have a reference to their faction
-        faction.receive_report(report)
+        faction.receive_report(report, current_step)
         # if utils_config.ENABLE_LOGGING: logger.log_msg(f"Agent {agent.role} sent report to Faction {faction.id}: {report}", level=logging.INFO)
 
     def clear_messages(self):

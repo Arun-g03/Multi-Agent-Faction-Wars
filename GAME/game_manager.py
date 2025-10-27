@@ -993,6 +993,9 @@ class GameManager:
             self.metric_history[faction.id]["gold_balance"].append(faction.gold_balance)
             self.metric_history[faction.id]["food_balance"].append(faction.food_balance)
             self.metric_history[faction.id]["agents_alive"].append(agent_count)
+            
+            # Add world ownership metric (territory count)
+            self.metric_history[faction.id]["world_ownership"].append(faction.territory_count)
 
             # Add role-specific rewards to the history for each role
             for role, reward in role_rewards.get(faction.id, {}).items():
@@ -1013,17 +1016,19 @@ class GameManager:
                     f"Faction_{faction.id}/Average_Reward", average_reward, self.episode
                 )
 
-            # --- Join Gold, Food, and Agents Alive into one grouped plot per faction ---
+            # --- Join Gold, Food, Agents Alive, and World Ownership into one grouped plot per faction ---
             plotter.plot_scalar_over_time(
                 names=[
                     f"Faction {faction.id} Gold Balance",
                     f"Faction {faction.id} Food Balance",
                     f"Faction {faction.id} Agents Alive",
+                    f"Faction {faction.id} World Ownership",
                 ],
                 values_list=[
                     self.metric_history[faction.id]["gold_balance"],
                     self.metric_history[faction.id]["food_balance"],
                     self.metric_history[faction.id]["agents_alive"],
+                    self.metric_history[faction.id]["world_ownership"],
                 ],
                 episodes=list(range(1, self.episode + 1)),
                 tensorboard_logger=tensorboard_logger,
@@ -1263,6 +1268,45 @@ class GameManager:
                     agent.ai.train(mode="train", batching=True)
                 except Exception as e:
                     # Silently continue if training fails during mini-batch
+                    pass
+        
+        # Also train HQ networks with mini-batches
+        self.train_hq_networks_mini()
+
+    def train_hq_networks_mini(self):
+        """
+        Perform mini-batch training for HQ networks during an episode.
+        Trains on recent samples without clearing memory.
+        """
+        for faction in self.faction_manager.factions:
+            if (
+                self.mode == "train"
+                and hasattr(faction.network, "hq_memory")
+                and len(faction.network.hq_memory) >= 5  # Minimum samples for HQ training
+            ):
+                try:
+                    if utils_config.ENABLE_LOGGING:
+                        self.logger.log_msg(
+                            f"[HQ MINI-TRAIN] Training HQ network for Faction {faction.id} with {len(faction.network.hq_memory)} samples.",
+                            level=logging.DEBUG,
+                        )
+                    
+                    # Assign interim rewards based on current performance
+                    # Use a simple heuristic: sum of step rewards so far
+                    interim_reward = sum(faction.hq_step_rewards) if hasattr(faction, 'hq_step_rewards') else 0.0
+                    
+                    # Update rewards for the current memory
+                    faction.network.update_memory_rewards(interim_reward)
+                    
+                    # Train with mini-batch
+                    faction.network.train(faction.network.hq_memory, faction.optimizer)
+                except Exception as e:
+                    # Silently continue if training fails during mini-batch
+                    if utils_config.ENABLE_LOGGING:
+                        self.logger.log_msg(
+                            f"[HQ MINI-TRAIN] Failed to train HQ for Faction {faction.id}: {e}",
+                            level=logging.DEBUG
+                        )
                     pass
 
     def train_hq_networks(self, winner_id):

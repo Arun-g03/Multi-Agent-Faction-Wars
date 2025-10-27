@@ -48,9 +48,11 @@ class Faction:
             self.threats = []  # Initialise known threats
             self.task_counter = 0
             self.assigned_tasks = {}
+            self.territory_count = 0  # Track number of tiles owned by this faction
 
             self.unvisited_cells = set()
             self.reports = []
+            self.recent_threat_reports = []  # Track recent threat reports with timestamps
             self.strategy_history = []  # Track strategies chosen
 
             self.create_task = utils_config.create_task
@@ -251,6 +253,7 @@ class Faction:
                             global_state_size=global_state_size_inferred,
                             device=Training_device,
                             global_state=self.global_state,
+                            faction_id=self.id,
                         )
                     else:
                         # Not loading from checkpoint - use passed-in values
@@ -268,6 +271,7 @@ class Faction:
                             global_state_size=global_state_size,
                             device=Training_device,
                             global_state=self.global_state,
+                            faction_id=self.id,
                         )
                 except Exception as e:
                     logger.log_msg(
@@ -476,7 +480,7 @@ class Faction:
 
         return self.global_state
 
-    def receive_report(self, report):
+    def receive_report(self, report, current_step=None):
         """Process reports received from agents."""
         if "type" not in report or "data" not in report:
             logger.warning(
@@ -508,6 +512,8 @@ class Faction:
             if existing_threat:
                 if existing_threat["location"] != location:
                     existing_threat["location"] = location
+                    # Update last_seen with current step
+                    existing_threat["last_seen"] = current_step if current_step is not None else self.current_step
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"Faction {self.id} updated threat ID {threat_id} to location {location}."
@@ -515,10 +521,25 @@ class Faction:
 
             else:
                 self.global_state["threats"].append(data)
+                # Add timestamp for new threats
+                if "last_seen" not in data:
+                    data["last_seen"] = current_step if current_step is not None else self.current_step
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Faction {self.id} added new threat: {data['type']} ID {threat_id} at {location}."
                     )
+            
+            # Track recent threat reports with timestamp
+            self.recent_threat_reports.append({
+                "step": current_step if current_step is not None else self.current_step,
+                "threat_id": str(threat_id),
+                "location": location,
+                "reported_by": report.get("sender_id", "unknown")
+            })
+            
+            # Keep only last 50 reports to prevent memory bloat
+            if len(self.recent_threat_reports) > 50:
+                self.recent_threat_reports.pop(0)
 
         elif report_type == "resource":
             # Extract relevant data from the resource object
@@ -912,23 +933,23 @@ class Faction:
 
             elif strategy == "DEFEND_HQ":
                 hq_position = self.home_base["position"]
-                # Always convert pixel HQ position to grid coordinates for movement
-                hq_position = (
-                    int(hq_position[0] // utils_config.CELL_SIZE),
-                    int(hq_position[1] // utils_config.CELL_SIZE),
-                )
+                
+                # Convert HQ position to grid coordinates for comparison
+                hq_grid_x = int(hq_position[0] // utils_config.CELL_SIZE)
+                hq_grid_y = int(hq_position[1] // utils_config.CELL_SIZE)
+                hq_grid_position = (hq_grid_x, hq_grid_y)
 
                 # Check if agent is already at HQ
                 agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
                 agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
                 is_at_hq = (
-                    agent_grid_x == hq_position[0] and agent_grid_y == hq_position[1]
+                    agent_grid_x == hq_grid_x and agent_grid_y == hq_grid_y
                 )
 
                 already_defending = (
                     current_type_id == utils_config.TASK_TYPE_MAPPING["move_to"]
                     and current
-                    and current.get("target", {}).get("position") == hq_position
+                    and current.get("target", {}).get("position") == hq_grid_position
                 )
 
                 # If already at HQ or already defending, don't assign new task
@@ -938,7 +959,7 @@ class Faction:
                 if current:
                     agent.current_task = None
                     agent.update_task_state(utils_config.TaskState.NONE)
-                return self.assign_move_to_task(agent, hq_position, label="DefendHQ")
+                return self.assign_move_to_task(agent, hq_grid_position, label="DefendHQ")
 
             elif strategy in ["COLLECT_GOLD", "COLLECT_FOOD", "NO_PRIORITY"]:
                 # When HQ wants to collect resources, peacekeepers should secure the area
@@ -961,16 +982,17 @@ class Faction:
 
                 # Otherwise, assign to patrol/defend near resource areas or HQ
                 hq_position = self.home_base["position"]
-                hq_position = (
-                    int(hq_position[0] // utils_config.CELL_SIZE),
-                    int(hq_position[1] // utils_config.CELL_SIZE),
-                )
+                
+                # Convert to grid for comparison
+                hq_grid_x = int(hq_position[0] // utils_config.CELL_SIZE)
+                hq_grid_y = int(hq_position[1] // utils_config.CELL_SIZE)
+                hq_grid_position = (hq_grid_x, hq_grid_y)
 
                 # Check if already at HQ
                 agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
                 agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
                 is_at_hq = (
-                    agent_grid_x == hq_position[0] and agent_grid_y == hq_position[1]
+                    agent_grid_x == hq_grid_x and agent_grid_y == hq_grid_y
                 )
 
                 if not is_at_hq:
@@ -978,7 +1000,7 @@ class Faction:
                         agent.current_task = None
                         agent.update_task_state(utils_config.TaskState.NONE)
                     return self.assign_move_to_task(
-                        agent, hq_position, label="DefendHQ"
+                        agent, hq_grid_position, label="DefendHQ"
                     )
                 else:
                     # Already at HQ, keep current task if valid
@@ -1127,10 +1149,11 @@ class Faction:
         if unexplored_cells:
             cell_x, cell_y = random.choice(unexplored_cells)
             task_string_id = f"Explore-({cell_x}, {cell_y})"
+            # Keep target in GRID coordinates (explore targets should be grid-based)
             target = {"position": (cell_x, cell_y), "type": "Explore"}
 
             logger.log_msg(
-                f"Created task: {task_string_id} for agent {agent.agent_id}",
+                f"Created task: {task_string_id} for agent {agent.agent_id} at grid ({cell_x}, {cell_y})",
                 level=logging.INFO,
             )
 
@@ -1287,7 +1310,7 @@ class Faction:
     def calculate_territory(self, terrain):
         """Calculate the number of cells owned by this faction."""
         self.territory_count = sum(
-            1 for row in terrain.grid for cell in row if cell["faction"] == self.id
+            1 for row in terrain.grid for cell in row if str(cell["faction"]) == str(self.id)
         )
 
     ##########################################################################
@@ -2382,6 +2405,27 @@ class Faction:
             enhanced_state["nearest_resource_distance"] = self.global_state.get(
                 "nearest_resource", {}
             ).get("distance", float("inf"))
+            
+            # Add threat reporting awareness - HQ knows when its troops are reporting enemies
+            recent_reports_window = 20  # Steps to look back
+            recent_threat_reports = [
+                r for r in self.recent_threat_reports
+                if self.current_step - r.get("step", 0) <= recent_reports_window
+            ]
+            enhanced_state["threat_reports_recent"] = min(len(recent_threat_reports) / 5.0, 1.0)  # 0-1 normalized
+            enhanced_state["has_known_threats"] = 1.0 if self.global_state.get("threats", []) else 0.0
+            
+            # Calculate threat freshness (how old is the threat intel?)
+            if self.global_state.get("threats"):
+                oldest_threat_age = 0
+                for threat in self.global_state.get("threats", []):
+                    last_seen = threat.get("last_seen", 0)
+                    age = self.current_step - last_seen if last_seen else 0
+                    oldest_threat_age = max(oldest_threat_age, age)
+                # Normalize: 0 = very fresh (< 10 steps old), 1.0 = very stale (> 100 steps old)
+                enhanced_state["threat_intel_freshness"] = max(0.0, min(1.0, (oldest_threat_age - 10) / 90.0))
+            else:
+                enhanced_state["threat_intel_freshness"] = 1.0  # No threats = stale intel
 
             # Add efficiency metrics
             if len(self.agents) > 0:
