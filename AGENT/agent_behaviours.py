@@ -9,7 +9,7 @@ from NEURAL_NETWORK.PPO_Agent_Network import PPOModel
 from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
 
-from ENVIRONMENT.env_resources import AppleTree, GoldLump
+from ENVIRONMENT.Resources import AppleTree, GoldLump
 
 # Import role-specific behaviors
 from AGENT.Agent_Behaviours.core_actions import CoreActionsMixin
@@ -522,6 +522,8 @@ class AgentBehaviour(
                 reward += 0.25
             elif task_type == "eliminate":
                 reward += 0.5
+            elif task_type == "plant":
+                reward += 0.3  # Planting is valuable for long-term resource production
 
             # === Context-Aware Bonuses (using info agent can observe) ===
             # Bonus for eliminating threats near HQ (good defense)
@@ -530,12 +532,24 @@ class AgentBehaviour(
                 hq_proximity_bonus = max(0.0, 0.3 - 0.001 * hq_distance)
                 reward += hq_proximity_bonus
 
-            # Bonus for agents with low health completing tasks (survival value)
+            # Bonus for agents with low health completing tasks (survival value - emphasis on completing while at risk)
             if hasattr(agent, "Health"):
                 health_ratio = agent.Health / 100.0
                 if health_ratio < 0.5:  # Low health
-                    survival_bonus = (0.5 - health_ratio) * 0.2  # Up to +0.1 bonus
+                    survival_bonus = (
+                        0.5 - health_ratio
+                    ) * 0.15  # Reduced to up to +0.075 bonus
                     reward += survival_bonus
+
+            # Bonus for peacekeepers maintaining high health (block prevents damage)
+            # High health is rewarded more as it represents better long-term strategy
+            if agent.role == "peacekeeper" and hasattr(agent, "Health"):
+                health_ratio = agent.Health / 100.0
+                if health_ratio > 0.7:  # High health
+                    health_maintenance_bonus = (
+                        health_ratio - 0.7
+                    ) * 0.15  # Reduced to up to +0.045 bonus
+                    reward += health_maintenance_bonus
 
         # === Task Failure (Normalised Penalty) ===
         elif task_state == utils_config.TaskState.FAILURE:
@@ -566,6 +580,13 @@ class AgentBehaviour(
             if task_type == "gather" and agent.role == "gatherer":
                 proximity_bonus = max(0.0, 0.1 - 0.05 * dist)  # Closer = better
                 reward += proximity_bonus
+
+            # Bonus for peacekeepers blocking near threats (defensive stance)
+            if action == "block" and agent.role == "peacekeeper":
+                block_bonus = 0.15  # Small defensive bonus for blocking stance
+                reward += block_bonus
+                # Extra bonus if actually near threats (calculated in block function)
+                # This is a role-appropriate behavior bonus
 
         # === Invalid Task or Unknown ===
         elif task_state == utils_config.TaskState.INVALID:

@@ -8,7 +8,7 @@ from SHARED.core_imports import *
 
 """File Specific Imports"""
 import UTILITIES.utils_config as utils_config
-from ENVIRONMENT.env_resources import AppleTree, GoldLump
+from ENVIRONMENT.Resources import AppleTree, GoldLump
 
 
 FACTION_GOAL = {"gold_collection": 400, "food_collection": 400}

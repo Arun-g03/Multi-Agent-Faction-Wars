@@ -38,11 +38,15 @@ def profile_function(
     profiler = cProfile.Profile()
     profiler.enable()
 
+    result = None
     try:
         result = func(*args, **kwargs)  # Run the function
+    except (SystemExit, KeyboardInterrupt):
+        # Allow normal exits without error
+        raise
     except Exception as e:
         print(f"[ERROR] Profiling interrupted due to an exception: {e}")
-        result = None
+        raise
     finally:
         profiler.disable()
 

@@ -296,3 +296,52 @@ class PeacekeeperBehavioursMixin:
                 f"{self.agent.role} cleaned resolved threats. Before: {before_cleanup}, After: {after_cleanup}.",
                 level=logging.INFO,
             )
+
+    def block(self):
+        """
+        Enter a defensive block stance, reducing incoming damage.
+        Returns ONGOING while blocking when being attacked.
+        Returns FAILURE if not being attacked (blocking unnecessarily).
+        """
+        # Check if agent is currently being attacked
+        if self.agent.is_under_attack:
+            # Block successful - give small reward for defensive stance
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"{self.agent.role} is blocking under attack (Health: {self.agent.Health}).",
+                    level=logging.INFO,
+                )
+            return utils_config.TaskState.ONGOING
+
+        # Check if there are nearby threats (potential attack incoming)
+        threats = self.agent.faction.provide_state().get("threats", [])
+        nearby_threats = [
+            t
+            for t in threats
+            if t.get("faction") != self.agent.faction.id and t.get("is_active", True)
+        ]
+
+        # Calculate distance to each threat
+        for threat in nearby_threats:
+            threat_x, threat_y = threat["location"]
+            distance = (
+                (self.agent.x - threat_x) ** 2 + (self.agent.y - threat_y) ** 2
+            ) ** 0.5
+
+            # Consider threat nearby if within 2 cells (immediate danger)
+            if distance <= 2 * utils_config.CELL_SIZE:
+                # Preemptive block is acceptable
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"{self.agent.role} is blocking proactively near threat at {distance:.1f}.",
+                        level=logging.DEBUG,
+                    )
+                return utils_config.TaskState.ONGOING
+
+        # No immediate threats or attack - blocking unnecessarily
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"{self.agent.role} is blocking unnecessarily - no active threats.",
+                level=logging.DEBUG,
+            )
+        return utils_config.TaskState.FAILURE

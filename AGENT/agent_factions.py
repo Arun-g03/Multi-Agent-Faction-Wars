@@ -1926,6 +1926,113 @@ class Faction:
             else:
                 self.hq_step_rewards.append(0.0)  # No gatherers to collect food
 
+        # ========== STRATEGY: Plant Trees ==========
+        elif action == "PLANT_TREES":
+            # Check if we have enough food to plant
+            if self.food_balance < 3:
+                logger.log_msg(
+                    f"[HQ EXECUTE] Cannot plant trees: insufficient food ({self.food_balance}/3).",
+                    level=logging.WARNING,
+                )
+                self.hq_step_rewards.append(-0.5)
+                self.current_strategy = None
+                return retest_strategy()
+
+            # Check if we have gatherers to plant
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            if gatherer_count == 0:
+                logger.log_msg(
+                    f"[HQ EXECUTE] Cannot plant trees: no gatherers available.",
+                    level=logging.WARNING,
+                )
+                self.hq_step_rewards.append(-0.5)
+                self.current_strategy = None
+                return retest_strategy()
+
+            # Check how many trees we already have
+            existing_trees = len(
+                [
+                    r
+                    for r in self.global_state.get("resources", [])
+                    if r["type"] == "AppleTree"
+                ]
+            )
+
+            # Check if agents are actually assigned to planting
+            planters_assigned = 0
+            for agent in self.agents:
+                if agent.role == "gatherer" and agent.current_task:
+                    task_type = agent.current_task.get("type", "")
+                    if task_type == "plant":
+                        planters_assigned += 1
+
+            # Reward based on strategic value: more trees = better resource production
+            # But don't plant excessively if we already have many trees
+            if (
+                planters_assigned > 0 and existing_trees < 20
+            ):  # Actively planting and room for more
+                self.hq_step_rewards.append(+1.2)  # Excellent strategic expansion
+            elif planters_assigned > 0:
+                self.hq_step_rewards.append(+0.8)  # Actively planting
+            elif existing_trees < 10:  # Room for expansion
+                self.hq_step_rewards.append(+0.5)  # Strategic planting valid
+            else:
+                self.hq_step_rewards.append(0.0)  # Already have many trees
+
+        # ========== STRATEGY: Plant Gold Veins ==========
+        elif action == "PLANT_GOLD_VEINS":
+            # Check if we have enough gold to plant
+            if self.gold_balance < 5:
+                logger.log_msg(
+                    f"[HQ EXECUTE] Cannot plant gold veins: insufficient gold ({self.gold_balance}/5).",
+                    level=logging.WARNING,
+                )
+                self.hq_step_rewards.append(-0.5)
+                self.current_strategy = None
+                return retest_strategy()
+
+            # Check if we have gatherers to plant
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            if gatherer_count == 0:
+                logger.log_msg(
+                    f"[HQ EXECUTE] Cannot plant gold veins: no gatherers available.",
+                    level=logging.WARNING,
+                )
+                self.hq_step_rewards.append(-0.5)
+                self.current_strategy = None
+                return retest_strategy()
+
+            # Check how many gold veins we already have
+            existing_veins = len(
+                [
+                    r
+                    for r in self.global_state.get("resources", [])
+                    if r["type"] == "GoldLump"
+                ]
+            )
+
+            # Check if agents are actually assigned to planting gold
+            vein_planters_assigned = 0
+            for agent in self.agents:
+                if agent.role == "gatherer" and agent.current_task:
+                    task_type = agent.current_task.get("type", "")
+                    if task_type == "plant_gold":
+                        vein_planters_assigned += 1
+
+            # Gold is valuable - planting is strategic but very expensive
+            # Only plant if we have extra gold and room for more veins
+            has_spare_gold = self.gold_balance >= 20  # Reserve significant gold
+            if vein_planters_assigned > 0 and existing_veins < 10 and has_spare_gold:
+                self.hq_step_rewards.append(+1.5)  # Excellent strategic gold expansion
+            elif vein_planters_assigned > 0 and has_spare_gold:
+                self.hq_step_rewards.append(+1.0)  # Actively planting gold
+            elif existing_veins < 5 and has_spare_gold:
+                self.hq_step_rewards.append(+0.6)  # Strategic planting valid
+            elif has_spare_gold:
+                self.hq_step_rewards.append(0.0)  # Already have enough veins
+            else:
+                self.hq_step_rewards.append(-0.3)  # Don't waste precious gold!
+
         # ========== STRATEGY: No Priority ==========
         elif action == "NO_PRIORITY":
             logger.log_msg(

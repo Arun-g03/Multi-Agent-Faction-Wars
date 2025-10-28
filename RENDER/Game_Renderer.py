@@ -3,7 +3,7 @@
 from SHARED.core_imports import *
 
 """File Specific Imports"""
-from ENVIRONMENT.env_resources import AppleTree, GoldLump
+from ENVIRONMENT.Resources import AppleTree, GoldLump
 import UTILITIES.utils_config as utils_config
 from RENDER.Common import GAME_FONT, get_font, get_text_surface
 from RENDER.PauseMenu_Renderer import PauseMenuRenderer

@@ -10,7 +10,8 @@ from RENDER.MainMenu_Renderer import MenuRenderer
 import UTILITIES.utils_config as utils_config
 from RENDER.Game_Renderer import GameRenderer
 from GAME.camera import Camera
-from ENVIRONMENT.env_resources import AppleTree, GoldLump, ResourceManager
+from ENVIRONMENT.Resources import AppleTree, GoldLump
+from ENVIRONMENT.env_resources import ResourceManager
 from ENVIRONMENT.env_terrain import Terrain
 from GAME.event_manager import EventManager
 from GAME.game_rules import check_victory, calculate_resource_victory_targets

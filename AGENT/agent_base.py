@@ -122,6 +122,9 @@ class BaseAgent:
             self.Health = 100
             self.speed = 1
             self.local_view = utils_config.Agent_field_of_view
+            self.is_under_attack = False  # Track if agent is currently being attacked
+            self.attack_cooldown = 0  # Steps remaining until attack flag clears
+            self.last_health = 100  # Track previous health to detect damage
             self.update_detection_range()
 
             # Initialise the network (model) first
@@ -357,6 +360,24 @@ class BaseAgent:
         self.current_step = step
         self.current_episode = episode
         self._perception_cache = None
+
+        # Check if agent was attacked (health decreased)
+        if self.Health < self.last_health:
+            self.is_under_attack = True
+            self.attack_cooldown = 5  # Stay in "under attack" state for 5 steps
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"Agent {self.agent_id} ({self.role}) is under attack! Health: {self.last_health} → {self.Health}",
+                    level=logging.WARNING,
+                )
+
+        # Update last health and decay attack flag
+        self.last_health = self.Health
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 1
+        else:
+            self.is_under_attack = False
+
         try:
             # Log the current task before performing it
             if utils_config.ENABLE_LOGGING:

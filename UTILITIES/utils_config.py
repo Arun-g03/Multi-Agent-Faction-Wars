@@ -380,6 +380,8 @@ HQ_STRATEGY_OPTIONS = [
     "ATTACK_THREATS",
     "COLLECT_GOLD",
     "COLLECT_FOOD",
+    "PLANT_TREES",
+    "PLANT_GOLD_VEINS",
     "RECRUIT_GATHERER",
     "RECRUIT_PEACEKEEPER",
     "SWAP_TO_GATHERER",
@@ -404,6 +406,8 @@ ROLE_ACTIONS_MAP = {
         "forage_apple",
         "heal_with_apple",
         "explore",
+        "plant_tree",
+        "plant_gold_vein",
     ],
     "peacekeeper": [
         "move_up",
@@ -414,6 +418,7 @@ ROLE_ACTIONS_MAP = {
         "heal_with_apple",
         "eliminate_threat",
         "explore",
+        "block",
     ],
 }
 """
