@@ -18,6 +18,13 @@ The project serves as both an educational tool for understanding multi-agent sys
 
 **Developed in Python 3.9.7**
 
+## Documentation
+
+- **[Quick Start Guide](Documentation/QUICK_START.md)** - Get up and running in minutes
+- **[Architecture Overview](Documentation/ARCHITECTURE.md)** - System design and component structure  
+- **[Developer Guide](Documentation/DEVELOPER_GUIDE.md)** - Extending the system and contributing
+- **[Changelog](CHANGELOG.md)** - Recent updates and improvements
+
 ## Getting Started
 
 Before running the project:
@@ -48,6 +55,34 @@ Examples include:
 - World and screen settings
 
 Look for comments like "Customise as needed!" throughout the code to easily find configurable sections.
+
+## Features
+
+### Recent Improvements (See [CHANGELOG.md](CHANGELOG.md))
+
+- **37.6% Performance Improvement**: Runtime reduced from 88s to 55s per episode (Logging OFF)
+- **Peacekeeper Block Ability**: Defensive stance with attack detection
+- **Gatherer Planting**: Plant trees and gold veins for long-term resource production
+- **HQ Health System**: HQs can be attacked and destroyed
+- **Pause Menu**: ESC to pause, M to restart, Q to quit
+- **Persistent Settings**: Settings saved across runs
+- **Resource Growth System**: Planted trees grow through 6 stages
+- **Enhanced Rewards**: Context-aware and outcome-based reward systems
+- **Threat Intelligence**: "Last known" threat tracking
+- **Settings Menu Audit**: Removed unimplemented features, responsive scaling
+
+### Core Features
+
+- **Multi-Agent Reinforcement Learning**: PPO agents learning in real-time
+- **Hierarchical Decision-Making**: Agents (tactical) + HQ (strategic)
+- **Faction-Based Competition**: 2-6 factions competing for resources
+- **Emergent Behaviors**: Complex strategies from simple rules
+- **Real-Time Visualization**: Live gameplay with camera controls
+- **Neural Network Training**: Automatic model saving and loading
+- **TensorBoard Integration**: Comprehensive metrics tracking
+- **Terrain Generation**: Procedural land/water generation
+- **Resource Management**: Food and gold collection systems
+- **Threat Detection**: Agent-to-agent and agent-to-HQ targeting
 
 ## Screenshots
 
