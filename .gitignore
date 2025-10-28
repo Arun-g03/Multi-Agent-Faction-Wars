@@ -7,3 +7,4 @@ game_env/
 venv/
 VISUALS/
 Profiling_Stats/
+settings.json
