@@ -11,6 +11,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 REQUIREMENTS_FILE = os.path.join(os.path.dirname(__file__), "requirements.txt")
 
+# Import settings manager
+from UTILITIES.settings_manager import SettingsManager
+
 # Package name mappings (pip name -> import name)
 PACKAGE_MAPPINGS = {
     "opencv-python": "cv2",
@@ -329,11 +332,22 @@ def check_and_install_dependencies() -> bool:
                     [sys.executable, "-m", "pip", "install", *missing_packages]
                 )
                 print("[INFO] All missing packages installed successfully!")
+
+                # Save installer completion status
+                settings = SettingsManager()
+                settings.set_installer_run(True)
+                settings.set_first_run(False)
+
             except subprocess.CalledProcessError as e:
                 print(f"[ERROR] Failed to install packages: {e}")
                 return False
         else:
             print("[INFO] All required packages are available!")
+
+            # Save installer completion status even if no packages needed
+            settings = SettingsManager()
+            settings.set_installer_run(True)
+            settings.set_first_run(False)
 
         return True
 

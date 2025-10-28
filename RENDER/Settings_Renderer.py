@@ -15,6 +15,7 @@ from RENDER.Common import (
     get_font,
 )
 import UTILITIES.utils_config as utils_config
+from UTILITIES.settings_manager import settings_manager
 import traceback
 import sys
 
@@ -35,8 +36,27 @@ class SettingsMenuRenderer:
     def __init__(self, screen):
         try:
             self.screen = screen
+
+            # Get screen dimensions for responsive scaling
+            self.screen_width = screen.get_width()
+            self.screen_height = screen.get_height()
+
+            # Define layout parameters (scaled based on screen size)
+            self.sidebar_width = int(self.screen_width * 0.175)  # ~175px at default
+            self.content_start_x = int(self.screen_width * 0.22)  # ~210px at default
+            self.value_x = int(self.screen_width * 0.55)  # ~550px at default
+            self.button_x = int(self.screen_width * 0.68)  # ~700px at default
+            self.help_button_x = int(self.screen_width * 0.75)  # ~750px at default
+
+            # Vertical layout
+            self.title_y = 20
+            self.sidebar_start_y = 80
+            self.item_height = int(self.screen_height * 0.055)  # ~60px at default
+            self.buttons_y = int(self.screen_height * 0.87)  # ~500px at 576px height
+            self.buttons_spacing = int(self.screen_width * 0.15)  # ~150px at default
+
             self.font = get_font(24, SETTINGS_FONT, False)
-            self.selected_category = "debugging"
+            self.selected_category = "system"
             self.saved = False
             self.input_mode = False
             self.input_field = None
@@ -45,6 +65,8 @@ class SettingsMenuRenderer:
             self.cursor_timer = 0
             self.show_help = False
             self.help_timer = 0
+            self.help_scroll_offset = 0
+            self.max_help_scroll = 0
 
             # Scrolling variables
             self.scroll_offset = 0
@@ -58,6 +80,7 @@ class SettingsMenuRenderer:
 
             # Define category labels
             self.sidebar_items = [
+                "system",
                 "debugging",
                 "episode settings",
                 "screen",
@@ -67,9 +90,6 @@ class SettingsMenuRenderer:
                 "faction",
                 "ai training",
                 "curriculum learning",
-                "experience replay",
-                "multi-agent",
-                "training monitoring",
                 "advanced loss",
             ]
 
@@ -78,6 +98,10 @@ class SettingsMenuRenderer:
             self.defaults = {}
 
             raw_settings = {
+                "system": [
+                    ("Headless Mode", "HEADLESS_MODE"),
+                    ("Force Dependency Check", "FORCE_DEPENDENCY_CHECK"),
+                ],
                 "debugging": [
                     ("TensorBoard", "ENABLE_TENSORBOARD"),
                     ("Logging", "ENABLE_LOGGING"),
@@ -141,27 +165,8 @@ class SettingsMenuRenderer:
                     ("Initial Resource Rate", "INITIAL_RESOURCE_SPAWN_RATE", 0.01),
                     ("Final Resource Rate", "FINAL_RESOURCE_SPAWN_RATE", 0.01),
                 ],
-                "experience replay": [
-                    ("Enable Experience Replay", "ENABLE_EXPERIENCE_REPLAY"),
-                    ("Replay Buffer Size", "REPLAY_BUFFER_SIZE", 1000),
-                    ("Priority Replay Alpha", "PRIORITY_REPLAY_ALPHA", 0.01),
-                    ("Priority Replay Beta", "PRIORITY_REPLAY_BETA", 0.01),
-                ],
-                "multi-agent": [
-                    ("Enable Multi-Agent Training", "ENABLE_MULTI_AGENT_TRAINING"),
-                    ("Inter-Agent Communication", "INTER_AGENT_COMMUNICATION"),
-                    ("Faction Coordination Bonus", "FACTION_COORDINATION_BONUS", 0.01),
-                ],
-                "training monitoring": [
-                    ("Enable Training Monitoring", "ENABLE_TRAINING_MONITORING"),
-                    ("Save Checkpoint Every", "SAVE_CHECKPOINT_EVERY", 1),
-                    ("Evaluation Frequency", "EVALUATION_FREQUENCY", 1),
-                    ("Early Stopping Patience", "EARLY_STOPPING_PATIENCE", 1),
-                ],
                 "advanced loss": [
                     ("Use Huber Loss", "USE_HUBER_LOSS"),
-                    ("Use Focal Loss", "USE_FOCAL_LOSS"),
-                    ("Loss Normalization", "LOSS_NORMALIZATION"),
                 ],
             }
 
@@ -230,10 +235,10 @@ class SettingsMenuRenderer:
     def calculate_scroll_bounds(self):
         """Calculate the maximum scroll offset based on screen height and number of categories."""
         try:
-            # Screen height available for categories (from y=80 to y=500)
-            available_height = 500 - 80
+            # Screen height available for categories
+            available_height = self.buttons_y - self.sidebar_start_y - 40
             # Height needed for all categories
-            total_height = len(self.sidebar_items) * 60
+            total_height = len(self.sidebar_items) * self.item_height
             # Maximum scroll offset
             self.max_scroll = max(0, total_height - available_height)
             # Ensure scroll offset is within bounds
@@ -258,8 +263,12 @@ class SettingsMenuRenderer:
     def is_category_visible(self, index):
         """Check if a category at the given index is currently visible on screen."""
         try:
-            category_y = 80 + index * 60 - self.scroll_offset
-            return 80 <= category_y <= 500
+            category_y = (
+                self.sidebar_start_y + index * self.item_height - self.scroll_offset
+            )
+            visible_top = self.sidebar_start_y
+            visible_bottom = self.buttons_y - 40
+            return visible_top <= category_y <= visible_bottom
         except Exception as e:
             print(f"[ERROR] Failed to check category visibility: {e}")
             return True
@@ -271,8 +280,7 @@ class SettingsMenuRenderer:
                 return  # No scrolling needed
 
             # Calculate scroll bar dimensions
-            sidebar_width = 210
-            sidebar_height = 500 - 80
+            sidebar_height = self.buttons_y - self.sidebar_start_y - 40
             scroll_bar_height = max(
                 30,
                 (sidebar_height / (self.max_scroll + sidebar_height)) * sidebar_height,
@@ -282,12 +290,14 @@ class SettingsMenuRenderer:
             scroll_ratio = (
                 self.scroll_offset / self.max_scroll if self.max_scroll > 0 else 0
             )
-            scroll_bar_y = 80 + scroll_ratio * (sidebar_height - scroll_bar_height)
+            scroll_bar_y = self.sidebar_start_y + scroll_ratio * (
+                sidebar_height - scroll_bar_height
+            )
 
             # Draw scroll bar background
             scroll_bg_rect = pygame.Rect(
-                20 + sidebar_width - self.scroll_bar_width,
-                80,
+                20 + self.sidebar_width - self.scroll_bar_width,
+                self.sidebar_start_y,
                 self.scroll_bar_width,
                 sidebar_height,
             )
@@ -295,7 +305,7 @@ class SettingsMenuRenderer:
 
             # Draw scroll bar handle
             self.scroll_bar_rect = pygame.Rect(
-                20 + sidebar_width - self.scroll_bar_width,
+                20 + self.sidebar_width - self.scroll_bar_width,
                 scroll_bar_y,
                 self.scroll_bar_width,
                 scroll_bar_height,
@@ -307,27 +317,35 @@ class SettingsMenuRenderer:
             if self.scroll_offset > 0:
                 # Up arrow
                 up_arrow_rect = pygame.Rect(
-                    20 + sidebar_width - self.scroll_bar_width,
-                    75,
+                    20 + self.sidebar_width - self.scroll_bar_width,
+                    self.sidebar_start_y - 5,
                     self.scroll_bar_width,
                     10,
                 )
                 pygame.draw.rect(self.screen, WHITE, up_arrow_rect)
                 self.draw_text(
-                    "▲", 12, BLACK, 20 + sidebar_width - self.scroll_bar_width + 5, 75
+                    "▲",
+                    12,
+                    BLACK,
+                    20 + self.sidebar_width - self.scroll_bar_width + 5,
+                    self.sidebar_start_y - 3,
                 )
 
             if self.scroll_offset < self.max_scroll:
                 # Down arrow
                 down_arrow_rect = pygame.Rect(
-                    20 + sidebar_width - self.scroll_bar_width,
-                    505,
+                    20 + self.sidebar_width - self.scroll_bar_width,
+                    self.buttons_y - 30,
                     self.scroll_bar_width,
                     10,
                 )
                 pygame.draw.rect(self.screen, WHITE, down_arrow_rect)
                 self.draw_text(
-                    "▼", 12, BLACK, 20 + sidebar_width - self.scroll_bar_width + 5, 505
+                    "▼",
+                    12,
+                    BLACK,
+                    20 + self.sidebar_width - self.scroll_bar_width + 5,
+                    self.buttons_y - 28,
                 )
 
         except Exception as e:
@@ -340,18 +358,17 @@ class SettingsMenuRenderer:
                 return False
 
             # Check if click is on scroll bar background
-            sidebar_width = 210
+            sidebar_height = self.buttons_y - self.sidebar_start_y - 40
             scroll_bg_rect = pygame.Rect(
-                20 + sidebar_width - self.scroll_bar_width,
-                80,
+                20 + self.sidebar_width - self.scroll_bar_width,
+                self.sidebar_start_y,
                 self.scroll_bar_width,
-                500 - 80,
+                sidebar_height,
             )
 
             if scroll_bg_rect.collidepoint(mouse_pos):
                 # Calculate new scroll position based on click
-                click_y = mouse_pos[1] - 80
-                sidebar_height = 500 - 80
+                click_y = mouse_pos[1] - self.sidebar_start_y
                 new_scroll_ratio = click_y / sidebar_height
                 self.scroll_offset = int(new_scroll_ratio * self.max_scroll)
                 self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
@@ -380,13 +397,6 @@ class SettingsMenuRenderer:
                 "PPO_CLIP_RATIO": 0.01,
                 "INITIAL_RESOURCE_SPAWN_RATE": 0.01,
                 "FINAL_RESOURCE_SPAWN_RATE": 0.01,
-                "REPLAY_BUFFER_SIZE": 500,
-                "PRIORITY_REPLAY_ALPHA": 0.01,
-                "PRIORITY_REPLAY_BETA": 0.01,
-                "FACTION_COORDINATION_BONUS": 0.01,
-                "SAVE_CHECKPOINT_EVERY": 1,
-                "EVALUATION_FREQUENCY": 1,
-                "EARLY_STOPPING_PATIENCE": 1,
             }
 
             # Update step sizes for existing settings
@@ -423,20 +433,7 @@ class SettingsMenuRenderer:
                 "ENABLE_CURRICULUM_LEARNING": "Gradually increase difficulty during training",
                 "INITIAL_RESOURCE_SPAWN_RATE": "Starting resource density (0.3 recommended)",
                 "FINAL_RESOURCE_SPAWN_RATE": "Final resource density (1.0 recommended)",
-                "ENABLE_EXPERIENCE_REPLAY": "Use experience replay for better training",
-                "REPLAY_BUFFER_SIZE": "Size of experience replay buffer (10000+ recommended)",
-                "PRIORITY_REPLAY_ALPHA": "Priority replay importance (0.6 recommended)",
-                "PRIORITY_REPLAY_BETA": "Priority replay correction (0.4 recommended)",
-                "ENABLE_MULTI_AGENT_TRAINING": "Enable coordinated multi-agent learning",
-                "INTER_AGENT_COMMUNICATION": "Allow agents to share experiences",
-                "FACTION_COORDINATION_BONUS": "Reward for coordinated actions (0.1 recommended)",
-                "ENABLE_TRAINING_MONITORING": "Track training progress and metrics",
-                "SAVE_CHECKPOINT_EVERY": "Save models every N episodes (5 recommended)",
-                "EVALUATION_FREQUENCY": "Evaluate performance every N episodes (3 recommended)",
-                "EARLY_STOPPING_PATIENCE": "Episodes without improvement before stopping (10 recommended)",
-                "USE_HUBER_LOSS": "Use Huber loss for value function (more robust)",
-                "USE_FOCAL_LOSS": "Use focal loss for policy (experimental)",
-                "LOSS_NORMALIZATION": "Normalize losses for training stability",
+                "USE_HUBER_LOSS": "Use Huber loss for value function (more robust than MSE)",
             }
             return descriptions.get(key, "")
         except Exception as e:
@@ -451,9 +448,9 @@ class SettingsMenuRenderer:
 
             for i, setting in enumerate(settings):
                 try:
-                    y = 80 + i * 60
+                    y = self.sidebar_start_y + i * self.item_height
                     # Check if mouse is hovering over the parameter label
-                    label_rect = pygame.Rect(250, y, 350, 30)
+                    label_rect = pygame.Rect(self.content_start_x, y, 350, 30)
                     if label_rect.collidepoint(mouse_pos):
                         description = self.get_parameter_description(setting["key"])
                         if description:
@@ -515,10 +512,10 @@ class SettingsMenuRenderer:
             print(f"[ERROR] Failed to draw tooltip: {e}")
 
     def draw_help_overlay(self):
-        """Draw a comprehensive help overlay for AI training parameters."""
+        """Draw a comprehensive help overlay for AI training parameters with scrolling."""
         try:
             # Semi-transparent background
-            overlay_surface = pygame.Surface((800, 600))
+            overlay_surface = pygame.Surface((self.screen_width, self.screen_height))
             overlay_surface.set_alpha(200)
             overlay_surface.fill((0, 0, 0))
             self.screen.blit(overlay_surface, (0, 0))
@@ -530,31 +527,51 @@ class SettingsMenuRenderer:
                 "Learning Rates:",
                 "• PPO Learning Rate: Start with 0.0001 for stability",
                 "• HQ Learning Rate: Use 0.0001 for strategic learning",
-                "• Decay: 0.95-0.99 recommended for gradual reduction",
+                "• Min Learning Rate: Minimum LR to prevent stagnation",
+                "• Learning Rate Decay: 0.95-0.99 for gradual reduction",
+                "• LR Step Size: How often to decay the learning rate",
                 "",
                 "Training Parameters:",
-                "• Batch Size: 32-128 for optimal training",
-                "• Memory Size: At least 128 experiences before training",
-                "• GAE Lambda: 0.95-0.99 for advantage estimation",
+                "• Batch Size: 32-128 for optimal training, larger = more stable",
+                "• Memory Size: Minimum experiences before training starts",
+                "• GAE Lambda: 0.95-0.99 for Generalized Advantage Estimation",
                 "",
                 "Loss Coefficients:",
-                "• Value Loss: 0.5 for balanced policy/value learning",
-                "• Entropy: 0.01-0.1 to encourage exploration",
-                "• Gradient Clip: 0.5 for training stability",
+                "• Value Loss Coeff: Weight of value function loss (0.5 recommended)",
+                "• Entropy Coeff: Exploration bonus (0.01-0.1)",
+                "• Gradient Clip Norm: Clips gradients for stability (0.5)",
+                "• PPO Clip Ratio: Policy clipping range (0.1-0.2)",
                 "",
                 "Curriculum Learning:",
-                "• Start with 30% resources, gradually increase to 100%",
-                "• Helps agents learn progressively",
+                "• Enable Curriculum: Gradually increase difficulty over time",
+                "• Initial Resource Rate: Starting resource density (0.3 = 30%)",
+                "• Final Resource Rate: Ending resource density (1.0 = 100%)",
                 "",
-                "Experience Replay:",
-                "• Buffer size: 10,000+ for better sample diversity",
-                "• Priority replay for important experiences",
+                "Advanced Loss:",
+                "• Use Huber Loss: More robust than MSE for value learning",
+                "  Reduces impact of outliers during training",
+                "  Better for noisy value estimates",
                 "",
-                "Press ESC or click Help again to close",
+                "Keyboard Shortcuts:",
+                "• ESC: Close help / Toggle pause in game",
+                "• Mouse Wheel: Scroll through settings",
+                "• Home/End: Jump to top/bottom of category list",
+                "",
+                "Press ESC or click Close to exit",
             ]
 
-            # Draw help content
-            y_offset = 50
+            # Calculate scroll bounds
+            total_height = len(help_content) * 25
+            visible_height = self.screen_height - 100  # Space for title and buttons
+            self.max_help_scroll = max(0, total_height - visible_height)
+
+            # Clamp scroll offset
+            self.help_scroll_offset = max(
+                0, min(self.help_scroll_offset, self.max_help_scroll)
+            )
+
+            # Draw help content with scroll offset
+            y_offset = 50 - self.help_scroll_offset
             for line in help_content:
                 try:
                     if line.startswith("•"):
@@ -566,7 +583,7 @@ class SettingsMenuRenderer:
                         "Training Parameters:",
                         "Loss Coefficients:",
                         "Curriculum Learning:",
-                        "Experience Replay:",
+                        "Advanced Loss:",
                     ]:
                         color = WHITE
                         size = 20
@@ -576,18 +593,26 @@ class SettingsMenuRenderer:
                         color = GREY
                         size = 16
 
-                    self.draw_text(line, size, color, 50, y_offset)
+                    # Only draw if visible
+                    if 0 <= y_offset <= self.screen_height:
+                        self.draw_text(line, size, color, 50, y_offset)
                     y_offset += 25
                 except Exception as e:
                     print(f"[WARNING] Failed to draw help line: {e}")
                     y_offset += 25
                     continue
 
+            # Draw scroll bar if needed
+            if self.max_help_scroll > 0:
+                self.draw_help_scroll_bar()
+
             # Close button
             try:
-                close_btn = pygame.Rect(700, 20, 80, 30)
+                close_btn = pygame.Rect(int(self.screen_width * 0.73), 20, 80, 30)
                 pygame.draw.rect(self.screen, RED, close_btn)
-                self.draw_text("Close", 16, WHITE, 720, 25)
+                self.draw_text(
+                    "Close", 16, WHITE, int(self.screen_width * 0.73) + 20, 25
+                )
 
                 # Handle close button click
                 mouse_pos = pygame.mouse.get_pos()
@@ -599,6 +624,52 @@ class SettingsMenuRenderer:
         except Exception as e:
             print(f"[ERROR] Failed to draw help overlay: {e}")
             traceback.print_exc()
+
+    def draw_help_scroll_bar(self):
+        """Draw scroll bar for help overlay."""
+        try:
+            scroll_bar_x = self.screen_width - 30
+            scroll_bar_width = 20
+            scroll_bar_height = self.screen_height - 100
+            scroll_bar_bg_y = 50
+
+            # Calculate handle size and position
+            handle_height = max(
+                30,
+                (scroll_bar_height / (self.max_help_scroll + scroll_bar_height))
+                * scroll_bar_height,
+            )
+            scroll_ratio = (
+                self.help_scroll_offset / self.max_help_scroll
+                if self.max_help_scroll > 0
+                else 0
+            )
+            handle_y = scroll_bar_bg_y + scroll_ratio * (
+                scroll_bar_height - handle_height
+            )
+
+            # Draw scroll bar background
+            pygame.draw.rect(
+                self.screen,
+                DARK_GREY,
+                (scroll_bar_x, scroll_bar_bg_y, scroll_bar_width, scroll_bar_height),
+            )
+
+            # Draw scroll bar handle
+            pygame.draw.rect(
+                self.screen,
+                GREY,
+                (scroll_bar_x, handle_y, scroll_bar_width, handle_height),
+            )
+            pygame.draw.rect(
+                self.screen,
+                WHITE,
+                (scroll_bar_x, handle_y, scroll_bar_width, handle_height),
+                2,
+            )
+
+        except Exception as e:
+            print(f"[ERROR] Failed to draw help scroll bar: {e}")
 
     def draw_text(self, text, size, colour, x, y, bold=False):
         """Draw text with error handling."""
@@ -688,7 +759,11 @@ class SettingsMenuRenderer:
                 for idx, label in enumerate(self.sidebar_items):
                     try:
                         # Calculate position with scroll offset
-                        y = 80 + idx * 60 - self.scroll_offset
+                        y = (
+                            self.sidebar_start_y
+                            + idx * self.item_height
+                            - self.scroll_offset
+                        )
 
                         # Skip if category is not visible
                         if not self.is_category_visible(idx):
@@ -705,7 +780,7 @@ class SettingsMenuRenderer:
                             (180, 180, 180),
                             20,
                             y,
-                            210,
+                            self.sidebar_width,
                             40,
                         )
                         if pygame.mouse.get_pressed()[0] and btn.collidepoint(
@@ -728,22 +803,27 @@ class SettingsMenuRenderer:
                 step_buttons = []
                 for i, setting in enumerate(settings):
                     try:
-                        y = 80 + i * 60
+                        y = self.sidebar_start_y + i * self.item_height
                         label = setting["label"]
                         val = setting["value"]
-                        self.draw_text(f"{label}:", 20, WHITE, 250, y)
+                        self.draw_text(f"{label}:", 20, WHITE, self.content_start_x, y)
 
                         if self.input_mode and self.input_field == setting:
                             display_text = self.input_text + (
                                 "|" if self.cursor_visible else ""
                             )
-                            self.draw_text(display_text, 20, WHITE, 600, y)
+                            self.draw_text(display_text, 20, WHITE, self.value_x, y)
                         else:
-                            self.draw_text(str(val), 20, GREEN if val else RED, 600, y)
+                            self.draw_text(
+                                str(val), 20, GREEN if val else RED, self.value_x, y
+                            )
 
                         if "options" in setting:
                             try:
-                                toggle_btn = pygame.Rect(700, y, 40, 30)
+                                button_size = int(self.screen_width * 0.04)
+                                toggle_btn = pygame.Rect(
+                                    self.button_x, y, button_size, 30
+                                )
                                 pygame.draw.rect(self.screen, DARK_GREY, toggle_btn)
                                 if setting["value"]:
                                     pygame.draw.rect(self.screen, GREEN, toggle_btn)
@@ -772,9 +852,19 @@ class SettingsMenuRenderer:
 
                         elif "step" in setting:
                             try:
-                                minus_btn = pygame.Rect(700, y, 30, 30)
-                                plus_btn = pygame.Rect(740, y, 30, 30)
-                                default_btn = pygame.Rect(780, y, 80, 30)
+                                button_size = int(self.screen_width * 0.03)
+                                minus_btn = pygame.Rect(
+                                    self.button_x, y, button_size, 30
+                                )
+                                plus_btn = pygame.Rect(
+                                    self.button_x + button_size + 5, y, button_size, 30
+                                )
+                                default_btn = pygame.Rect(
+                                    self.button_x + (button_size * 2) + 10,
+                                    y,
+                                    int(self.screen_width * 0.09),
+                                    30,
+                                )
                                 pygame.draw.rect(self.screen, RED, minus_btn)
                                 pygame.draw.rect(self.screen, GREEN, plus_btn)
                                 pygame.draw.rect(self.screen, GREY, default_btn)
@@ -808,6 +898,12 @@ class SettingsMenuRenderer:
 
             # Draw main buttons
             try:
+                button_y = self.buttons_y
+                button_height = 50
+                button_w1 = int(self.screen_width * 0.15)
+                button_w2 = int(self.screen_width * 0.25)
+                button_w3 = int(self.screen_width * 0.17)
+
                 back_btn = self.create_button(
                     "Back",
                     SETTINGS_FONT,
@@ -815,10 +911,10 @@ class SettingsMenuRenderer:
                     GREY,
                     (180, 180, 180),
                     (120, 120, 120),
-                    250,
-                    500,
-                    150,
-                    50,
+                    self.content_start_x,
+                    button_y,
+                    button_w1,
+                    button_height,
                 )
                 save_return_btn = self.create_button(
                     "Save and Return",
@@ -827,10 +923,10 @@ class SettingsMenuRenderer:
                     BLUE,
                     (80, 80, 255),
                     (50, 50, 200),
-                    450,
-                    500,
-                    250,
-                    50,
+                    self.content_start_x + button_w1 + 10,
+                    button_y,
+                    button_w2,
+                    button_height,
                 )
                 reset_all_btn = self.create_button(
                     "Reset All",
@@ -839,10 +935,10 @@ class SettingsMenuRenderer:
                     GREY,
                     (180, 180, 180),
                     (120, 120, 120),
-                    20,
-                    500,
-                    200,
-                    50,
+                    self.content_start_x + button_w1 + button_w2 + 20,
+                    button_y,
+                    button_w3,
+                    button_height,
                 )
 
                 # Add help button for AI training categories
@@ -850,9 +946,6 @@ class SettingsMenuRenderer:
                 if self.selected_category in [
                     "ai training",
                     "curriculum learning",
-                    "experience replay",
-                    "multi-agent",
-                    "training monitoring",
                     "advanced loss",
                 ]:
                     try:
@@ -863,8 +956,12 @@ class SettingsMenuRenderer:
                             GREEN,
                             (100, 200, 100),
                             (80, 160, 80),
-                            720,
-                            500,
+                            self.content_start_x
+                            + button_w1
+                            + button_w2
+                            + button_w3
+                            + 30,
+                            button_y,
                             80,
                             50,
                         )
@@ -873,9 +970,24 @@ class SettingsMenuRenderer:
             except Exception as e:
                 print(f"[ERROR] Failed to draw main buttons: {e}")
                 # Create minimal fallback buttons
-                back_btn = pygame.Rect(250, 500, 150, 50)
-                save_return_btn = pygame.Rect(450, 500, 250, 50)
-                reset_all_btn = pygame.Rect(20, 500, 200, 50)
+                back_btn = pygame.Rect(
+                    self.content_start_x,
+                    self.buttons_y,
+                    int(self.screen_width * 0.15),
+                    50,
+                )
+                save_return_btn = pygame.Rect(
+                    self.content_start_x + int(self.screen_width * 0.17),
+                    self.buttons_y,
+                    int(self.screen_width * 0.25),
+                    50,
+                )
+                reset_all_btn = pygame.Rect(
+                    self.content_start_x + int(self.screen_width * 0.44),
+                    self.buttons_y,
+                    int(self.screen_width * 0.17),
+                    50,
+                )
                 help_btn = None
 
             # Show tooltips for AI training parameters
@@ -883,9 +995,6 @@ class SettingsMenuRenderer:
                 if self.selected_category in [
                     "ai training",
                     "curriculum learning",
-                    "experience replay",
-                    "multi-agent",
-                    "training monitoring",
                     "advanced loss",
                 ]:
                     self.show_parameter_tooltips()
@@ -900,69 +1009,7 @@ class SettingsMenuRenderer:
                 print(f"[ERROR] Failed to show help overlay: {e}")
                 self.show_help = False  # Reset if it fails
 
-            # Draw tips and help text
-            try:
-                self.draw_text(
-                    "Tip: You can click on a value to input in a custom number.",
-                    24,
-                    GREY,
-                    50,
-                    560,
-                )
-                self.draw_text("Type and press Enter to confirm", 24, GREY, 50, 590)
-
-                # Add scrolling instructions
-                if self.max_scroll > 0:
-                    self.draw_text(
-                        "Scroll: Mouse wheel, Page Up/Down, or click scroll bar",
-                        18,
-                        BLUE,
-                        50,
-                        620,
-                    )
-                    self.draw_text(
-                        "Navigation: Arrow keys to move between categories",
-                        18,
-                        BLUE,
-                        50,
-                        640,
-                    )
-                    self.draw_text(
-                        "Quick jump: Home (top) / End (bottom)", 18, BLUE, 50, 660
-                    )
-                else:
-                    # Add helpful tooltips for AI training parameters
-                    if self.selected_category in [
-                        "ai training",
-                        "curriculum learning",
-                        "experience replay",
-                        "multi-agent",
-                        "training monitoring",
-                        "advanced loss",
-                    ]:
-                        self.draw_text(
-                            "AI Training Tip: Lower learning rates (0.0001) for stability, higher (0.001) for faster learning",
-                            18,
-                            BLUE,
-                            50,
-                            620,
-                        )
-                        self.draw_text(
-                            "Curriculum Tip: Start with fewer resources and gradually increase difficulty",
-                            18,
-                            BLUE,
-                            50,
-                            640,
-                        )
-                        self.draw_text(
-                            "Monitoring Tip: Save checkpoints frequently to preserve good models",
-                            18,
-                            BLUE,
-                            50,
-                            660,
-                        )
-            except Exception as e:
-                print(f"[WARNING] Failed to draw tips and help text: {e}")
+            # Hover tooltips are handled elsewhere, no static tips needed
 
             pygame.display.update()
 
@@ -983,9 +1030,11 @@ class SettingsMenuRenderer:
 
                                 for i, setting in enumerate(settings):
                                     try:
-                                        y = 80 + i * 60
+                                        y = self.sidebar_start_y + i * self.item_height
                                         # matches where you draw the values
-                                        value_rect = pygame.Rect(600, y, 80, 30)
+                                        value_rect = pygame.Rect(
+                                            self.value_x, y, 80, 30
+                                        )
                                         if (
                                             value_rect.collidepoint(mouse_x, mouse_y)
                                             and "step" in setting
@@ -1023,6 +1072,33 @@ class SettingsMenuRenderer:
                                             f"[ERROR] Failed to process input before saving: {e}"
                                         )
 
+                                    # Save all settings to persistent storage
+                                    try:
+                                        settings_dict = {}
+                                        for (
+                                            category_settings
+                                        ) in self.settings_by_category.values():
+                                            for setting in category_settings:
+                                                try:
+                                                    settings_dict[setting["key"]] = (
+                                                        setting["value"]
+                                                    )
+                                                except Exception as e:
+                                                    print(
+                                                        f"[WARNING] Failed to save setting {setting.get('key', 'unknown')}: {e}"
+                                                    )
+
+                                        settings_manager.update_config_settings(
+                                            settings_dict
+                                        )
+                                        print(
+                                            f"[INFO] Saved {len(settings_dict)} settings to persistent storage"
+                                        )
+                                    except Exception as e:
+                                        print(
+                                            f"[ERROR] Failed to save settings to persistent storage: {e}"
+                                        )
+
                                     self.saved = True
                                     return False
                                 if reset_all_btn.collidepoint(event.pos):
@@ -1052,13 +1128,19 @@ class SettingsMenuRenderer:
                                 if self.selected_category in [
                                     "ai training",
                                     "curriculum learning",
-                                    "experience replay",
-                                    "multi-agent",
-                                    "training monitoring",
                                     "advanced loss",
                                 ]:
                                     try:
-                                        help_btn_rect = pygame.Rect(720, 500, 80, 50)
+                                        help_btn_rect = pygame.Rect(
+                                            self.content_start_x
+                                            + button_w1
+                                            + button_w2
+                                            + button_w3
+                                            + 30,
+                                            button_y,
+                                            80,
+                                            50,
+                                        )
                                         if help_btn_rect.collidepoint(event.pos):
                                             self.show_help = not self.show_help
                                             self.help_timer = 0
@@ -1125,8 +1207,10 @@ class SettingsMenuRenderer:
                                 clicked_input = False
                                 for i, setting in enumerate(settings):
                                     try:
-                                        y = 80 + i * 60
-                                        value_rect = pygame.Rect(600, y, 80, 30)
+                                        y = self.sidebar_start_y + i * self.item_height
+                                        value_rect = pygame.Rect(
+                                            self.value_x, y, 80, 30
+                                        )
                                         if (
                                             value_rect.collidepoint(mouse_x, mouse_y)
                                             and "step" in setting
@@ -1152,7 +1236,20 @@ class SettingsMenuRenderer:
                         # Handle mouse wheel scrolling
                         if event.type == pygame.MOUSEWHEEL:
                             try:
-                                self.handle_scroll_input(event.y)
+                                if self.show_help:
+                                    # Scroll help overlay
+                                    if event.y > 0:
+                                        self.help_scroll_offset = max(
+                                            0, self.help_scroll_offset - 40
+                                        )
+                                    else:
+                                        self.help_scroll_offset = min(
+                                            self.max_help_scroll,
+                                            self.help_scroll_offset + 40,
+                                        )
+                                else:
+                                    # Scroll category list
+                                    self.handle_scroll_input(event.y)
                             except Exception as e:
                                 print(f"[ERROR] Failed to handle mouse wheel: {e}")
 
@@ -1204,63 +1301,96 @@ class SettingsMenuRenderer:
                         # Handle keyboard scrolling
                         if event.type == pygame.KEYDOWN and not self.input_mode:
                             try:
-                                if event.key == pygame.K_PAGEUP:
-                                    self.handle_scroll_input(1)  # Scroll up
-                                elif event.key == pygame.K_PAGEDOWN:
-                                    self.handle_scroll_input(-1)  # Scroll down
-                                elif event.key == pygame.K_HOME:
-                                    self.scroll_offset = 0  # Jump to top
-                                elif event.key == pygame.K_END:
-                                    self.scroll_offset = (
-                                        self.max_scroll
-                                    )  # Jump to bottom
-                                elif event.key == pygame.K_UP:
-                                    # Find current category and move to previous
-                                    try:
-                                        current_index = self.sidebar_items.index(
-                                            self.selected_category
+                                if self.show_help:
+                                    # Handle help overlay scrolling
+                                    if event.key == pygame.K_PAGEUP:
+                                        self.help_scroll_offset = max(
+                                            0, self.help_scroll_offset - 200
                                         )
-                                        if current_index > 0:
-                                            self.selected_category = self.sidebar_items[
-                                                current_index - 1
-                                            ]
-                                            # Ensure the new category is visible
-                                            if not self.is_category_visible(
-                                                current_index - 1
-                                            ):
-                                                self.scroll_offset = max(
-                                                    0, (current_index - 1) * 60 - 200
+                                    elif event.key == pygame.K_PAGEDOWN:
+                                        self.help_scroll_offset = min(
+                                            self.max_help_scroll,
+                                            self.help_scroll_offset + 200,
+                                        )
+                                    elif event.key == pygame.K_HOME:
+                                        self.help_scroll_offset = 0  # Jump to top
+                                    elif event.key == pygame.K_END:
+                                        self.help_scroll_offset = (
+                                            self.max_help_scroll
+                                        )  # Jump to bottom
+                                else:
+                                    # Handle category list scrolling
+                                    if event.key == pygame.K_PAGEUP:
+                                        self.handle_scroll_input(1)  # Scroll up
+                                    elif event.key == pygame.K_PAGEDOWN:
+                                        self.handle_scroll_input(-1)  # Scroll down
+                                    elif event.key == pygame.K_HOME:
+                                        self.scroll_offset = 0  # Jump to top
+                                    elif event.key == pygame.K_END:
+                                        self.scroll_offset = (
+                                            self.max_scroll
+                                        )  # Jump to bottom
+                                    elif event.key == pygame.K_UP:
+                                        # Find current category and move to previous
+                                        try:
+                                            current_index = self.sidebar_items.index(
+                                                self.selected_category
+                                            )
+                                            if current_index > 0:
+                                                self.selected_category = (
+                                                    self.sidebar_items[
+                                                        current_index - 1
+                                                    ]
                                                 )
-                                    except Exception as e:
-                                        print(
-                                            f"[WARNING] Failed to navigate to previous category: {e}"
-                                        )
-                                elif event.key == pygame.K_DOWN:
-                                    # Find current category and move to next
-                                    try:
-                                        current_index = self.sidebar_items.index(
-                                            self.selected_category
-                                        )
-                                        if current_index < len(self.sidebar_items) - 1:
-                                            self.selected_category = self.sidebar_items[
-                                                current_index + 1
-                                            ]
-                                            # Ensure the new category is visible
-                                            if not self.is_category_visible(
-                                                current_index + 1
+                                                # Ensure the new category is visible
+                                                if not self.is_category_visible(
+                                                    current_index - 1
+                                                ):
+                                                    self.scroll_offset = max(
+                                                        0,
+                                                        (current_index - 1)
+                                                        * self.item_height
+                                                        - 200,
+                                                    )
+                                        except Exception as e:
+                                            print(
+                                                f"[WARNING] Failed to navigate to previous category: {e}"
+                                            )
+                                    elif event.key == pygame.K_DOWN:
+                                        # Find current category and move to next
+                                        try:
+                                            current_index = self.sidebar_items.index(
+                                                self.selected_category
+                                            )
+                                            if (
+                                                current_index
+                                                < len(self.sidebar_items) - 1
                                             ):
-                                                self.scroll_offset = min(
-                                                    self.max_scroll,
-                                                    (current_index + 1) * 60 - 200,
+                                                self.selected_category = (
+                                                    self.sidebar_items[
+                                                        current_index + 1
+                                                    ]
                                                 )
-                                    except Exception as e:
-                                        print(
-                                            f"[WARNING] Failed to navigate to next category: {e}"
-                                        )
+                                                # Ensure the new category is visible
+                                                if not self.is_category_visible(
+                                                    current_index + 1
+                                                ):
+                                                    self.scroll_offset = min(
+                                                        self.max_scroll,
+                                                        (current_index + 1)
+                                                        * self.item_height
+                                                        - 200,
+                                                    )
+                                        except Exception as e:
+                                            print(
+                                                f"[WARNING] Failed to navigate to next category: {e}"
+                                            )
+
                             except Exception as e:
                                 print(
                                     f"[ERROR] Failed to handle keyboard scrolling: {e}"
                                 )
+
                     except Exception as e:
                         print(f"[ERROR] Failed to handle event {event.type}: {e}")
                         continue

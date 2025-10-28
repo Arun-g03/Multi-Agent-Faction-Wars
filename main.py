@@ -8,32 +8,95 @@ startup_script = os.path.join("UTILITIES", "Startup_installer.py")
 print("[INFO] - Main.py ---- Starting the game...\n")
 print("[INFO] Checking and installing dependencies...")
 
-# Run the startup installer BEFORE any other imports
+# Load persistent settings BEFORE running installer
+from UTILITIES.settings_manager import SettingsManager
+
+settings = SettingsManager()
+
+# Check if the installer has already been run
+has_run_installer = settings.has_run_installer()
+
+# Check if we should force reinstall due to previous dependency errors
+should_force_reinstall = settings.should_force_reinstall()
+
+# Check if user requested force dependency check
+# Import after settings_manager is initialized
 try:
-    result = subprocess.run([sys.executable, startup_script], check=True)
-except subprocess.CalledProcessError:
-    sys.exit("[ERROR] Failed to verify dependencies. Exiting.")
+    import UTILITIES.utils_config as utils_config
 
-# Prompt for headless mode after dependencies are installed
-print("\nWould you like to run in HEADLESS_MODE?")
-print(
-    "\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR BETTER PERFORMANCE\033[0m"
-)
+    force_check_requested = utils_config.FORCE_DEPENDENCY_CHECK
+    if force_check_requested:
+        print("\n[INFO] Force dependency check requested from Settings menu")
+        settings.force_reinstall()
+except:
+    force_check_requested = False
 
-print("\nEnter y for yes n for no: ", end="")
-user_input = input().strip().lower()
-headless_response = user_input == "y"
+# Check for dependency errors by attempting to import critical modules
+dependency_error_detected = False
+if has_run_installer and not should_force_reinstall:
+    print("\n[INFO] Checking critical dependencies...")
+    try:
+        # Try importing the most critical modules
+        import torch
+        import numpy
+        import pygame
+        import cv2
 
-# Inject HEADLESS_MODE before utils_config is imported
-with open("UTILITIES/utils_config.py", "r") as f:
-    config_lines = f.readlines()
+        print("[OK] All critical dependencies are available")
+    except ImportError as e:
+        dependency_error_detected = True
+        print(f"\n[WARNING] Missing critical dependency: {e}")
+        print("[WARNING] Will re-run installer to fix dependency issues")
 
-with open("UTILITIES/utils_config.py", "w") as f:
-    for line in config_lines:
-        if line.startswith("HEADLESS_MODE"):
-            f.write(f"HEADLESS_MODE = {str(headless_response)}\n")
-        else:
-            f.write(line)
+# Only run the startup installer if it hasn't been run yet or if we need to force reinstall
+if not has_run_installer or should_force_reinstall or dependency_error_detected:
+    if should_force_reinstall or dependency_error_detected:
+        print("\n[WARNING] Dependency errors detected. Re-running installer...")
+        settings.force_reinstall()  # Keep flag set
+    else:
+        print("\n[INFO] First time setup detected. Running dependency installer...")
+
+    try:
+        result = subprocess.run([sys.executable, startup_script], check=True)
+
+        # Clear force reinstall flag after successful run
+        if should_force_reinstall or dependency_error_detected or force_check_requested:
+            settings.clear_force_reinstall()
+
+        # Clear force dependency check flag if it was user-requested
+        if force_check_requested:
+            try:
+                utils_config.FORCE_DEPENDENCY_CHECK = False
+                settings.update_config_settings({"FORCE_DEPENDENCY_CHECK": False})
+                print("[INFO] Force dependency check flag cleared")
+            except Exception as e:
+                print(f"[WARNING] Could not clear force check flag: {e}")
+    except subprocess.CalledProcessError:
+        sys.exit("[ERROR] Failed to verify dependencies. Exiting.")
+
+    # Reload settings to get the updated flags
+    settings = SettingsManager()
+else:
+    print("\n[INFO] Dependency check already completed (skipping installer)")
+
+# Load settings for headless mode check
+has_run = settings.has_run_installer()
+
+if not has_run or settings.is_first_run():
+    print("\nWould you like to run in HEADLESS_MODE?")
+    print(
+        "\033[93mHEADLESS MODE WILL DISABLE GAME RENDERING BUT WILL ALLOW FOR BETTER PERFORMANCE\033[0m"
+    )
+    print("\nEnter y for yes n for no: ", end="")
+    user_input = input().strip().lower()
+    headless_response = user_input == "y"
+    settings.set_headless_mode(headless_response)
+else:
+    # Use saved preference
+    headless_response = settings.is_headless_mode()
+    print(
+        f"\n[INFO] Running in {'HEADLESS' if headless_response else 'VISUAL'} mode (from saved settings)"
+    )
 
 # Continue with main program after startup script dependency check
 from SHARED.core_imports import *
@@ -41,6 +104,14 @@ from GAME.game_manager import GameManager
 from RENDER.Game_Renderer import GameRenderer
 from RENDER.MainMenu_Renderer import MenuRenderer
 import UTILITIES.utils_config as utils_config
+
+# Apply the headless mode setting
+if (
+    hasattr(utils_config, "_load_persistent_settings")
+    and utils_config._load_persistent_settings
+):
+    # Override the loaded value with the user's current choice
+    utils_config.HEADLESS_MODE = headless_response
 
 if utils_config.ENABLE_TENSORBOARD:
     from SHARED.core_imports import tensorboard_logger
@@ -182,6 +253,7 @@ class MainGame:
                                 step=game_manager.current_step,
                                 episode=game_manager.episode,
                                 resource_counts=game_manager.resource_counts,
+                                paused=getattr(game_manager, "paused", False),
                             )
 
                             if not utils_config.HEADLESS_MODE:

@@ -49,10 +49,14 @@ class Faction:
             self.task_counter = 0
             self.assigned_tasks = {}
             self.territory_count = 0  # Track number of tiles owned by this faction
+            self._territory_cache = None  # Cached territory count
+            self._territory_cache_step = -1  # Step when cache was calculated
 
             self.unvisited_cells = set()
             self.reports = []
-            self.recent_threat_reports = []  # Track recent threat reports with timestamps
+            self.recent_threat_reports = (
+                []
+            )  # Track recent threat reports with timestamps
             self.strategy_history = []  # Track strategies chosen
 
             self.create_task = utils_config.create_task
@@ -63,6 +67,9 @@ class Faction:
                 "position": (0, 0),  # To be set during initialisation
                 "size": 50,  # Default size of the base
                 "colour": colour,  # Match faction colour
+                "health": 100,  # HQ health (0-100)
+                "max_health": 100,  # Maximum HQ health
+                "is_destroyed": False,  # Whether HQ is destroyed
             }
 
             self.game_manager = game_manager
@@ -73,7 +80,8 @@ class Faction:
             # Populate the initial global state
             self.global_state.update(
                 {
-                    "HQ_health": 100,  # Default HQ health
+                    "HQ_health": self.home_base["health"]
+                    / self.home_base["max_health"],  # Normalized HQ health (0-1)
                     "gold_balance": 0,  # Starting gold
                     "food_balance": 0,  # Starting food
                     "resource_count": 0,  # Total resources count
@@ -358,6 +366,15 @@ class Faction:
         Aggregate faction-wide state, ensuring all required features exist.
         """
 
+        # Update HQ health from home_base
+        if "health" in self.home_base and "max_health" in self.home_base:
+            if self.home_base["max_health"] > 0:
+                self.global_state["HQ_health"] = (
+                    self.home_base["health"] / self.home_base["max_health"]
+                )
+            else:
+                self.global_state["HQ_health"] = 0.0
+
         #  Ensure required fields exist before processing
         required_keys = [
             "HQ_health",
@@ -510,33 +527,47 @@ class Faction:
             )
 
             if existing_threat:
+                # Update location if it's changed (re-detected threat)
                 if existing_threat["location"] != location:
                     existing_threat["location"] = location
                     # Update last_seen with current step
-                    existing_threat["last_seen"] = current_step if current_step is not None else self.current_step
+                    existing_threat["last_seen"] = (
+                        current_step if current_step is not None else self.current_step
+                    )
                     if utils_config.ENABLE_LOGGING:
                         logger.log_msg(
                             f"Faction {self.id} updated threat ID {threat_id} to location {location}."
                         )
+                else:
+                    # Same location - just update last_seen timestamp to indicate it's still visible
+                    existing_threat["last_seen"] = (
+                        current_step if current_step is not None else self.current_step
+                    )
 
             else:
                 self.global_state["threats"].append(data)
                 # Add timestamp for new threats
                 if "last_seen" not in data:
-                    data["last_seen"] = current_step if current_step is not None else self.current_step
+                    data["last_seen"] = (
+                        current_step if current_step is not None else self.current_step
+                    )
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
                         f"Faction {self.id} added new threat: {data['type']} ID {threat_id} at {location}."
                     )
-            
+
             # Track recent threat reports with timestamp
-            self.recent_threat_reports.append({
-                "step": current_step if current_step is not None else self.current_step,
-                "threat_id": str(threat_id),
-                "location": location,
-                "reported_by": report.get("sender_id", "unknown")
-            })
-            
+            self.recent_threat_reports.append(
+                {
+                    "step": (
+                        current_step if current_step is not None else self.current_step
+                    ),
+                    "threat_id": str(threat_id),
+                    "location": location,
+                    "reported_by": report.get("sender_id", "unknown"),
+                }
+            )
+
             # Keep only last 50 reports to prevent memory bloat
             if len(self.recent_threat_reports) > 50:
                 self.recent_threat_reports.pop(0)
@@ -640,20 +671,78 @@ class Faction:
         for threat in self.global_state.get("threats", []):
             tid = threat.get("id")
 
+            # Check if threat was marked as inactive (eliminated but not yet cleaned up)
+            if not threat.get("is_active", True):
+                # This threat was marked as eliminated, remove it
+                continue
+
+            # Check threat age - use last_seen timestamp to determine intelligence staleness
+            last_seen = threat.get("last_seen", self.current_step)
+            threat_age = self.current_step - last_seen if last_seen else 0
+            MAX_THREAT_AGE = (
+                200  # Steps before considering a "last known" threat completely stale
+            )
+
+            # Determine if threat should be kept based on its type, current state, and age
+            is_keep_threat = False
+
             if threat["type"] == "Faction HQ":
-                # Keep HQ threats unless you add HQ destruction logic
-                valid_threats.append(threat)
+                # Check if the enemy HQ still exists and is not destroyed
+                if isinstance(tid, utils_config.AgentIDStruc) and hasattr(
+                    self.game_manager, "faction_manager"
+                ):
+                    # Find the faction for this HQ threat
+                    enemy_faction_id = tid.faction_id
+                    enemy_faction = next(
+                        (
+                            f
+                            for f in self.game_manager.faction_manager.factions
+                            if f.id == enemy_faction_id
+                        ),
+                        None,
+                    )
+                    if enemy_faction:
+                        # Only keep if HQ is NOT destroyed (regardless of detection range or age)
+                        # HQs are strategic targets - keep their "last known" location indefinitely
+                        is_keep_threat = not enemy_faction.home_base.get(
+                            "is_destroyed", False
+                        )
+                    else:
+                        # Faction not found - likely destroyed, remove the threat
+                        is_keep_threat = False
+                else:
+                    # Can't verify - keep it as a safety measure
+                    is_keep_threat = True
+
+                if is_keep_threat:
+                    valid_threats.append(threat)
                 continue
 
             if isinstance(tid, utils_config.AgentIDStruc):
-                is_alive = any(
-                    agent
-                    for agent in self.game_manager.agents
-                    if getattr(agent, "agent_id", None) == tid
-                    and getattr(agent, "Health", 1) > 0
+                # Check if agent still exists and is alive
+                matching_agent = next(
+                    (
+                        agent
+                        for agent in self.game_manager.agents
+                        if getattr(agent, "agent_id", None) == tid
+                    ),
+                    None,
                 )
-                if is_alive:
+
+                if matching_agent:
+                    # Agent exists - keep if alive (regardless of detection range or age)
+                    # Mobile threats can move, so keep "last known" location even if stale
+                    is_keep_threat = getattr(matching_agent, "Health", 1) > 0
+                else:
+                    # Agent doesn't exist anymore - likely removed/destroyed
+                    # Only remove if it's been confirmed missing for a while
+                    # This prevents immediately removing threats when agents despawn
+                    is_keep_threat = threat_age < MAX_THREAT_AGE
+
+                if is_keep_threat:
                     valid_threats.append(threat)
+                # Update threat age indicator for the HQ network to use
+                threat["age"] = threat_age
 
         self.global_state["threats"] = valid_threats
         self.global_state["threat_count"] = len(valid_threats)
@@ -933,7 +1022,7 @@ class Faction:
 
             elif strategy == "DEFEND_HQ":
                 hq_position = self.home_base["position"]
-                
+
                 # Convert HQ position to grid coordinates for comparison
                 hq_grid_x = int(hq_position[0] // utils_config.CELL_SIZE)
                 hq_grid_y = int(hq_position[1] // utils_config.CELL_SIZE)
@@ -942,9 +1031,7 @@ class Faction:
                 # Check if agent is already at HQ
                 agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
                 agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
-                is_at_hq = (
-                    agent_grid_x == hq_grid_x and agent_grid_y == hq_grid_y
-                )
+                is_at_hq = agent_grid_x == hq_grid_x and agent_grid_y == hq_grid_y
 
                 already_defending = (
                     current_type_id == utils_config.TASK_TYPE_MAPPING["move_to"]
@@ -959,7 +1046,9 @@ class Faction:
                 if current:
                     agent.current_task = None
                     agent.update_task_state(utils_config.TaskState.NONE)
-                return self.assign_move_to_task(agent, hq_grid_position, label="DefendHQ")
+                return self.assign_move_to_task(
+                    agent, hq_grid_position, label="DefendHQ"
+                )
 
             elif strategy in ["COLLECT_GOLD", "COLLECT_FOOD", "NO_PRIORITY"]:
                 # When HQ wants to collect resources, peacekeepers should secure the area
@@ -982,7 +1071,7 @@ class Faction:
 
                 # Otherwise, assign to patrol/defend near resource areas or HQ
                 hq_position = self.home_base["position"]
-                
+
                 # Convert to grid for comparison
                 hq_grid_x = int(hq_position[0] // utils_config.CELL_SIZE)
                 hq_grid_y = int(hq_position[1] // utils_config.CELL_SIZE)
@@ -991,9 +1080,7 @@ class Faction:
                 # Check if already at HQ
                 agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
                 agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
-                is_at_hq = (
-                    agent_grid_x == hq_grid_x and agent_grid_y == hq_grid_y
-                )
+                is_at_hq = agent_grid_x == hq_grid_x and agent_grid_y == hq_grid_y
 
                 if not is_at_hq:
                     if current:
@@ -1309,9 +1396,27 @@ class Faction:
 
     def calculate_territory(self, terrain):
         """Calculate the number of cells owned by this faction."""
+        # Use cached value if still valid for this step
+        if (
+            hasattr(self, "_territory_cache_step")
+            and hasattr(self, "_territory_cache")
+            and self._territory_cache_step == self.current_step
+            and self._territory_cache is not None
+        ):
+            self.territory_count = self._territory_cache
+            return
+
+        # Calculate fresh
         self.territory_count = sum(
-            1 for row in terrain.grid for cell in row if str(cell["faction"]) == str(self.id)
+            1
+            for row in terrain.grid
+            for cell in row
+            if str(cell["faction"]) == str(self.id)
         )
+
+        # Cache for this step
+        self._territory_cache = self.territory_count
+        self._territory_cache_step = self.current_step
 
     ##########################################################################
 
@@ -1423,6 +1528,10 @@ class Faction:
         # ========== STRATEGY: Recruit Peacekeeper ==========
         if action == "RECRUIT_PEACEKEEPER":
             Agent_cost = utils_config.Gold_Cost_for_Agent
+            # Check if recruitment is logical: do we have threats?
+            threat_count = self.global_state.get("threat_count", 0)
+            has_threats = threat_count > 0
+
             if (
                 self.gold_balance >= Agent_cost
                 and len(self.agents) < utils_config.MAX_AGENTS
@@ -1430,7 +1539,11 @@ class Faction:
                 new_agent = self.recruit_agent("peacekeeper")
                 if new_agent:
                     print(f"Faction {self.id} bought a Peacekeeper")
-                    self.hq_step_rewards.append(+1.0)
+                    # Reward higher if recruitment addresses threats
+                    if has_threats:
+                        self.hq_step_rewards.append(+1.5)  # Good strategic choice
+                    else:
+                        self.hq_step_rewards.append(+0.5)  # Recruited but no threats
                 else:
                     logger.log_msg(
                         f"[HQ EXECUTE] Failed to recruit peacekeeper: spawn failed.",
@@ -1456,6 +1569,16 @@ class Faction:
         # ========== STRATEGY: Recruit Gatherer ==========
         elif action == "RECRUIT_GATHERER":
             Agent_cost = utils_config.Gold_Cost_for_Agent
+            # Check if recruitment is logical: do we have resources to gather?
+            resource_count = self.global_state.get("resource_count", 0)
+            has_resources = resource_count > 0
+            # Also check if we have enough gatherers relative to threats
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            peacekeeper_count = len([a for a in self.agents if a.role == "peacekeeper"])
+            needs_more_gatherers = (
+                gatherer_count <= peacekeeper_count
+            )  # Balanced or skewed toward peacekeepers
+
             if (
                 self.gold_balance >= Agent_cost
                 and len(self.agents) < utils_config.MAX_AGENTS
@@ -1463,7 +1586,13 @@ class Faction:
                 new_agent = self.recruit_agent("gatherer")
                 if new_agent:
                     print(f"Faction {self.id} bought a Gatherer")
-                    self.hq_step_rewards.append(+1.0)
+                    # Reward higher if resources available AND it balances composition
+                    if has_resources and needs_more_gatherers:
+                        self.hq_step_rewards.append(+1.5)  # Excellent strategic choice
+                    elif has_resources:
+                        self.hq_step_rewards.append(+1.0)  # Good choice (has resources)
+                    else:
+                        self.hq_step_rewards.append(+0.3)  # Recruited but no resources
                 else:
                     logger.log_msg(
                         f"[HQ EXECUTE] Failed to recruit gatherer: spawn failed.",
@@ -1500,13 +1629,37 @@ class Faction:
             # Evaluate which agents to swap
             candidates = self.evaluate_agent_swap_candidates("gatherer")
 
+            # Check if swap is logical: do we have resources and need more gatherers?
+            resource_count = self.global_state.get("resource_count", 0)
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            peacekeeper_count = len([a for a in self.agents if a.role == "peacekeeper"])
+            has_resources = resource_count > 0
+
+            # If no resources at all, swapping to gatherer is pointless
+            if not has_resources:
+                logger.log_msg(
+                    f"[HQ EXECUTE] No resources available - gatherers have no goal.",
+                    level=logging.WARNING,
+                )
+                self.hq_step_rewards.append(-0.5)  # Penalize pointless swap
+                self.current_strategy = None
+                return retest_strategy()
+
+            needs_more_gatherers = gatherer_count < peacekeeper_count
+
             if candidates:
                 best_candidate, score = candidates[0]
                 if self.swap_agent_role(best_candidate, "gatherer"):
                     print(
                         f"Faction {self.id} swapped {best_candidate.role} to Gatherer"
                     )
-                    self.hq_step_rewards.append(+1.0)
+                    # Reward based on strategic value of the swap
+                    if has_resources and needs_more_gatherers:
+                        self.hq_step_rewards.append(+1.2)  # Excellent swap
+                    elif has_resources:
+                        self.hq_step_rewards.append(+0.8)  # Good swap
+                    else:
+                        self.hq_step_rewards.append(+0.3)  # Swap OK but not optimal
                     # Log swap statistics for monitoring
                     self.log_swap_statistics()
                 else:
@@ -1540,13 +1693,39 @@ class Faction:
             # Evaluate which agents to swap
             candidates = self.evaluate_agent_swap_candidates("peacekeeper")
 
+            # Check if swap is logical: do we have threats and need more peacekeepers?
+            resource_count = self.global_state.get("resource_count", 0)
+            threat_count = self.global_state.get("threat_count", 0)
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            peacekeeper_count = len([a for a in self.agents if a.role == "peacekeeper"])
+            has_threats = threat_count > 0
+            has_resources = resource_count > 0
+
+            # If no resources AND we have gatherers, switching to peacekeeper is smart
+            no_resources_with_gatherers = not has_resources and gatherer_count > 0
+
+            # Normal peacekeeper need based on threats
+            needs_more_peacekeepers = peacekeeper_count < gatherer_count
+
             if candidates:
                 best_candidate, score = candidates[0]
                 if self.swap_agent_role(best_candidate, "peacekeeper"):
                     print(
                         f"Faction {self.id} swapped {best_candidate.role} to Peacekeeper"
                     )
-                    self.hq_step_rewards.append(+1.0)
+                    # Reward based on strategic value of the swap
+                    if no_resources_with_gatherers:
+                        self.hq_step_rewards.append(
+                            +1.5
+                        )  # Excellent - repurpose idle gatherers
+                    elif has_threats and needs_more_peacekeepers:
+                        self.hq_step_rewards.append(
+                            +1.2
+                        )  # Excellent - addressing threats
+                    elif has_threats or needs_more_peacekeepers:
+                        self.hq_step_rewards.append(+0.8)  # Good swap
+                    else:
+                        self.hq_step_rewards.append(+0.3)  # Swap OK but not optimal
                     # Log swap statistics for monitoring
                     self.log_swap_statistics()
                 else:
@@ -1596,14 +1775,14 @@ class Faction:
                 if dist_sq <= DEFENSE_RADIUS_SQ:
                     nearby_threat_found = True
                     break
-            self.hq_step_rewards.append(+1.0)
 
+            # Check if there are threats and peacekeepers to defend
             if not nearby_threat_found:
                 logger.log_msg(
                     f"[HQ STRATEGY] No nearby threats to defend HQ.",
                     level=logging.WARNING,
                 )
-                self.hq_step_rewards.append(-0.5)
+                self.hq_step_rewards.append(-0.5)  # Penalize illogical strategy
                 return retest_strategy()
 
             # Strategy is valid — assign peacekeepers to move to HQ
@@ -1613,6 +1792,7 @@ class Faction:
                 level=logging.INFO,
             )
 
+            peacekeepers_assigned = 0
             for agent in self.agents:
                 if agent.role != "peacekeeper":
                     continue
@@ -1629,22 +1809,44 @@ class Faction:
                         agent, hq_pos, label="DefendHQ"
                     )
                     agent.update_task_state(utils_config.TaskState.ONGOING)
+                    peacekeepers_assigned += 1
                     logger.log_msg(
                         f"[DEFEND ASSIGN] Peacekeeper {agent.agent_id} assigned to move to HQ.",
                         level=logging.INFO,
                     )
 
+            # Reward based on actual defensive assignment
+            if peacekeepers_assigned > 0:
+                self.hq_step_rewards.append(+1.0)  # Successfully defended
+            else:
+                self.hq_step_rewards.append(0.0)  # No peacekeepers available to defend
+
         # ========== STRATEGY: Attack Threats ==========
         elif action == "ATTACK_THREATS":
-            if self.global_state.get("threat_count", 0) == 0:
+            threat_count = self.global_state.get("threat_count", 0)
+            if threat_count == 0:
                 logger.log_msg(
                     f"[HQ EXECUTE] No threats to attack.", level=logging.WARNING
                 )
-                self.hq_step_rewards.append(-0.5)  # Penalise ineffective action
+                self.hq_step_rewards.append(-0.5)  # Penalise illogical strategy
                 self.current_strategy = None
                 return retest_strategy()
+
+            # Check if any agents are actually assigned to eliminate threats
+            peacekeepers_attacking = 0
+            for agent in self.agents:
+                if agent.role == "peacekeeper" and agent.current_task:
+                    task_type = agent.current_task.get("type", "")
+                    if task_type == "eliminate":
+                        peacekeepers_attacking += 1
+
+            # Reward based on actual threat engagement
+            if peacekeepers_attacking > 0:
+                self.hq_step_rewards.append(+1.5)  # Actually engaging threats
             else:
-                self.hq_step_rewards.append(+1.0)  # Reward valid threat engagement
+                self.hq_step_rewards.append(
+                    +0.5
+                )  # Strategy valid but no assignments yet
 
         # ========== STRATEGY: Collect Gold ==========
         elif action == "COLLECT_GOLD":
@@ -1658,8 +1860,32 @@ class Faction:
                 self.hq_step_rewards.append(-0.5)  # Penalise for no available gold
                 self.current_strategy = None
                 return retest_strategy()
+
+            # Check if we have gatherers to actually collect
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            # Check gold balance to see if we need more gold
+            needs_gold = self.gold_balance < 200  # Low gold threshold
+
+            if gatherer_count > 0:
+                # Check if agents are actually assigned to mining
+                miners_assigned = 0
+                for agent in self.agents:
+                    if agent.role == "gatherer" and agent.current_task:
+                        task_type = agent.current_task.get("type", "")
+                        if task_type == "mine":
+                            miners_assigned += 1
+
+                # Reward based on actual collection and need
+                if miners_assigned > 0 and needs_gold:
+                    self.hq_step_rewards.append(+1.2)  # Actively collecting needed gold
+                elif miners_assigned > 0:
+                    self.hq_step_rewards.append(+0.8)  # Actively collecting gold
+                else:
+                    self.hq_step_rewards.append(
+                        +0.5
+                    )  # Strategy valid but no mining yet
             else:
-                self.hq_step_rewards.append(+1.0)  # Reward valid economic strategy
+                self.hq_step_rewards.append(0.0)  # No gatherers to collect gold
 
         # ========== STRATEGY: Collect Food ==========
         elif action == "COLLECT_FOOD":
@@ -1673,8 +1899,32 @@ class Faction:
                 self.hq_step_rewards.append(-0.5)
                 self.current_strategy = None
                 return retest_strategy()
+
+            # Check if we have gatherers to actually collect
+            gatherer_count = len([a for a in self.agents if a.role == "gatherer"])
+            # Check food balance to see if we need more food
+            needs_food = self.food_balance < 200  # Low food threshold
+
+            if gatherer_count > 0:
+                # Check if agents are actually assigned to foraging
+                foragers_assigned = 0
+                for agent in self.agents:
+                    if agent.role == "gatherer" and agent.current_task:
+                        task_type = agent.current_task.get("type", "")
+                        if task_type == "forage":
+                            foragers_assigned += 1
+
+                # Reward based on actual collection and need
+                if foragers_assigned > 0 and needs_food:
+                    self.hq_step_rewards.append(+1.2)  # Actively collecting needed food
+                elif foragers_assigned > 0:
+                    self.hq_step_rewards.append(+0.8)  # Actively collecting food
+                else:
+                    self.hq_step_rewards.append(
+                        +0.5
+                    )  # Strategy valid but no foraging yet
             else:
-                self.hq_step_rewards.append(+1.0)  # Reward viable food collection
+                self.hq_step_rewards.append(0.0)  # No gatherers to collect food
 
         # ========== STRATEGY: No Priority ==========
         elif action == "NO_PRIORITY":
@@ -1880,6 +2130,74 @@ class Faction:
                 return True
 
         return False
+
+    def take_hq_damage(self, damage: int):
+        """
+        Apply damage to HQ health.
+
+        Args:
+            damage: Amount of damage to apply
+
+        Returns:
+            bool: True if HQ is destroyed, False otherwise
+        """
+        if self.home_base["is_destroyed"]:
+            return True  # Already destroyed
+
+        self.home_base["health"] = max(0, self.home_base["health"] - damage)
+
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[HQ DAMAGE] Faction {self.id} HQ took {damage} damage. Health: {self.home_base['health']}/{self.home_base['max_health']}",
+                level=logging.WARNING,
+            )
+
+        if self.home_base["health"] <= 0:
+            self.home_base["is_destroyed"] = True
+            self.home_base["health"] = 0
+
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[HQ DESTROYED] Faction {self.id} HQ has been destroyed!",
+                    level=logging.CRITICAL,
+                )
+            return True  # HQ is now destroyed
+
+        # Update global state
+        self.global_state["HQ_health"] = (
+            self.home_base["health"] / self.home_base["max_health"]
+        )
+        return False  # HQ still alive
+
+    def get_enemy_hqs(self):
+        """
+        Get all enemy HQs from the game manager.
+
+        Returns:
+            list: List of enemy HQ dictionaries
+        """
+        if not hasattr(self.game_manager, "faction_manager"):
+            return []
+
+        enemy_hqs = []
+        for faction in self.game_manager.faction_manager.factions:
+            if faction.id != self.id and not faction.home_base["is_destroyed"]:
+                enemy_hqs.append(
+                    {
+                        "faction_id": faction.id,
+                        "faction": faction.id,
+                        "type": "Faction HQ",
+                        "position": faction.home_base["position"],
+                        "health": faction.home_base["health"],
+                        "max_health": faction.home_base["max_health"],
+                    }
+                )
+
+        return enemy_hqs
+
+    def is_hq_destroyed(self) -> bool:
+        """Check if this HQ is destroyed."""
+        return self.home_base["is_destroyed"]
 
     def evaluate_agent_swap_candidates(self, target_role: str):
         """
@@ -2405,16 +2723,50 @@ class Faction:
             enhanced_state["nearest_resource_distance"] = self.global_state.get(
                 "nearest_resource", {}
             ).get("distance", float("inf"))
-            
+
+            # Add HQ health status to awareness
+            if "health" in self.home_base and "max_health" in self.home_base:
+                enhanced_state["hq_health_status"] = (
+                    self.home_base["health"] / self.home_base["max_health"]
+                    if self.home_base["max_health"] > 0
+                    else 0.0
+                )
+                enhanced_state["hq_is_critical"] = (
+                    1.0 if enhanced_state["hq_health_status"] < 0.25 else 0.0
+                )  # Critical at < 25%
+                enhanced_state["hq_is_damaged"] = (
+                    1.0 if enhanced_state["hq_health_status"] < 0.75 else 0.0
+                )  # Damaged at < 75%
+            else:
+                enhanced_state["hq_health_status"] = 1.0
+                enhanced_state["hq_is_critical"] = 0.0
+                enhanced_state["hq_is_damaged"] = 0.0
+
+            # Check if HQ is under direct attack
+            hq_under_attack = 0.0
+            hq_x, hq_y = self.home_base["position"]
+            for threat in self.global_state.get("threats", []):
+                threat_pos = threat.get("location", (-1, -1))
+                dist_sq = (threat_pos[0] - hq_x) ** 2 + (threat_pos[1] - hq_y) ** 2
+                if dist_sq <= (50**2):  # Within 50 pixels of HQ
+                    hq_under_attack = 1.0
+                    break
+            enhanced_state["hq_under_attack"] = hq_under_attack
+
             # Add threat reporting awareness - HQ knows when its troops are reporting enemies
             recent_reports_window = 20  # Steps to look back
             recent_threat_reports = [
-                r for r in self.recent_threat_reports
+                r
+                for r in self.recent_threat_reports
                 if self.current_step - r.get("step", 0) <= recent_reports_window
             ]
-            enhanced_state["threat_reports_recent"] = min(len(recent_threat_reports) / 5.0, 1.0)  # 0-1 normalized
-            enhanced_state["has_known_threats"] = 1.0 if self.global_state.get("threats", []) else 0.0
-            
+            enhanced_state["threat_reports_recent"] = min(
+                len(recent_threat_reports) / 5.0, 1.0
+            )  # 0-1 normalized
+            enhanced_state["has_known_threats"] = (
+                1.0 if self.global_state.get("threats", []) else 0.0
+            )
+
             # Calculate threat freshness (how old is the threat intel?)
             if self.global_state.get("threats"):
                 oldest_threat_age = 0
@@ -2423,9 +2775,13 @@ class Faction:
                     age = self.current_step - last_seen if last_seen else 0
                     oldest_threat_age = max(oldest_threat_age, age)
                 # Normalize: 0 = very fresh (< 10 steps old), 1.0 = very stale (> 100 steps old)
-                enhanced_state["threat_intel_freshness"] = max(0.0, min(1.0, (oldest_threat_age - 10) / 90.0))
+                enhanced_state["threat_intel_freshness"] = max(
+                    0.0, min(1.0, (oldest_threat_age - 10) / 90.0)
+                )
             else:
-                enhanced_state["threat_intel_freshness"] = 1.0  # No threats = stale intel
+                enhanced_state["threat_intel_freshness"] = (
+                    1.0  # No threats = stale intel
+                )
 
             # Add efficiency metrics
             if len(self.agents) > 0:

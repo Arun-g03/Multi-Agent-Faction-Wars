@@ -1,5 +1,23 @@
 from enum import Enum
 from collections import namedtuple
+import warnings
+
+# Suppress PyTorch TracerWarnings - these are informational and not errors
+try:
+    import torch
+
+    warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+except ImportError:
+    pass  # PyTorch not available yet
+
+# Import settings manager for persistent settings
+try:
+    from UTILITIES.settings_manager import settings_manager
+
+    _load_persistent_settings = True
+except ImportError:
+    _load_persistent_settings = False
+    settings_manager = None
 
 
 """
@@ -16,8 +34,12 @@ So i dont have to change the internal code every time I want to change something
 #   |____/|_____|____/ \___/ \____|  \___/|_|    |_| |___\___/|_| \_|____/
 #
 
+# Load persistent settings or use defaults
 HEADLESS_MODE = False
 """Disable pygame game rendering for performance"""
+
+if _load_persistent_settings and settings_manager:
+    HEADLESS_MODE = settings_manager.is_headless_mode()
 # Customisable
 ENABLE_PROFILE_BOOL = False
 """Enable profiling for performance analysis- function calls and execution time"""
@@ -28,11 +50,40 @@ ENABLE_LOGGING = True
 ENABLE_TENSORBOARD = False
 """Enable tensorboard for visualisation"""
 
+VERBOSE_TENSOR_LOGGING = False
+"""Enable verbose tensor-to-string conversions in logs (expensive operation)"""
+
 ENABLE_PLOTS = False
 """Enable plot and CSV generation for visualization and analysis"""
 
+FORCE_DEPENDENCY_CHECK = False
+"""Force dependency checker to run on next startup"""
 
-#    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ _____ ___ _   _  ____ ____
+
+# ===== LOAD PERSISTENT CONFIG SETTINGS =====
+# Load any saved settings from the settings menu, if available
+# Note: This runs before all other constants are defined, so we'll load them later in a function
+def load_persistent_config():
+    """Load persisted config settings from storage"""
+    if _load_persistent_settings and settings_manager:
+        saved_config = settings_manager.get_config_settings()
+        if saved_config:
+            # Update config values from saved settings
+            # This allows settings changed in the Settings menu to persist across runs
+            for key, value in saved_config.items():
+                # Update the module-level constants
+                try:
+                    globals()[key] = value
+                    #  print(f"[CONFIG] Loaded persisted setting: {key} = {value}")
+                except Exception as e:
+                    print(f"[WARNING] Could not load setting {key}: {e}")
+
+
+# Call this after all constants are defined
+# We'll use a marker to call it at the end of the file
+
+
+#    _____ ____ ___ ____   ___  ____  _____   ____  _____ _____ ___ _   _  ____ ____
 #   | ____|  _ \_ _/ ___| / _ \|  _ \| ____| / ___|| ____|_   _|_   _|_ _| \ | |/ ___/ ___|
 #   |  _| | |_) | |\___ \| | | | | | |  _|   \___ \|  _|   | |   | |  | ||  \| | |  _\___ \
 #   | |___|  __/| | ___) | |_| | |_| | | |___   ___) | |___  | |   | |  | || |\  | |_| |___) |
@@ -46,7 +97,7 @@ ENABLE_PLOTS = False
 EPISODES_LIMIT = 30
 """How many episodes or games to train for"""
 
-STEPS_PER_EPISODE = 20000
+STEPS_PER_EPISODE = 5000
 """How many steps to take per episode/ How long should an episode last"""
 # Estimated 15k steps in around 5 minutes, need to reconfirm (Depends on
 # hardware)
@@ -515,3 +566,57 @@ def create_task(self, task_type, target, task_id=None):
         task["id"] = task_id
 
     return task
+
+
+# ===== PERSISTENT SETTINGS HELPERS =====
+
+
+def has_run_installer():
+    """Check if the startup installer has been run"""
+    if _load_persistent_settings and settings_manager:
+        return settings_manager.has_run_installer()
+    return False
+
+
+def is_first_run():
+    """Check if this is the first run"""
+    if _load_persistent_settings and settings_manager:
+        return settings_manager.is_first_run()
+    return True
+
+
+def save_headless_mode(value):
+    """Save headless mode setting"""
+    if _load_persistent_settings and settings_manager:
+        settings_manager.set_headless_mode(value)
+
+
+def get_persistent_episodes():
+    """Get last used episode count"""
+    if _load_persistent_settings and settings_manager:
+        return settings_manager.get_last_episodes()
+    return EPISODES_LIMIT
+
+
+def save_persistent_episodes(value):
+    """Save last used episode count"""
+    if _load_persistent_settings and settings_manager:
+        settings_manager.set_last_episodes(value)
+
+
+def get_persistent_steps():
+    """Get last used steps per episode"""
+    if _load_persistent_settings and settings_manager:
+        return settings_manager.get_last_steps()
+    return STEPS_PER_EPISODE
+
+
+def save_persistent_steps(value):
+    """Save last used steps per episode"""
+    if _load_persistent_settings and settings_manager:
+        settings_manager.set_last_steps(value)
+
+
+# ===== LOAD PERSISTENT CONFIG SETTINGS AT MODULE LEVEL =====
+# Call the load function after all constants are defined
+load_persistent_config()

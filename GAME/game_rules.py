@@ -55,26 +55,44 @@ def check_victory(factions):
     Check victory conditions for factions.
     A faction wins if:
     - It reaches the resource goal (gold or food).
-    - It is the last faction standing.
+    - It is the last faction standing (with active HQ).
+    - All other faction HQs are destroyed.
     """
-    active_factions = [f for f in factions if len(f.agents) > 0]
+    # Check for HQ destruction - eliminate factions with destroyed HQs
+    active_factions = [
+        f for f in factions if not f.home_base.get("is_destroyed", False)
+    ]
 
-    # Check resource-based victory
-    for faction in factions:
+    if len(active_factions) == 1:
+        print(
+            f"\n\nFaction {active_factions[0].id} wins by HQ victory (all other HQs destroyed)!\n\n"
+        )
+        setattr(active_factions[0], "victory_reason", "HQ Destruction")
+        return active_factions[0]
+
+    if len(active_factions) == 0:
+        print("\n\nDraw - all HQs destroyed!\n\n")
+        return None
+
+    # Check resource-based victory (only for factions with active HQs)
+    for faction in active_factions:
         if (
             faction.gold_balance >= FACTION_GOAL["gold_collection"]
             or faction.food_balance >= FACTION_GOAL["food_collection"]
         ):
             print("\n\nResource victory!\n\n")
+            setattr(faction, "victory_reason", "Resource Collection")
             return faction  # Return the winning faction
 
     # Check last faction standing
-    if len(active_factions) == 1:
+    active_factions_with_agents = [f for f in active_factions if len(f.agents) > 0]
+    if len(active_factions_with_agents) == 1:
         print("\n\nLast faction standing!\n\n")
-        return active_factions[0]
+        setattr(active_factions_with_agents[0], "victory_reason", "Last Standing")
+        return active_factions_with_agents[0]
 
-    # Check draw (no active factions)
-    if len(active_factions) == 0:
+    # Check draw (no active factions with agents)
+    if len(active_factions_with_agents) == 0:
         print("\n\nDraw!\n\n")
         return None  # Draw/stalemate
 

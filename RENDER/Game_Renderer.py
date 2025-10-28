@@ -6,6 +6,7 @@ from SHARED.core_imports import *
 from ENVIRONMENT.env_resources import AppleTree, GoldLump
 import UTILITIES.utils_config as utils_config
 from RENDER.Common import GAME_FONT, get_font, get_text_surface
+from RENDER.PauseMenu_Renderer import PauseMenuRenderer
 
 
 logger = Logger(log_file="Renderer.txt", log_level=logging.DEBUG)
@@ -45,6 +46,14 @@ class GameRenderer:
         self.camera = camera  # Set camera if passed, or use None by default
         self.active_animations = []
 
+        # Sprite caching to avoid repeated transforms
+        self.sprite_cache = {}
+        self.last_zoom_level = 1.0
+        self.cached_scaled_frames = {}
+
+        # Initialize pause menu renderer
+        self.pause_menu_renderer = PauseMenuRenderer(screen)
+
     def render(
         self,
         camera,
@@ -56,6 +65,7 @@ class GameRenderer:
         step,
         resource_counts,
         enable_cell_tooltip=True,
+        paused=False,
     ):
         """
         Render the entire game state, including terrain, resources, home bases, and agents.
@@ -69,7 +79,6 @@ class GameRenderer:
             try:
                 # Clear the screen with black background
                 self.screen.fill((0, 0, 0))
-                self.update_animations()
 
                 # Render terrain, passing factions for territory visualisation
                 terrain.draw(self.screen, camera, factions)
@@ -136,41 +145,60 @@ class GameRenderer:
                 self.render_home_bases(factions, camera, mouse_x, mouse_y)
                 self.render_agents(agents, camera)
 
-                # Render tooltip if any
-                if tooltip_text:
-                    self.render_tooltip(tooltip_text)
+                # Render attack animations (only if not paused)
+                if not paused:
+                    self.update_animations()
 
-                # Render mouse cell tooltip if enabled
-                if enable_cell_tooltip:
-                    # Calculate world-relative grid cell under the mouse
-                    world_mouse_x = (mouse_x / camera.zoom) + camera.x
-                    world_mouse_y = (mouse_y / camera.zoom) + camera.y
+                # Only render tooltips and HUD if not paused
+                if not paused:
+                    # Render tooltip if any
+                    if tooltip_text:
+                        self.render_tooltip(tooltip_text)
 
-                    # Convert world coordinates to grid coordinates
-                    mouse_grid_x = int(world_mouse_x // utils_config.CELL_SIZE)
-                    mouse_grid_y = int(world_mouse_y // utils_config.CELL_SIZE)
+                    # Render mouse cell tooltip if enabled
+                    if enable_cell_tooltip:
+                        # Calculate world-relative grid cell under the mouse
+                        world_mouse_x = (mouse_x / camera.zoom) + camera.x
+                        world_mouse_y = (mouse_y / camera.zoom) + camera.y
 
-                    # Create the tooltip text for the world-relative cell and
-                    # screen position
-                    cell_tooltip_text = (
-                        f"Screen Pos: ({mouse_x}, {mouse_y})\n"  # Screen position
-                        # Grid coordinates
-                        f"World Cell: ({mouse_grid_x}, {mouse_grid_y})"
+                        # Convert world coordinates to grid coordinates
+                        mouse_grid_x = int(world_mouse_x // utils_config.CELL_SIZE)
+                        mouse_grid_y = int(world_mouse_y // utils_config.CELL_SIZE)
+
+                        # Create the tooltip text for the world-relative cell and
+                        # screen position
+                        cell_tooltip_text = (
+                            f"Screen Pos: ({mouse_x}, {mouse_y})\n"  # Screen position
+                            # Grid coordinates
+                            f"World Cell: ({mouse_grid_x}, {mouse_grid_y})"
+                        )
+
+                        # Calculate bottom-left position for the tooltip
+                        tooltip_x = 10  # Offset from the left edge
+                        # 50px offset from the bottom edge (adjust based on tooltip
+                        # size)
+                        tooltip_y = self.screen.get_height() - 50
+
+                        # Render the tooltip using the existing tooltip function
+                        self.render_tooltip(
+                            cell_tooltip_text, position=(tooltip_x, tooltip_y)
+                        )
+
+                    #  Render the HUD with episode and step data
+                    self.render_hud(
+                        self.screen,
+                        episode,
+                        step,
+                        factions,
+                        resource_counts,
+                        paused=paused,
                     )
 
-                    # Calculate bottom-left position for the tooltip
-                    tooltip_x = 10  # Offset from the left edge
-                    # 50px offset from the bottom edge (adjust based on tooltip
-                    # size)
-                    tooltip_y = self.screen.get_height() - 50
-
-                    # Render the tooltip using the existing tooltip function
-                    self.render_tooltip(
-                        cell_tooltip_text, position=(tooltip_x, tooltip_y)
-                    )
-
-                #  Render the HUD with episode and step data
-                self.render_hud(self.screen, episode, step, factions, resource_counts)
+                # Render pause menu OVER everything if paused (must be very last)
+                if paused:
+                    # Update screen reference to current screen
+                    self.pause_menu_renderer.screen = self.screen
+                    self.pause_menu_renderer.render()
 
                 #  Ensure Pygame updates the display
 
@@ -208,11 +236,14 @@ class GameRenderer:
                     adjusted_size = size * camera.zoom
 
                     # Draw the home base square
-                    # Load and scale the PNG image for the faction base
-                    base_image_scaled = pygame.transform.scale(
-                        self.faction_base_image,
-                        (int(adjusted_size), int(adjusted_size)),
-                    )
+                    # Use cached scaled version to avoid repeated transforms
+                    size_key = int(adjusted_size)
+                    if size_key not in self.sprite_cache:
+                        self.sprite_cache[size_key] = pygame.transform.scale(
+                            self.faction_base_image,
+                            (size_key, size_key),
+                        )
+                    base_image_scaled = self.sprite_cache[size_key]
                     # Blit the base image instead of drawing a square
                     self.screen.blit(base_image_scaled, (screen_x, screen_y))
 
@@ -225,12 +256,74 @@ class GameRenderer:
                         )
                     )
                     self.screen.blit(text, text_rect)
+
                     # Highlight resources and threats known to the faction if
                     # hovering over the base
                     base_rect = pygame.Rect(
                         screen_x, screen_y, adjusted_size, adjusted_size
                     )
                     if base_rect.collidepoint(mouse_x, mouse_y):
+
+                        # Render HQ health bar on hover only
+                        if (
+                            "health" in faction.home_base
+                            and "max_health" in faction.home_base
+                        ):
+                            health = faction.home_base["health"]
+                            max_health = faction.home_base["max_health"]
+                            is_destroyed = faction.home_base.get("is_destroyed", False)
+
+                            if not is_destroyed and max_health > 0:
+                                # Health bar parameters
+                                bar_width = adjusted_size * 0.8
+                                bar_height = 8 * camera.zoom
+                                bar_x = screen_x + (adjusted_size - bar_width) / 2
+                                bar_y = screen_y + adjusted_size - bar_height - 10
+
+                                # Calculate health percentage
+                                health_percent = health / max_health
+
+                                # Background bar (red/damaged)
+                                pygame.draw.rect(
+                                    self.screen,
+                                    (150, 0, 0),  # Dark red
+                                    pygame.Rect(bar_x, bar_y, bar_width, bar_height),
+                                )
+
+                                # Health bar (green/yellow based on health)
+                                if health_percent > 0.5:
+                                    health_color = (0, 255, 0)  # Green when > 50%
+                                elif health_percent > 0.25:
+                                    health_color = (255, 200, 0)  # Yellow when 25-50%
+                                else:
+                                    health_color = (255, 0, 0)  # Red when < 25%
+
+                                health_width = bar_width * health_percent
+                                pygame.draw.rect(
+                                    self.screen,
+                                    health_color,
+                                    pygame.Rect(bar_x, bar_y, health_width, bar_height),
+                                )
+
+                                # Border
+                                pygame.draw.rect(
+                                    self.screen,
+                                    (0, 0, 0),
+                                    pygame.Rect(bar_x, bar_y, bar_width, bar_height),
+                                    width=1,
+                                )
+                            elif is_destroyed:
+                                # Draw destroyed indicator (X or skull)
+                                destroy_text = get_text_surface(
+                                    "X", "Arial", 32, (255, 0, 0)
+                                )
+                                destroy_rect = destroy_text.get_rect(
+                                    center=(
+                                        screen_x + adjusted_size // 2,
+                                        screen_y + adjusted_size // 2 - 20,
+                                    )
+                                )
+                                self.screen.blit(destroy_text, destroy_rect)
 
                         # Highlight resources
                         for resource in faction.global_state["resources"]:
@@ -306,10 +399,14 @@ class GameRenderer:
                         gatherer_count = sum(
                             1 for agent in faction.agents if agent.role == "gatherer"
                         )
-                        
+
                         # Calculate ownership percentage
                         max_tiles = self.terrain.max_traversable_tiles
-                        ownership_pct = (faction.territory_count / max_tiles * 100) if max_tiles > 0 else 0.0
+                        ownership_pct = (
+                            (faction.territory_count / max_tiles * 100)
+                            if max_tiles > 0
+                            else 0.0
+                        )
 
                         # Display all metrics in the tooltip
 
@@ -337,7 +434,9 @@ class GameRenderer:
     #   |_| |_|\___/|____/
     #
 
-    def render_hud(self, screen, episode, step, factions, resource_counts):
+    def render_hud(
+        self, screen, episode, step, factions, resource_counts, paused=False
+    ):
         font_size = 20
         lines = []
 
@@ -351,11 +450,46 @@ class GameRenderer:
             )
         )
 
-        # Time
+        # Controls hint
+        lines.append(
+            get_text_surface(
+                "Controls: ESC=Pause, +/-=Zoom",
+                GAME_FONT,
+                16,
+                (200, 200, 200),
+            )
+        )
+
+        # Time (only advance when not paused)
         start_time = getattr(self, "start_time", pygame.time.get_ticks())
         if not hasattr(self, "start_time"):
             self.start_time = start_time
-        elapsed_time = (pygame.time.get_ticks() - self.start_time) // 1000
+
+        # Store pause state for time tracking
+        if not hasattr(self, "paused_time_accumulator"):
+            self.paused_time_accumulator = 0
+
+        if paused and not hasattr(self, "paused_at_time"):
+            # Just entered paused state
+            self.paused_at_time = pygame.time.get_ticks()
+        elif not paused and hasattr(self, "paused_at_time"):
+            # Just exited paused state - accumulate the time we were paused
+            self.paused_time_accumulator += (
+                pygame.time.get_ticks() - self.paused_at_time
+            )
+            delattr(self, "paused_at_time")
+
+        if paused and hasattr(self, "paused_at_time"):
+            # Use the time when we paused
+            elapsed_time = (
+                self.paused_at_time - self.start_time - self.paused_time_accumulator
+            ) // 1000
+        else:
+            # Normal time progression
+            elapsed_time = (
+                pygame.time.get_ticks() - self.start_time - self.paused_time_accumulator
+            ) // 1000
+
         hours, minutes, seconds = (
             elapsed_time // 3600,
             (elapsed_time % 3600) // 60,
@@ -672,17 +806,36 @@ class GameRenderer:
     def load_frames(self, sprite_sheet, frame_width, frame_height):
         """
         Extract individual frames from a sprite sheet.
+        Supports both horizontal (rectangular) and vertical sprite sheets.
         """
         if utils_config.HEADLESS_MODE:
             return []  # Skip loading frames entirely
 
         frames = []
         sheet_width, sheet_height = sprite_sheet.get_size()
-        for i in range(sheet_height // frame_height):
+
+        # Detect frame layout based on sheet dimensions
+        # Frames are stacked vertically (top to bottom) in this sprite sheet
+        # Use full sheet width if frame_width doesn't divide evenly
+        num_vertical_frames = sheet_height // frame_height
+
+        print(f"[ANIMATION] Sprite sheet size: {sheet_width}x{sheet_height}")
+        print(f"[ANIMATION] Requested frame size: {frame_width}x{frame_height}")
+        print(f"[ANIMATION] Vertical frames detected: {num_vertical_frames}")
+
+        # Use full sheet width for vertical frames (they span the entire width)
+        actual_frame_width = sheet_width
+
+        print(f"[ANIMATION] Using frame width: {actual_frame_width}")
+
+        # Extract frames vertically (frames stacked from top to bottom)
+        for i in range(num_vertical_frames):
             frame = sprite_sheet.subsurface(
-                pygame.Rect(0, i * frame_height, frame_width, frame_height)
+                pygame.Rect(0, i * frame_height, actual_frame_width, frame_height)
             )
             frames.append(frame)
+
+        print(f"[ANIMATION] Loaded {len(frames)} frames")
         return frames
 
     def play_attack_animation(self, position, duration):
@@ -692,14 +845,19 @@ class GameRenderer:
         if utils_config.HEADLESS_MODE:
             return  # Skip in headless mode
 
-        print(f"Renderer - Playing attack animation at position: {position}")
         screen_x, screen_y = self.camera.apply(position)
 
         frame_count = len(self.attack_frames)
         if frame_count == 0:
+            print(
+                f"[ANIMATION] WARNING: No attack frames loaded! Frame count: {frame_count}"
+            )
             return  # Avoid div-by-zero if load_frames was skipped
 
         frame_duration = duration // frame_count
+
+        # print(f"[ANIMATION] Adding animation at screen position: ({screen_x}, {screen_y}), "
+        #       f"duration: {duration}ms, frames: {frame_count}, frame_duration: {frame_duration}ms")
 
         self.active_animations.append(
             {
@@ -729,12 +887,23 @@ class GameRenderer:
 
             if frame_index < animation["total_frames"]:
                 frame = self.attack_frames[frame_index]
+                # Scale frame down by 50% (cache scaled versions)
+                frame_width, frame_height = frame.get_size()
+                scaled_size = (frame_width // 2, frame_height // 2)
+
+                # Use cached scaled frame to avoid repeated transforms
+                if frame_index not in self.cached_scaled_frames:
+                    self.cached_scaled_frames[frame_index] = pygame.transform.scale(
+                        frame, scaled_size
+                    )
+                scaled_frame = self.cached_scaled_frames[frame_index]
+
                 screen_x, screen_y = animation["screen_position"]
                 self.screen.blit(
-                    frame,
+                    scaled_frame,
                     (
-                        screen_x - frame.get_width() // 2,
-                        screen_y - frame.get_height() // 2,
+                        screen_x - scaled_frame.get_width() // 2,
+                        screen_y - scaled_frame.get_height() // 2,
                     ),
                 )
                 updated_animations.append(animation)

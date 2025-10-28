@@ -75,7 +75,7 @@ class PeacekeeperBehavioursMixin:
 
     def eliminate_threat(self, agents):
         """
-        Attempt to eliminate the assigned threat.
+        Attempt to eliminate the assigned threat (agent or HQ).
         If it's not in combat range, opportunistically attack any nearby enemy within combat range.
         Returns SUCCESS if threat is eliminated, ONGOING if attacking, or FAILURE if nothing in range.
         """
@@ -99,12 +99,55 @@ class PeacekeeperBehavioursMixin:
 
         assigned_position = threat["position"]
         assigned_id = threat.get("id", None)
+        threat_type = threat.get("type", "")
 
         # Step 1: Try to attack the assigned threat if within combat range
         if self.agent.is_near(
             assigned_position,
             threshold=utils_config.Agent_Interact_Range * utils_config.CELL_SIZE,
         ):
+            # Check if target is an HQ
+            if "HQ" in threat_type or "Faction HQ" in threat_type:
+                target_hq = None
+                if hasattr(self.agent.faction, "game_manager") and hasattr(
+                    self.agent.faction.game_manager, "faction_manager"
+                ):
+                    for (
+                        faction
+                    ) in self.agent.faction.game_manager.faction_manager.factions:
+                        if (
+                            hasattr(assigned_id, "faction_id")
+                            and faction.id == assigned_id.faction_id
+                        ) or (
+                            isinstance(assigned_id, int) and faction.id == assigned_id
+                        ):
+                            target_hq = faction
+                            break
+
+                if target_hq and not target_hq.home_base["is_destroyed"]:
+                    # Attack the enemy HQ
+                    self.event_manager.trigger_attack_animation(
+                        position=target_hq.home_base["position"], duration=200
+                    )
+
+                    damage = 5  # HQ takes more damage than agents
+                    is_destroyed = target_hq.take_hq_damage(damage)
+
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"{self.agent.role} attacked enemy HQ (Faction {target_hq.id}) at {assigned_position}. HQ Health: {target_hq.home_base['health']}/{target_hq.home_base['max_health']}",
+                            level=logging.INFO,
+                        )
+                    print(
+                        f"{self.agent.role} attacked enemy HQ (Faction {target_hq.id}) at {assigned_position}. HQ Health: {target_hq.home_base['health']}/{target_hq.home_base['max_health']}"
+                    )
+
+                    if is_destroyed:
+                        self.report_threat_eliminated(threat)
+                        return utils_config.TaskState.SUCCESS
+                    return utils_config.TaskState.ONGOING
+
+            # Otherwise, treat as an agent
             target_agent = next((a for a in agents if a.agent_id == assigned_id), None)
             if target_agent and target_agent.faction.id != self.agent.faction.id:
                 self.event_manager.trigger_attack_animation(
@@ -152,6 +195,47 @@ class PeacekeeperBehavioursMixin:
                             )
                         print(f"{self.agent.role} eliminated nearby  {enemy.role}.")
                     return utils_config.TaskState.ONGOING
+
+            # Step 3: Attack any nearby enemy HQ
+            if hasattr(self.agent.faction, "get_enemy_hqs"):
+                enemy_hqs = self.agent.faction.get_enemy_hqs()
+                for hq in enemy_hqs:
+                    if self.agent.is_near(
+                        hq["position"],
+                        threshold=utils_config.Agent_Interact_Range
+                        * utils_config.CELL_SIZE,
+                    ):
+                        self.event_manager.trigger_attack_animation(
+                            position=hq["position"], duration=200
+                        )
+
+                        # Find the target faction and damage its HQ
+                        for (
+                            faction
+                        ) in self.agent.faction.game_manager.faction_manager.factions:
+                            if faction.id == hq["faction_id"]:
+                                damage = 5
+                                is_destroyed = faction.take_hq_damage(damage)
+
+                                if utils_config.ENABLE_LOGGING:
+                                    logger.log_msg(
+                                        f"{self.agent.role} attacked enemy HQ (Faction {faction.id}). HQ Health: {faction.home_base['health']}/{faction.home_base['max_health']}",
+                                        level=logging.INFO,
+                                    )
+                                print(
+                                    f"{self.agent.role} attacked enemy HQ (Faction {faction.id}). HQ Health: {faction.home_base['health']}/{faction.home_base['max_health']}"
+                                )
+
+                                if is_destroyed:
+                                    if utils_config.ENABLE_LOGGING:
+                                        logger.log_msg(
+                                            f"{self.agent.role} destroyed enemy HQ (Faction {faction.id})!",
+                                            level=logging.CRITICAL,
+                                        )
+                                    print(
+                                        f"{self.agent.role} destroyed enemy HQ (Faction {faction.id})!"
+                                    )
+                                return utils_config.TaskState.ONGOING
 
         # Nothing in range — fail the task this step
         if utils_config.ENABLE_LOGGING:

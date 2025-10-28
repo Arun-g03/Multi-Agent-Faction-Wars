@@ -77,6 +77,9 @@ class GameManager:
 
         self.episode = 1
 
+        # Pause state
+        self.paused = False
+
         # Initialise the resource manager with the terrain
         self.resource_manager = ResourceManager(self.terrain)
 
@@ -245,11 +248,39 @@ class GameManager:
                     print(f"An error occurred for agent {agent.role}: {e}")
                     traceback.print_exc()
 
+            # Process events from event manager (e.g., attack animations)
+            events = self.event_manager.get_events()
+            for event in events:
+                self.handle_event(event)
+
             # Let agents share what they observed
             for agent in self.agents:
+                # Collect all enemy HQs for detection
+                enemy_hqs = []
+                for faction in self.faction_manager.factions:
+                    if faction.id != agent.faction.id and not faction.home_base.get(
+                        "is_destroyed", False
+                    ):
+                        enemy_hqs.append(
+                            {
+                                "faction_id": faction.id,
+                                "position": faction.home_base["position"],
+                            }
+                        )
+
+                # For backwards compatibility, also pass the first enemy HQ in the old format
+                enemy_hq_first = (
+                    enemy_hqs[0]
+                    if enemy_hqs
+                    else {
+                        "faction_id": agent.faction.id,
+                        "position": agent.faction.home_base["position"],
+                    }
+                )
+
                 agent.observe(
                     all_agents=self.agents,
-                    enemy_hq={"position": agent.faction.home_base["position"]},
+                    enemy_hq=enemy_hq_first,  # Pass first enemy HQ for backwards compatibility
                     resource_manager=self.resource_manager,
                 )
 
@@ -808,11 +839,17 @@ class GameManager:
                     )
 
                 while self.current_step < utils_config.STEPS_PER_EPISODE:
-                    self.process_pygame_events()
-                    self.step()
-                    self.update_resources()
+                    result = self.process_pygame_events()
+                    if result == "QUIT":
+                        return  # Exit the game loop
+
+                    # Only update game state if not paused
+                    if not self.paused:
+                        self.step()
+                        self.update_resources()
                     # Track resource spawn at the start of the episode
 
+                    # Always render, but pass paused state
                     if not utils_config.HEADLESS_MODE:
                         self.renderer.render(
                             self.camera,
@@ -823,44 +860,50 @@ class GameManager:
                             self.episode,
                             self.current_step,
                             self.resource_counts,
+                            enable_cell_tooltip=True,
+                            paused=self.paused,  # Pass paused state to renderer
                         )
                         pygame.display.update()
                     else:
                         step_bar.update(1)
 
-                    self.collect_episode_rewards()
+                    # Only update game systems if not paused
+                    if not self.paused:
+                        self.collect_episode_rewards()
 
-                    # Mini-batch training during episode (every 1000 steps if
-                    # we have enough samples)
-                    if (
-                        self.mode == "train"
-                        and self.current_step % 1000 == 0
-                        and self.current_step > 0
-                    ):
-                        self.train_agents_mini()
+                        # Mini-batch training during episode (every 1000 steps if
+                        # we have enough samples)
+                        if (
+                            self.mode == "train"
+                            and self.current_step % 1000 == 0
+                            and self.current_step > 0
+                        ):
+                            self.train_agents_mini()
 
-                    winner = check_victory(self.faction_manager.factions)
-                    winner_id = winner.id if winner else -1
-                    victory_type = (
-                        getattr(winner, "victory_reason", "none") if winner else "none"
-                    )
+                        winner = check_victory(self.faction_manager.factions)
+                        winner_id = winner.id if winner else -1
+                        victory_type = (
+                            getattr(winner, "victory_reason", "none")
+                            if winner
+                            else "none"
+                        )
 
-                    if not hasattr(self, "victory_history"):
-                        self.victory_history = {
-                            "episode": [],
-                            "winner_id": [],
-                            "victory_type": [],
-                        }
+                        if not hasattr(self, "victory_history"):
+                            self.victory_history = {
+                                "episode": [],
+                                "winner_id": [],
+                                "victory_type": [],
+                            }
 
-                    self.victory_history["episode"].append(self.episode)
-                    self.victory_history["winner_id"].append(winner_id)
-                    self.victory_history["victory_type"].append(victory_type)
+                        self.victory_history["episode"].append(self.episode)
+                        self.victory_history["winner_id"].append(winner_id)
+                        self.victory_history["victory_type"].append(victory_type)
 
-                    if winner:
-                        self.handle_victory(winner)
-                        break
+                        if winner:
+                            self.handle_victory(winner)
+                            break
 
-                    self.current_step += 1
+                        self.current_step += 1
 
                 self.resource_spawn_history["episode"].append(self.episode)
                 self.resource_spawn_history["gold_lumps"].append(
@@ -922,6 +965,10 @@ class GameManager:
                 if self.mode == "train":
                     for agent in self.agents:
                         agent.ai.clear_memory()
+
+                # Force flush any buffered logs
+                if hasattr(self.logger, "force_flush"):
+                    self.logger.force_flush()
 
                 self.episode += 1
 
@@ -993,9 +1040,11 @@ class GameManager:
             self.metric_history[faction.id]["gold_balance"].append(faction.gold_balance)
             self.metric_history[faction.id]["food_balance"].append(faction.food_balance)
             self.metric_history[faction.id]["agents_alive"].append(agent_count)
-            
+
             # Add world ownership metric (territory count)
-            self.metric_history[faction.id]["world_ownership"].append(faction.territory_count)
+            self.metric_history[faction.id]["world_ownership"].append(
+                faction.territory_count
+            )
 
             # Add role-specific rewards to the history for each role
             for role, reward in role_rewards.get(faction.id, {}).items():
@@ -1269,7 +1318,7 @@ class GameManager:
                 except Exception as e:
                     # Silently continue if training fails during mini-batch
                     pass
-        
+
         # Also train HQ networks with mini-batches
         self.train_hq_networks_mini()
 
@@ -1282,7 +1331,8 @@ class GameManager:
             if (
                 self.mode == "train"
                 and hasattr(faction.network, "hq_memory")
-                and len(faction.network.hq_memory) >= 5  # Minimum samples for HQ training
+                and len(faction.network.hq_memory)
+                >= 5  # Minimum samples for HQ training
             ):
                 try:
                     if utils_config.ENABLE_LOGGING:
@@ -1290,14 +1340,18 @@ class GameManager:
                             f"[HQ MINI-TRAIN] Training HQ network for Faction {faction.id} with {len(faction.network.hq_memory)} samples.",
                             level=logging.DEBUG,
                         )
-                    
+
                     # Assign interim rewards based on current performance
                     # Use a simple heuristic: sum of step rewards so far
-                    interim_reward = sum(faction.hq_step_rewards) if hasattr(faction, 'hq_step_rewards') else 0.0
-                    
+                    interim_reward = (
+                        sum(faction.hq_step_rewards)
+                        if hasattr(faction, "hq_step_rewards")
+                        else 0.0
+                    )
+
                     # Update rewards for the current memory
                     faction.network.update_memory_rewards(interim_reward)
-                    
+
                     # Train with mini-batch
                     faction.network.train(faction.network.hq_memory, faction.optimizer)
                 except Exception as e:
@@ -1305,7 +1359,7 @@ class GameManager:
                     if utils_config.ENABLE_LOGGING:
                         self.logger.log_msg(
                             f"[HQ MINI-TRAIN] Failed to train HQ for Faction {faction.id}: {e}",
-                            level=logging.DEBUG
+                            level=logging.DEBUG,
                         )
                     pass
 
@@ -1346,7 +1400,7 @@ class GameManager:
                             float(f.split("_reward_")[-1].replace(".pth", "")),
                         )
                         for f in os.listdir(hq_model_dir)
-                        if f.startswith(f"HQ_Faction_") and "_reward_" in f
+                        if f.startswith("HQ_Faction_") and "_reward_" in f
                     ]
 
                     # Combine disk models + in-memory top list + current result
@@ -1386,7 +1440,7 @@ class GameManager:
                             f_path = os.path.join(hq_model_dir, f)
                             if (
                                 f_path not in keep_paths
-                                and f.startswith(f"HQ_Faction_")
+                                and f.startswith("HQ_Faction_")
                                 and "_reward_" in f
                             ):
                                 os.remove(f_path)
@@ -1459,9 +1513,9 @@ class GameManager:
         if event["type"] == "attack_animation":
             position = event["data"]["position"]
             duration = event["data"]["duration"]
-            print(
-                f"Game Manager/Handle_event - Playing attack animation at {position} for {duration} seconds."
-            )
+            # print(
+            #     f"Game Manager/Handle_event - Playing attack animation at {position} for {duration} seconds."
+            # )
             self.renderer.play_attack_animation(position, duration)
 
         elif event["type"] == "dynamic_event":
@@ -1508,10 +1562,95 @@ class GameManager:
             elif event.type == pygame.KEYDOWN:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
 
-                if event.key in (pygame.K_PLUS, pygame.K_EQUALS):
+                # Toggle pause with ESC
+                if event.key == pygame.K_ESCAPE:
+                    self.paused = not self.paused
+                    print(
+                        f"[INFO] Game state: {'PAUSED' if self.paused else 'RESUMED'}"
+                    )
+                    if self.paused:
+                        print(
+                            "[INFO] Game paused. Press ESC again to resume, M to restart episode, Q to quit."
+                        )
+                    else:
+                        print("[INFO] Game resumed.")
+
+                # Handle pause menu keys
+                elif self.paused:
+                    if event.key == pygame.K_q:
+                        print("[INFO] Quitting game from pause menu...")
+                        return "QUIT"
+                    elif event.key == pygame.K_m:
+                        print(
+                            "[INFO] Restarting episode with new map from pause menu..."
+                        )
+                        self.change_map()
+                        self.paused = False  # Unpause after map change
+
+                # Only process other keys if not paused
+                elif event.key in (pygame.K_PLUS, pygame.K_EQUALS):
                     self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
                 elif event.key == pygame.K_MINUS:
                     self.camera.zoom_around_mouse(False, mouse_x, mouse_y)
+
+    def change_map(self):
+        """
+        Change the map by regenerating terrain and resources while restarting the episode.
+        Respawning HQs and agents on the new map.
+        """
+        print("[MAP CHANGE] Regenerating terrain and resources, restarting episode...")
+
+        # Step 1: Regenerate terrain
+        self.terrain = Terrain()
+
+        # Step 2: Regenerate resources
+        for resource in self.resource_manager.resources:
+            resource.remove_from_terrain()
+        self.resource_manager.terrain = self.terrain  # Update reference
+        self.resource_manager.resources = []
+        self.resource_manager.gold_count = 0
+        self.resource_manager.apple_tree_count = 0
+        self.resource_manager.generate_resources()
+
+        # Update renderer's terrain reference
+        self.renderer.terrain = self.terrain
+
+        # Step 3: Reset HQs and agents (respawning everything)
+        self.agents_initialised = False  # Reset flag for agents initialisation
+        self.faction_manager.reset_factions(
+            utils_config.FACTON_COUNT, self.resource_manager, self.agents, self
+        )
+        self.agents.clear()  # Clear existing agents
+        self.Initialise_agents(mode=self.mode)  # Respawning HQs and agents
+
+        # Reset communication system
+        self.communication_system = CommunicationSystem(
+            self.agents, self.faction_manager.factions
+        )
+
+        # Reset event manager with new agents
+        self.event_manager = EventManager(
+            resource_manager=self.resource_manager,
+            faction_manager=self.faction_manager,
+            agents=self.agents,
+            renderer=self.renderer,
+            camera=self.camera,
+        )
+
+        # Clean faction global states (clear resource/threat knowledge)
+        for faction in self.faction_manager.factions:
+            faction.clean_global_state()
+
+        # Step 4: Reset episode state
+        self.current_step = 0
+        self.last_activity_step = 0
+
+        print("[MAP CHANGE] Episode restarted with new map! HQs and agents respawned.")
+        if utils_config.ENABLE_LOGGING:
+            self.logger.log_msg(
+                "Map changed - episode restarted, HQs and agents respawned.",
+                level=logging.INFO,
+            )
 
     def handle_victory(self, winner):
         print(f"Faction {winner.id} wins! Moving to next episode...")

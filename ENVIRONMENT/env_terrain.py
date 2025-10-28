@@ -27,6 +27,11 @@ class Terrain:
         # Calculate total traversable tiles (land tiles) for percentage calculations
         self.max_traversable_tiles = self.get_traversable_tile_count()
 
+        # Cache for terrain rendering
+        self._scaled_tiles = {}  # Cache scaled tiles by cell size
+        self._last_cell_size = None
+        self._base_textures_loaded = False
+
     def ensure_connected_land(self, grid, min_land_ratio=0.6):
         """
         Ensures that most of the land is in a single connected component.
@@ -188,44 +193,48 @@ class Terrain:
         # Adjust font size to cell size
         font = get_font(int(utils_config.CELL_SIZE * 0.5))
 
-        # Load the grass texture
-        grass_texture = pygame.image.load(
-            utils_config.Grass_Texture_Path
-        ).convert_alpha()
+        # Initialize cache on first call or when cell size changes
+        cell_size_int = int(utils_config.CELL_SIZE)
+        if cell_size_int != self._last_cell_size or not self._base_textures_loaded:
+            self._last_cell_size = cell_size_int
+            self._base_textures_loaded = True
+            self._scaled_tiles = {}
 
-        # Load water textures (animate water)
-        water_sprite_sheet = pygame.image.load(
-            utils_config.Water_Texture_Path
-        ).convert_alpha()
+            # Load base textures once
+            self._base_grass_texture = pygame.image.load(
+                utils_config.Grass_Texture_Path
+            ).convert_alpha()
 
-        # Define the frames for the water animation (frames 3, 4, and 5)
-        water_frames = []
-        frame_width = 16  # width of each frame (192 / 12)
-        frame_height = 16  # height of each frame (224 / 14)
+            # Load water textures
+            self._base_water_sheet = pygame.image.load(
+                utils_config.Water_Texture_Path
+            ).convert_alpha()
 
-        # Extract frames 3, 4, and 5 (0-indexed, so frames 2, 3, and 4 in terms
-        # of index)
-        water_frames.append(
-            water_sprite_sheet.subsurface(
-                (2 * frame_width, 2 * frame_height, frame_width, frame_height)
+            # Pre-scale grass texture
+            self._scaled_tiles["land"] = pygame.transform.scale(
+                self._base_grass_texture, (cell_size_int, cell_size_int)
             )
-        )  # Frame 3
-        water_frames.append(
-            water_sprite_sheet.subsurface(
-                (3 * frame_width, 2 * frame_height, frame_width, frame_height)
-            )
-        )  # Frame 4
-        water_frames.append(
-            water_sprite_sheet.subsurface(
-                (4 * frame_width, 2 * frame_height, frame_width, frame_height)
-            )
-        )  # Frame 5
+
+            # Pre-scale water frames
+            frame_width = 16
+            frame_height = 16
+            self._water_frames = []
+            for i in range(3, 6):  # Frames 3, 4, 5
+                frame = self._base_water_sheet.subsurface(
+                    (i * frame_width, 2 * frame_height, frame_width, frame_height)
+                )
+                self._scaled_tiles[f"water_{i-3}"] = pygame.transform.scale(
+                    frame, (cell_size_int, cell_size_int)
+                )
+                self._water_frames.append(self._scaled_tiles[f"water_{i-3}"])
 
         # Determine the number of frames to display per cycle and the time
         # interval between frames
         frame_duration = 200  # Time per frame (in milliseconds)
         # Cycle through frames
-        current_frame = (pygame.time.get_ticks() // frame_duration) % len(water_frames)
+        current_frame = (pygame.time.get_ticks() // frame_duration) % len(
+            self._water_frames
+        )
 
         for x in range(grid_width):
             for y in range(grid_height):
@@ -235,51 +244,39 @@ class Terrain:
                 cell = self.grid[x][y]
 
                 if cell["type"] == "water":
-                    # Animate the water texture and apply on screen
-
-                    play_animation = (
-                        utils_config.WaterAnimationToggle
-                    )  # bool to toggle the animation
+                    # Use cached scaled water frame
+                    play_animation = utils_config.WaterAnimationToggle
                     if play_animation:
-                        frame = water_frames[current_frame]
-                        scaled_frame = pygame.transform.scale(
-                            frame,
-                            (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)),
+                        screen.blit(
+                            self._water_frames[current_frame], (world_x, world_y)
                         )
-                        screen.blit(scaled_frame, (world_x, world_y))
                     else:
-                        # Use the first frame as static
-                        static_frame = water_frames[0]
-                        scaled_static_frame = pygame.transform.scale(
-                            static_frame,
-                            (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)),
-                        )
-                        screen.blit(scaled_static_frame, (world_x, world_y))
+                        screen.blit(self._water_frames[0], (world_x, world_y))
                 elif cell["type"] == "land":
-                    # Scale the grass texture to fit the cell size
-                    scaled_grass_texture = pygame.transform.scale(
-                        grass_texture,
-                        (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)),
-                    )
+                    # Use cached scaled grass texture
+                    grass_texture = self._scaled_tiles["land"]
 
-                    # Create a tint surface and scale it to fit the cell size
-                    tint_surface = pygame.Surface(
-                        (int(utils_config.CELL_SIZE), int(utils_config.CELL_SIZE)),
-                        pygame.SRCALPHA,
-                    )
-                    # Adjust tint colour and transparency (R, G, B, A)
-                    tint_colour = (0, 160, 0, 255)
-                    tint_surface.fill(tint_colour)
+                    # Create tint surface (cache this too if needed)
+                    if "tint_surface" not in self._scaled_tiles:
+                        tint_surface = pygame.Surface(
+                            (cell_size_int, cell_size_int),
+                            pygame.SRCALPHA,
+                        )
+                        tint_colour = (0, 160, 0, 255)
+                        tint_surface.fill(tint_colour)
+                        self._scaled_tiles["tint_surface"] = tint_surface
 
-                    # Apply the tint by blitting the tint surface onto the
-                    # scaled texture
-                    tinted_grass_texture = scaled_grass_texture.copy()
-                    tinted_grass_texture.blit(
-                        tint_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT
-                    )
+                    # Apply tint (only if not already tinted in cache)
+                    if "land_tinted" not in self._scaled_tiles:
+                        tinted_grass = self._scaled_tiles["land"].copy()
+                        tinted_grass.blit(
+                            self._scaled_tiles["tint_surface"],
+                            (0, 0),
+                            special_flags=pygame.BLEND_RGBA_MULT,
+                        )
+                        self._scaled_tiles["land_tinted"] = tinted_grass
 
-                    # Draw the tinted grass texture on the screen
-                    screen.blit(tinted_grass_texture, (world_x, world_y))
+                    screen.blit(self._scaled_tiles["land_tinted"], (world_x, world_y))
 
                     # If the cell is owned by a faction, overlay the faction's
                     # colour with some transparency

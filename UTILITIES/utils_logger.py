@@ -75,23 +75,65 @@ class Logger:
 
         self.logger.info("Logger initialised and log file cleared.")
 
+        # Buffer for batch writing to reduce I/O overhead
+        self.log_buffer = []
+        self.buffer_size = 200  # Flush after 200 messages
+        self.last_flush_time = 0
+        self.flush_interval = 2.0  # Force flush every 2 seconds
+
     def log_msg(self, message, level=logging.INFO):
         """
-        Log a message at a specified logging level.
+        Log a message at a specified logging level with batch buffering.
         """
         try:
             if not utils_config.ENABLE_LOGGING:
                 return
 
-            if level == logging.DEBUG:
-                self.logger.debug(message)
-            elif level == logging.INFO:
-                self.logger.info(message)
-            elif level == logging.WARNING:
-                self.logger.warning(message)
-            elif level == logging.ERROR:
-                self.logger.error(message)
-            elif level == logging.CRITICAL:
-                self.logger.critical(message)
+            # Add to buffer with timestamp
+            import time
+
+            current_time = time.time()
+
+            self.log_buffer.append((message, level, current_time))
+
+            # Flush buffer if it's full or if enough time has passed
+            should_flush = (
+                len(self.log_buffer) >= self.buffer_size
+                or current_time - self.last_flush_time >= self.flush_interval
+            )
+
+            if should_flush:
+                self._flush_buffer()
         except Exception as e:
             raise Exception(f"Logging error: {str(e)}")
+
+    def _flush_buffer(self):
+        """Flush all buffered log messages."""
+        try:
+            import time
+
+            for message, level, _ in self.log_buffer:
+                if level == logging.DEBUG:
+                    self.logger.debug(message)
+                elif level == logging.INFO:
+                    self.logger.info(message)
+                elif level == logging.WARNING:
+                    self.logger.warning(message)
+                elif level == logging.ERROR:
+                    self.logger.error(message)
+                elif level == logging.CRITICAL:
+                    self.logger.critical(message)
+
+            # Force flush handlers
+            for handler in self.logger.handlers:
+                handler.flush()
+
+            self.log_buffer = []
+            self.last_flush_time = time.time()
+        except Exception as e:
+            print(f"[WARNING] Failed to flush log buffer: {e}")
+
+    def force_flush(self):
+        """Force flush all buffered messages (call at end of episodes/runs)."""
+        if hasattr(self, "log_buffer") and self.log_buffer:
+            self._flush_buffer()

@@ -504,6 +504,14 @@ class AgentBehaviour(
         reward = 0.0
         dist = self.calculate_distance(current_pos, target_pos)
 
+        # === Context-Aware Context ===
+        # Calculate distance to HQ for context (agent can observe this)
+        hq_distance = None
+        if hasattr(agent, "faction") and hasattr(agent.faction, "home_base"):
+            hq_pos = agent.faction.home_base.get("position", None)
+            if hq_pos:
+                hq_distance = self.calculate_distance(current_pos, hq_pos)
+
         # === Task Completion (Normalised Success) ===
         if task_state == utils_config.TaskState.SUCCESS:
             reward += 1.0  # Base normalised reward
@@ -515,10 +523,30 @@ class AgentBehaviour(
             elif task_type == "eliminate":
                 reward += 0.5
 
+            # === Context-Aware Bonuses (using info agent can observe) ===
+            # Bonus for eliminating threats near HQ (good defense)
+            if task_type == "eliminate" and hq_distance is not None:
+                # Closer to HQ = better (0.0 to 0.3 bonus based on proximity)
+                hq_proximity_bonus = max(0.0, 0.3 - 0.001 * hq_distance)
+                reward += hq_proximity_bonus
+
+            # Bonus for agents with low health completing tasks (survival value)
+            if hasattr(agent, "Health"):
+                health_ratio = agent.Health / 100.0
+                if health_ratio < 0.5:  # Low health
+                    survival_bonus = (0.5 - health_ratio) * 0.2  # Up to +0.1 bonus
+                    reward += survival_bonus
+
         # === Task Failure (Normalised Penalty) ===
         elif task_state == utils_config.TaskState.FAILURE:
             reward -= 1.0
             reward -= 0.05 * dist  # Soft penalty based on distance
+
+            # Extra penalty if low health fails (critical failure)
+            if hasattr(agent, "Health"):
+                health_ratio = agent.Health / 100.0
+                if health_ratio < 0.3:  # Very low health
+                    reward -= 0.2  # Critical failure penalty
 
         # === Ongoing Tasks (Shaping) ===
         elif task_state == utils_config.TaskState.ONGOING:
@@ -528,6 +556,16 @@ class AgentBehaviour(
                 reward -= 0.3
 
             reward += self.shape_action_bonus(task_type, action)
+
+            # Bonus for peacekeepers getting closer to threats
+            if task_type == "eliminate" and agent.role == "peacekeeper":
+                proximity_bonus = max(0.0, 0.1 - 0.05 * dist)  # Closer = better
+                reward += proximity_bonus
+
+            # Bonus for gatherers getting closer to resources
+            if task_type == "gather" and agent.role == "gatherer":
+                proximity_bonus = max(0.0, 0.1 - 0.05 * dist)  # Closer = better
+                reward += proximity_bonus
 
         # === Invalid Task or Unknown ===
         elif task_state == utils_config.TaskState.INVALID:
@@ -867,7 +905,7 @@ class AgentBehaviour(
             return utils_config.TaskState.INVALID
 
         target_x, target_y = self.agent.current_task["target"]["position"]
-        
+
         # Explore targets are in GRID coordinates
         # Convert grid target to world coordinates for distance calculation
         world_x = target_x * utils_config.CELL_SIZE

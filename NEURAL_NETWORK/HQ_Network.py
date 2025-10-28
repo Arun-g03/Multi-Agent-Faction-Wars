@@ -38,7 +38,7 @@ class HQ_Network(nn.Module):
         # Store AgentID for consistency with other network models
         self.AgentID = AgentID
         self.faction_id = faction_id
-        
+
         # Initialise the device to use (CPU or GPU) default to Training_device if none
         if device is None:
             device = Training_device
@@ -110,7 +110,7 @@ class HQ_Network(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size // 4, 1),
         )
-        
+
         # Reset seed back to original after initialization to avoid affecting other HQs
         if faction_id is not None:
             torch.manual_seed(torch.initial_seed())
@@ -179,10 +179,10 @@ class HQ_Network(nn.Module):
         calculated_state_size = new_input_size - (
             self.role_size + self.local_state_size + self.global_state_size
         )
-        
+
         # Minimum state size is 5 (base state vector has 5 elements)
         MIN_STATE_SIZE = 5
-        
+
         # Prevent invalid state size - if calculation goes negative or below minimum, keep original
         if calculated_state_size >= MIN_STATE_SIZE:
             self.state_size = calculated_state_size
@@ -199,17 +199,48 @@ class HQ_Network(nn.Module):
         device = self.device
 
         # Ensure all inputs are on the correct device and properly shaped
-        state = state.to(device).view(-1)
-        role = role.to(device).view(-1)
-        local_state = local_state.to(device).view(-1)
-        global_state = global_state.to(device).view(-1)
+        # Keep batch dimension if present (for training), otherwise flatten
+        # Note: Tensors are created with device=device, so .to() is only needed if not already on device
+        if state.device != device:
+            state = state.to(device)
+        if role.device != device:
+            role = role.to(device)
+        if local_state.device != device:
+            local_state = local_state.to(device)
+        if global_state.device != device:
+            global_state = global_state.to(device)
 
-        input_size_check = (
-            state.shape[0]
-            + role.shape[0]
-            + local_state.shape[0]
-            + global_state.shape[0]
-        )
+        if state.dim() > 1:
+            # Batch mode: state is (batch_size, state_size), etc.
+            # Reshape to (batch_size, -1) to preserve batch dimension
+            state = state.reshape(state.shape[0], -1)
+            role = role.reshape(role.shape[0], -1)
+            local_state = local_state.reshape(local_state.shape[0], -1)
+            global_state = global_state.reshape(global_state.shape[0], -1)
+        else:
+            # Single sample: flatten to 1D
+            state = state.view(-1)
+            role = role.view(-1)
+            local_state = local_state.view(-1)
+            global_state = global_state.view(-1)
+
+        # Calculate total input size (handle both batch and single sample modes)
+        if state.dim() > 1:
+            # Batch mode: use last dimension
+            input_size_check = (
+                state.shape[-1]
+                + role.shape[-1]
+                + local_state.shape[-1]
+                + global_state.shape[-1]
+            )
+        else:
+            # Single sample mode: use first dimension
+            input_size_check = (
+                state.shape[0]
+                + role.shape[0]
+                + local_state.shape[0]
+                + global_state.shape[0]
+            )
 
         if input_size_check != self.feature_extractor[0].in_features:
             if utils_config.ENABLE_LOGGING:
@@ -229,11 +260,13 @@ class HQ_Network(nn.Module):
             # Reshape for attention (batch_size, seq_len, features)
             # Ensure features has the right dimensions
             if features.dim() == 1:
-                features = features.unsqueeze(0).unsqueeze(0)  # Add batch and seq dimensions
+                features = features.unsqueeze(0).unsqueeze(
+                    0
+                )  # Add batch and seq dimensions
             elif features.dim() == 2:
                 features = features.unsqueeze(1)  # Add seq dimension
             # At this point features should be (batch_size, seq_len, features) = (?, ?, hidden_size)
-            
+
             # Only apply attention if we have valid dimensions
             if features.dim() >= 2:
                 try:
@@ -244,16 +277,15 @@ class HQ_Network(nn.Module):
                         if utils_config.ENABLE_LOGGING:
                             logger.log_msg(
                                 f"[WARNING] Skipping attention due to dimension error: {e}",
-                                level=logging.WARNING
+                                level=logging.WARNING,
                             )
                     else:
                         raise
-            
+
             # Restore original dimensions
             if features.dim() == 3:
                 features = features.squeeze(1)  # Remove seq dimension if present
-            elif features.dim() == 2 and features.shape[0] == 1:
-                features = features.squeeze(0)  # Remove batch dimension if batch_size=1
+            # Note: Don't squeeze batch dimension - we need it for batch training
 
         # Policy and value outputs
         policy_logits = self.policy_head(features)
@@ -487,12 +519,12 @@ class HQ_Network(nn.Module):
             # 5. Select strategy - add exploration for untrained networks
             # Check if network is trained (has memory entries or total_updates > 0)
             is_trained = len(self.hq_memory) > 0 or self.total_updates > 0
-            
+
             logger.log_msg(
                 f"[STRATEGY_SELECT] Memory size: {len(self.hq_memory)}, Total updates: {self.total_updates}, is_trained: {is_trained}",
-                level=logging.INFO
+                level=logging.INFO,
             )
-            
+
             # Add noise to logits if untrained to prevent all HQs picking same strategy
             if not is_trained:
                 # Add significant random noise to encourage exploration during initial training
@@ -501,21 +533,21 @@ class HQ_Network(nn.Module):
                 logits = logits + noise
                 logger.log_msg(
                     f"[EXPLORATION] Adding significant noise. Logits before: {logits_list[:3]}... After: {logits.squeeze(0).tolist()[:3]}...",
-                    level=logging.INFO
+                    level=logging.INFO,
                 )
             else:
                 logger.log_msg(
                     "[STRATEGY_SELECT] Network is trained, using deterministic selection",
-                    level=logging.INFO
+                    level=logging.INFO,
                 )
-            
+
             # Select with deterministic argmax for trained, with noise for untrained
             action_index = torch.argmax(logits).item()
             selected_strategy = self.strategy_labels[action_index]
-            
+
             logger.log_msg(
                 f"[STRATEGY_SELECT] Selected strategy: {selected_strategy} (index: {action_index})",
-                level=logging.INFO
+                level=logging.INFO,
             )
 
             # 6. Store memory for training
@@ -573,7 +605,7 @@ class HQ_Network(nn.Module):
                     max(g.get("threat_count", 0.0) / 10.0, 0.0), 2.0
                 ),  # Allow up to 2x normal
             ]
-            
+
             # If state_size is smaller than the minimum required size, fix it
             MIN_STATE_SIZE = len(state_vector)  # Ensure at least 5 elements
             if self.state_size < MIN_STATE_SIZE:
@@ -687,7 +719,7 @@ class HQ_Network(nn.Module):
                     level=logging.WARNING,
                 )
                 self.state_size = len(state_vector)
-            
+
             # Now safely validate and pad/truncate
             if len(state_vector) != self.state_size:
                 logger.log_msg(
@@ -758,22 +790,82 @@ class HQ_Network(nn.Module):
 
         # Prepare batches from structured memory
         device = self.device
+
+        # Validate and normalize state vectors to ensure consistent sizes
+        expected_state_size = self.state_size
+        expected_role_size = self.role_size
+        expected_local_size = self.local_state_size
+        expected_global_size = self.global_state_size
+
+        normalized_memory = []
+        for m in memory:
+            normalized = {}
+
+            # Normalize state vector to expected size
+            state = m["state"]
+            if len(state) != expected_state_size:
+                if len(state) < expected_state_size:
+                    # Pad with zeros
+                    state = state + [0.0] * (expected_state_size - len(state))
+                else:
+                    # Truncate to expected size
+                    state = state[:expected_state_size]
+            normalized["state"] = state
+
+            # Normalize role vector
+            role = m["role"]
+            if len(role) != expected_role_size:
+                if len(role) < expected_role_size:
+                    role = role + [0.0] * (expected_role_size - len(role))
+                else:
+                    role = role[:expected_role_size]
+            normalized["role"] = role
+
+            # Normalize local_state vector
+            local = m["local_state"]
+            if len(local) != expected_local_size:
+                if len(local) < expected_local_size:
+                    local = local + [0.0] * (expected_local_size - len(local))
+                else:
+                    local = local[:expected_local_size]
+            normalized["local_state"] = local
+
+            # Normalize global_state vector
+            global_vec = m["global_state"]
+            if len(global_vec) != expected_global_size:
+                if len(global_vec) < expected_global_size:
+                    global_vec = global_vec + [0.0] * (
+                        expected_global_size - len(global_vec)
+                    )
+                else:
+                    global_vec = global_vec[:expected_global_size]
+            normalized["global_state"] = global_vec
+
+            normalized["action"] = m["action"]
+            normalized["reward"] = m["reward"]
+            normalized["timestamp"] = m.get("timestamp", 0)
+            normalized_memory.append(normalized)
+
         states = torch.tensor(
-            [m["state"] for m in memory], dtype=torch.float32, device=device
+            [m["state"] for m in normalized_memory], dtype=torch.float32, device=device
         )
         roles = torch.tensor(
-            [m["role"] for m in memory], dtype=torch.float32, device=device
+            [m["role"] for m in normalized_memory], dtype=torch.float32, device=device
         )
         locals_ = torch.tensor(
-            [m["local_state"] for m in memory], dtype=torch.float32, device=device
+            [m["local_state"] for m in normalized_memory],
+            dtype=torch.float32,
+            device=device,
         )
         globals_ = torch.tensor(
-            [m["global_state"] for m in memory], dtype=torch.float32, device=device
+            [m["global_state"] for m in normalized_memory],
+            dtype=torch.float32,
+            device=device,
         )
         actions = torch.tensor(
-            [m["action"] for m in memory], dtype=torch.long, device=device
+            [m["action"] for m in normalized_memory], dtype=torch.long, device=device
         )
-        rewards = [m["reward"] for m in memory]
+        rewards = [m["reward"] for m in normalized_memory]
 
         # Compute discounted returns with better numerical stability
         returns = []

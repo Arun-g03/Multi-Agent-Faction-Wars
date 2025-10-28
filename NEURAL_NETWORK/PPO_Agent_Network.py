@@ -222,7 +222,7 @@ class PPOModel(nn.Module):
         else:
             action = torch.argmax(probs, dim=-1)
 
-        if utils_config.ENABLE_LOGGING:
+        if utils_config.ENABLE_LOGGING and utils_config.VERBOSE_TENSOR_LOGGING:
             logger.log_msg(
                 f"Action probabilities: {probs.tolist()}, Selected action: {action.item()}, State value: {value.item()}.",
                 level=logging.DEBUG,
@@ -676,11 +676,15 @@ class PPOModel(nn.Module):
             if not isinstance(dones, torch.Tensor):
                 dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
 
-            # Ensure all tensors are on the same device
-            rewards = rewards.to(self.device)
-            local_values = local_values.to(self.device)
-            global_values = global_values.to(self.device)
-            dones = dones.to(self.device)
+            # Ensure all tensors are on the same device (only move if needed)
+            if rewards.device != self.device:
+                rewards = rewards.to(self.device)
+            if local_values.device != self.device:
+                local_values = local_values.to(self.device)
+            if global_values.device != self.device:
+                global_values = global_values.to(self.device)
+            if dones.device != self.device:
+                dones = dones.to(self.device)
 
             # Use configuration-based parameters
             gamma = 0.99  # Can be made configurable

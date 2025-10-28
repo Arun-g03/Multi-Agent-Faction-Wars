@@ -512,7 +512,9 @@ class BaseAgent:
             # Report threat to HQ using the communication system
             if self.communication_system:
                 self.communication_system.agent_to_hq(
-                    self, {"type": "threat", "data": threat}, current_step=self.current_step
+                    self,
+                    {"type": "threat", "data": threat},
+                    current_step=self.current_step,
                 )
 
         # Detect resources
@@ -522,7 +524,9 @@ class BaseAgent:
         for resource in observed_resources:
             if self.communication_system:
                 self.communication_system.agent_to_hq(
-                    self, {"type": "resource", "data": resource}, current_step=self.current_step
+                    self,
+                    {"type": "resource", "data": resource},
+                    current_step=self.current_step,
                 )
 
         # Log reported resources
@@ -651,8 +655,43 @@ class BaseAgent:
                     level=logging.DEBUG,
                 )
 
-        # === Detect enemy HQ ===
-        if "position" in enemy_hq and enemy_hq.get("faction_id") is not None:
+        # === Detect enemy HQs ===
+        # Use the faction's get_enemy_hqs method to get all enemy HQs
+        if hasattr(self.faction, "get_enemy_hqs"):
+            enemy_hqs = self.faction.get_enemy_hqs()
+            for hq_info in enemy_hqs:
+                hq_x, hq_y = hq_info["position"]
+
+                if utils_config.SUB_TILE_PRECISION:
+                    dx = hq_x - self.x
+                    dy = hq_y - self.y
+                else:
+                    self_gx = self.x // utils_config.CELL_SIZE
+                    self_gy = self.y // utils_config.CELL_SIZE
+                    hq_gx = hq_x // utils_config.CELL_SIZE
+                    hq_gy = hq_y // utils_config.CELL_SIZE
+                    dx = (hq_gx - self_gx) * utils_config.CELL_SIZE
+                    dy = (hq_gy - self_gy) * utils_config.CELL_SIZE
+
+                if dx * dx + dy * dy <= radius_sq:
+                    threats.append(
+                        {
+                            "id": utils_config.AgentIDStruc(
+                                faction_id=hq_info["faction_id"], agent_id="HQ"
+                            ),
+                            "faction": hq_info["faction_id"],
+                            "type": "Faction HQ",
+                            "location": hq_info["position"],
+                        }
+                    )
+
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"Agent {self.agent_id} detected enemy HQ (Faction {hq_info['faction_id']}) at location {hq_info['position']}.",
+                            level=logging.DEBUG,
+                        )
+        # Fallback to old single HQ detection for backwards compatibility
+        elif "position" in enemy_hq and enemy_hq.get("faction_id") is not None:
             hq_x, hq_y = enemy_hq["position"]
 
             if utils_config.SUB_TILE_PRECISION:
@@ -885,28 +924,31 @@ class BaseAgent:
         grid_x = int(self.x // utils_config.CELL_SIZE)
         grid_y = int(self.y // utils_config.CELL_SIZE)
         terrain_awareness = []
-        
+
         # Check 8 directions: N, S, E, W, NE, NW, SE, SW
         directions = [
-            (0, -1),   # North
-            (0, 1),    # South
-            (1, 0),    # East
-            (-1, 0),   # West
-            (1, -1),   # NorthEast
+            (0, -1),  # North
+            (0, 1),  # South
+            (1, 0),  # East
+            (-1, 0),  # West
+            (1, -1),  # NorthEast
             (-1, -1),  # NorthWest
-            (1, 1),    # SouthEast
-            (-1, 1),   # SouthWest
+            (1, 1),  # SouthEast
+            (-1, 1),  # SouthWest
         ]
-        
+
         for dx, dy in directions:
             check_x = grid_x + dx
             check_y = grid_y + dy
-            
+
             # Check if the tile is valid and traversable
-            if (0 <= check_x < len(self.terrain.grid) and 
-                0 <= check_y < len(self.terrain.grid[0])):
+            if 0 <= check_x < len(self.terrain.grid) and 0 <= check_y < len(
+                self.terrain.grid[0]
+            ):
                 tile = self.terrain.grid[check_x][check_y]
-                tile_type = tile.get("type", "water") if isinstance(tile, dict) else "water"
+                tile_type = (
+                    tile.get("type", "water") if isinstance(tile, dict) else "water"
+                )
                 # 1.0 = traversable (land), 0.0 = water
                 terrain_awareness.append(1.0 if tile_type == "land" else 0.0)
             else:
@@ -924,7 +966,14 @@ class BaseAgent:
         ]
 
         # === Final State Vector ===
-        state = core_state + role_vector + one_hot_task + task_info + context_vector + terrain_awareness
+        state = (
+            core_state
+            + role_vector
+            + one_hot_task
+            + task_info
+            + context_vector
+            + terrain_awareness
+        )
 
         return state
 
