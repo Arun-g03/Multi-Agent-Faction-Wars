@@ -1,5 +1,27 @@
 # Project Architecture
 
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Project Structure](#project-structure)
+3. [Core Components](#core-components)
+   - [Agent System](#1-agent-system-agent)
+   - [Neural Network System](#2-neural-network-system-neural_network)
+   - [Environment System](#3-environment-system-environment)
+   - [Game Management](#4-game-management-game)
+   - [Rendering System](#5-rendering-system-render)
+   - [Utilities](#6-utilities-utilities)
+4. [Data Flow](#data-flow)
+   - [Agent Action Cycle](#agent-action-cycle)
+   - [HQ Decision Cycle](#hq-decision-cycle)
+   - [Rendering Cycle](#rendering-cycle)
+5. [Key Design Patterns](#key-design-patterns)
+6. [Neural Network Architecture](#neural-network-architecture)
+7. [Performance Characteristics](#performance-characteristics)
+8. [Extension Points](#extension-points)
+
+---
+
 ## Overview
 
 Multi-Agent Faction Wars uses a modular architecture with clear separation of concerns. The project is organized into several key components that interact to create an emergent multi-agent system.
@@ -42,9 +64,9 @@ Multi-Agent-Faction-Wars/
 └── SHARED/                   # Shared imports and common code
 ```
 
-## Core Components
+## Core Components {#core-components}
 
-### 1. Agent System (`AGENT/`)
+### 1. Agent System (`AGENT/`) {#agent-system}
 
 The agent system is the heart of the simulation, implementing individual agents, their behaviors, and faction-level decision-making.
 
@@ -68,7 +90,7 @@ The agent system is the heart of the simulation, implementing individual agents,
   - **Peacekeepers**: Defend and eliminate threats
 - Provides context-aware rewards (proximity bonuses, survival bonuses)
 
-### 2. Neural Network System (`NEURAL_NETWORK/`)
+### 2. Neural Network System (`NEURAL_NETWORK/`) {#neural-network-system}
 
 The neural network system handles learning for both individual agents and HQ strategic decisions.
 
@@ -89,7 +111,7 @@ The neural network system handles learning for both individual agents and HQ str
 - Allows networks to focus on relevant information
 - Handles dimension mismatches gracefully
 
-### 3. Environment System (`ENVIRONMENT/`)
+### 3. Environment System (`ENVIRONMENT/`) {#environment-system}
 
 The environment provides the game world and all resources agents interact with.
 
@@ -105,7 +127,7 @@ The environment provides the game world and all resources agents interact with.
 - Implements growth mechanics for planted trees
 - Provides gathering/mining interfaces for agents
 
-### 4. Game Management (`GAME/`)
+### 4. Game Management (`GAME/`) {#game-management}
 
 The game management system orchestrates everything and handles the main game loop.
 
@@ -131,7 +153,7 @@ The game management system orchestrates everything and handles the main game loo
 - Handles zoom and pan controls
 - Converts world coordinates to screen coordinates
 
-### 5. Rendering System (`RENDER/`)
+### 5. Rendering System (`RENDER/`) {#rendering-system}
 
 The rendering system handles all visual output using Pygame.
 
@@ -148,7 +170,7 @@ The rendering system handles all visual output using Pygame.
 - **Pause Menu**: In-game pause with restart/quit options
 - **Credits**: Credits display
 
-### 6. Utilities (`UTILITIES/`)
+### 6. Utilities (`UTILITIES/`) {#utilities}
 
 Utility systems provide configuration, logging, and support functions.
 
