@@ -3762,6 +3762,9 @@ class Faction:
 
         self.home_base["health"] = max(0, self.home_base["health"] - damage)
 
+        # Print HQ damage for immediate visibility
+        print(f"HQ DAMAGE: Faction {self.id} HQ took {damage} damage! Health: {self.home_base['health']}/{self.home_base['max_health']}")
+
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(
                 f"[HQ DAMAGE] Faction {self.id} HQ took {damage} damage. Health: {self.home_base['health']}/{self.home_base['max_health']}",
@@ -3771,6 +3774,9 @@ class Faction:
         if self.home_base["health"] <= 0:
             self.home_base["is_destroyed"] = True
             self.home_base["health"] = 0
+
+            # Print HQ destruction for immediate visibility
+            print(f"HQ DESTROYED: Faction {self.id} HQ has been completely destroyed!")
 
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(

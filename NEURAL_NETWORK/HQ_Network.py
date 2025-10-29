@@ -1118,8 +1118,8 @@ class HQ_Network(nn.Module):
             returns = (returns - returns.mean()) / (returns.std() + 1e-8)
         returns = torch.clamp(returns, -10.0, 10.0)
 
-        # Forward pass with full input
-        logits, values = self.forward(states, roles, locals_, globals_)
+        # Forward pass with full input - unpack all 5 return values
+        logits, values, binary_params, continuous_params, discrete_params = self.forward(states, roles, locals_, globals_)
         probs = torch.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         log_probs = dist.log_prob(actions)

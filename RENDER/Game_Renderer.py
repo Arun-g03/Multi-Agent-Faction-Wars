@@ -408,6 +408,14 @@ class GameRenderer:
                             else 0.0
                         )
 
+                        # Calculate faction health percentage
+                        hq_health_pct = 0.0
+                        if hasattr(faction, 'home_base') and faction.home_base:
+                            current_health = faction.home_base.get('health', 0)
+                            max_health = faction.home_base.get('max_health', 100)
+                            if max_health > 0:
+                                hq_health_pct = (current_health / max_health) * 100
+
                         # Display all metrics in the tooltip
 
                         overlay_text = (
@@ -417,6 +425,7 @@ class GameRenderer:
                             f"Gold Lumps: {resource_counts['gold_lumps']}\n"
                             f"Threats: {threat_count}\n\n"
                             f"Faction Metrics:\n"
+                            f"Health: {hq_health_pct:.1f}%\n"
                             f"Gold: {faction.gold_balance}\n"
                             f"Food: {faction.food_balance}\n"
                             f"Peacekeepers: {peacekeeper_count}\n"
@@ -532,7 +541,16 @@ class GameRenderer:
                 "Faction Leaderboard:", GAME_FONT, font_size, (255, 255, 255)
             )
         )
-        sorted_factions = sorted(factions, key=lambda f: f.gold_balance, reverse=True)
+        # Leaderboard - Sort by agents > gold > food (agents are most important for capability)
+        def faction_sort_key(faction):
+            agent_count = len(faction.agents)
+            # If no agents, put at bottom regardless of resources
+            if agent_count == 0:
+                return (0, 0, 0)  # Lowest priority
+            # Sort by agent count, then gold, then food (descending)
+            return (agent_count, faction.gold_balance, faction.food_balance)
+        
+        sorted_factions = sorted(factions, key=faction_sort_key, reverse=True)
         for faction in sorted_factions[:4]:
             lines.append(
                 get_text_surface(
@@ -704,7 +722,7 @@ class GameRenderer:
                                         level=logging.ERROR,
                                     )
 
-                    # Tooltip Info
+                    # Enhanced Tooltip Info with HQ Context
                     if isinstance(agent.current_task, dict):
                         task_type = agent.current_task.get("type", "Unknown")
                         target = agent.current_task.get("target", {})
@@ -724,15 +742,27 @@ class GameRenderer:
                             else "N/A"
                         )
                         task_state = agent.current_task.get("state", "Unknown")
-
+                        task_id = agent.current_task.get("id", "N/A")
+                        
+                        # Get HQ strategy context
+                        hq_strategy = getattr(agent.faction, 'current_strategy', 'None')
+                        strategy_context = ""
+                        if hq_strategy and hq_strategy != "None":
+                            strategy_context = f"\nHQ Strategy: {hq_strategy}"
+                        
+                        
                         task_info = (
-                            f"Task: {task_type}\n"
+                            f"HQ Task: {task_type}\n"
                             f"Target: {target_type} at {target_position}\n"
                             f"Quantity: {target_quantity}\n"
-                            f"State: {task_state}"
+                            f"State: {task_state}\n"
+                            f"Task ID: {task_id}{strategy_context}"
                         )
                     else:
-                        task_info = "Task: None"
+                        # Show HQ strategy even when no task
+                        hq_strategy = getattr(agent.faction, 'current_strategy', 'None')
+                        strategy_context = f"\nHQ Strategy: {hq_strategy}" if hq_strategy and hq_strategy != "None" else ""
+                        task_info = f"Task: None{strategy_context}"
 
                     action = (
                         agent.role_actions[agent.current_action]
@@ -748,12 +778,15 @@ class GameRenderer:
                         grid_y = int(agent.y // utils_config.CELL_SIZE)
                         pos_string = f"Grid: ({grid_x}, {grid_y})"
 
+                    # Enhanced agent info with role-specific context
+                    role_context = self._get_role_context(agent.role, hq_strategy)
+                    
                     self.render_tooltip(
-                        f"ID: {agent.agent_id}\n"
-                        f"Role: {agent.role}\n"
+                        f"Agent ID: {agent.agent_id}\n"
+                        f"Role: {agent.role.title()}{role_context}\n"
                         f"{task_info}\n"
-                        f"Action: {action}\n"
-                        f"Health: {agent.Health}\n"
+                        f"Current Action: {action}\n"
+                        f"Health: {agent.Health}/100\n"
                         f"Position: {pos_string}"
                     )
 
@@ -763,6 +796,34 @@ class GameRenderer:
     #     | | (_) | (_) | | |_| | |_) \__ \
     #     |_|\___/ \___/|_|\__|_| .__/|___/
     #                           |_|
+
+    def _get_role_context(self, role, hq_strategy):
+        """
+        Generate role-specific context based on HQ strategy.
+        """
+        role_contexts = {
+            "gatherer": {
+                "COLLECT_GOLD": " (Primary Resource Collector)",
+                "COLLECT_FOOD": " (Primary Resource Collector)", 
+                "ATTACK_THREATS": " (Supporting War Effort)",
+                "RECRUIT_GATHERER": " (Training New Recruits)",
+                "RECRUIT_PEACEKEEPER": " (Supporting Recruitment)",
+                "EXPAND_TERRITORY": " (Resource Support)",
+                "DEFEND_BASE": " (Resource Support)"
+            },
+            "peacekeeper": {
+                "COLLECT_GOLD": " (Security Detail)",
+                "COLLECT_FOOD": " (Security Detail)",
+                "ATTACK_THREATS": " (Primary Combat Unit)",
+                "RECRUIT_GATHERER": " (Security Detail)",
+                "RECRUIT_PEACEKEEPER": " (Training New Recruits)",
+                "EXPAND_TERRITORY": " (Primary Combat Unit)",
+                "DEFEND_BASE": " (Primary Defense Unit)"
+            }
+        }
+        
+        context = role_contexts.get(role, {}).get(hq_strategy, "")
+        return context
 
     def render_tooltip(self, text, position=None):
         """

@@ -1466,12 +1466,12 @@ class AgentBehaviour(
                 target_agent.Health -= 10
                 if utils_config.ENABLE_LOGGING:
                     logger.log_msg(
-                        f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}.",
+                        f"{self.agent.role} attacked assigned threat {target_agent.role} ,\n(ID: {assigned_id}) at {assigned_position}.\nHealth is now {target_agent.Health}.",
                         level=logging.INFO,
                     )
-                print(
-                    f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}."
-                )
+                    print(
+                            f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}."
+                    )
                 if target_agent.Health <= 0:
                     self.report_threat_eliminated(threat)
                     return utils_config.TaskState.SUCCESS
