@@ -239,42 +239,86 @@ class AgentBehaviour(
             agent_id = self.agent.agent_id
             task_id = self.agent.current_task["id"]
 
-            # Update tracking
-            if task_id in self.agent.faction.assigned_tasks:
-                self.agent.faction.assigned_tasks[task_id][agent_id] = task_state
-            reward = self.assign_reward(
-                agent=self.agent,
-                task_type=task_type,
-                task_state=task_state,
-                action="task_completed",
-                target_pos=target_position,
-                current_pos=current_position,
-                is_independent=False,
-            )
+            # === ADAPTIVE BEHAVIOR: Handle failures gracefully ===
+            if task_state == utils_config.TaskState.FAILURE:
+                # Check if agent should try adaptive behavior
+                adaptive_params = self._get_adaptive_parameters()
+                
+                if adaptive_params["agent_adaptability"] > 0.3:  # Only if agent is somewhat adaptive
+                    # Analyze the failure
+                    failure_type = self.analyze_failure(task_state)
+                    
+                    # Select adaptive strategy
+                    adaptive_strategy = self.select_adaptive_strategy(failure_type, adaptive_params)
+                    
+                    # Execute adaptive strategy
+                    adaptive_result = self.execute_adaptive_strategy(
+                        adaptive_strategy, state, resource_manager, agents
+                    )
+                    
+                    # If adaptive strategy succeeded, continue with modified task
+                    if adaptive_result == utils_config.TaskState.SUCCESS:
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(
+                                f"[ADAPTIVE SUCCESS] Agent {self.agent.agent_id} recovered from failure using {adaptive_strategy.value}",
+                                level=logging.INFO,
+                            )
+                        # Continue with the task instead of marking it as failed
+                        task_state = utils_config.TaskState.ONGOING
+                    elif adaptive_result == utils_config.TaskState.ONGOING:
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(
+                                f"[ADAPTIVE ONGOING] Agent {self.agent.agent_id} trying {adaptive_strategy.value}",
+                                level=logging.INFO,
+                            )
+                        # Continue with the task
+                        task_state = utils_config.TaskState.ONGOING
+                    else:
+                        if utils_config.ENABLE_LOGGING:
+                            logger.log_msg(
+                                f"[ADAPTIVE FAILED] Agent {self.agent.agent_id} adaptive strategy {adaptive_strategy.value} failed",
+                                level=logging.INFO,
+                            )
+                        # Adaptive strategy also failed, proceed with original failure
 
-            self.agent.current_task["state"] = utils_config.TaskState.NONE
-            logger.log_msg(
-                f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.",
-                level=logging.INFO,
-            )
+            # Only process completion if task is still marked as completed
+            if task_state in [utils_config.TaskState.SUCCESS, utils_config.TaskState.FAILURE]:
+                # Update tracking
+                if task_id in self.agent.faction.assigned_tasks:
+                    self.agent.faction.assigned_tasks[task_id][agent_id] = task_state
+                reward = self.assign_reward(
+                    agent=self.agent,
+                    task_type=task_type,
+                    task_state=task_state,
+                    action="task_completed",
+                    target_pos=target_position,
+                    current_pos=current_position,
+                    is_independent=False,
+                )
 
-            log_prob = self.agent.log_prob
-            if log_prob is None:
-                log_prob = torch.tensor(
-                    [0.0], device=self.agent.ai.device
-                )  # 👈 wrapped
+                self.agent.current_task["state"] = utils_config.TaskState.NONE
+                logger.log_msg(
+                    f"[TASK COMPLETE] Agent {self.agent.agent_id} finished task '{task_type}' with result {task_state.name}.",
+                    level=logging.INFO,
+                )
 
-            self.agent.ai.store_transition(
-                state,
-                0,
-                log_prob,
-                reward,
-                self.agent.value if self.agent.value is not None else 0.0,
-                0.0,
-                True,
-            )
+                log_prob = self.agent.log_prob
+                if log_prob is None:
+                    log_prob = torch.tensor(
+                        [0.0], device=self.agent.ai.device
+                    )  # 👈 wrapped
 
-            return reward, task_state
+                self.agent.ai.store_transition(
+                    state,
+                    0,
+                    log_prob,
+                    reward,
+                    self.agent.value if self.agent.value is not None else 0.0,
+                    0.0,
+                    True,
+                )
+
+                return reward, task_state
 
         # === Continue acting normally (if task still ongoing) ===
         action_index, log_prob, value = self.ai.choose_action(state)
@@ -501,6 +545,110 @@ class AgentBehaviour(
         current_pos,
         is_independent=False,
     ):
+        """
+        Assign hierarchical reward to agent using the new reward system.
+        This connects agent performance to HQ strategy success.
+        """
+        # Calculate base reward using existing logic
+        base_reward = self._calculate_base_reward(
+            agent, task_type, task_state, action, target_pos, current_pos, is_independent
+        )
+        
+        # Get hierarchical reward manager from faction
+        if hasattr(agent, 'faction') and hasattr(agent.faction, 'hierarchical_reward_manager'):
+            reward_manager = agent.faction.hierarchical_reward_manager
+            
+            # Calculate efficiency score
+            distance = self.calculate_distance(current_pos, target_pos)
+            time_taken = getattr(agent, 'task_start_time', 0)
+            efficiency_score = reward_manager.get_efficiency_score(
+                agent.agent_id, task_type, distance, time_taken
+            )
+            
+            # Calculate coordination score
+            coordination_score = reward_manager.get_coordination_score(agent.agent_id)
+            
+            # Calculate adaptation score
+            adaptation_score = reward_manager.get_adaptation_score(agent.agent_id)
+            
+            # Calculate survival score
+            health = getattr(agent, 'Health', 100.0)
+            survival_score = reward_manager.get_survival_score(agent.agent_id, health)
+            
+            # Calculate hierarchical reward
+            hierarchical_reward = reward_manager.calculate_agent_reward(
+                agent_id=agent.agent_id,
+                base_reward=base_reward,
+                task_type=task_type,
+                task_state=task_state,
+                efficiency_score=efficiency_score,
+                coordination_score=coordination_score,
+                adaptation_score=adaptation_score,
+                survival_score=survival_score,
+            )
+            
+            # Report experience to hierarchical reward manager
+            coordination_data = self._get_coordination_data(agent, task_type, task_state)
+            adaptation_data = self._get_adaptation_data(agent, task_type, task_state)
+            
+            reward_manager.report_agent_experience(
+                agent_id=agent.agent_id,
+                state=getattr(agent, 'state', None),
+                action=action,
+                reward=hierarchical_reward,
+                next_state=getattr(agent, 'next_state', None),
+                done=False,  # Will be set by episode management
+                task_type=task_type,
+                task_state=task_state,
+                coordination_data=coordination_data,
+                adaptation_data=adaptation_data,
+            )
+            
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[HIERARCHICAL REWARD] Agent {agent.agent_id}: {hierarchical_reward:.3f} "
+                    f"(base: {base_reward:.3f}, efficiency: {efficiency_score:.3f}, "
+                    f"coordination: {coordination_score:.3f}, adaptation: {adaptation_score:.3f})",
+                    level=logging.DEBUG,
+                )
+            
+            reward = hierarchical_reward
+        else:
+            # Fallback to base reward if hierarchical system not available
+            reward = base_reward
+
+        # === Log Normalised Reward ===
+        if utils_config.ENABLE_TENSORBOARD and task_state is not None:
+            try:
+                episode = getattr(agent.faction, "episode", 0)
+                faction_id = agent.faction.id
+                suffix = (
+                    f"_{agent.role}_{task_type}_{task_state.value if hasattr(task_state, 'value') else str(task_state)}"
+                )
+                agent.ai.tensorboard_logger.log_scalar(
+                    f"Reward/{faction_id}/Agent{suffix}", reward, episode
+                )
+            except Exception as e:
+                logger.log_msg(
+                    f"[TensorBoard] Failed to log reward: {e}", level=logging.WARNING
+                )
+
+        return reward
+    
+    def _calculate_base_reward(
+        self,
+        agent,
+        task_type,
+        task_state,
+        action,
+        target_pos,
+        current_pos,
+        is_independent=False,
+    ):
+        """
+        Calculate the base reward using the original reward logic.
+        This is used as input to the hierarchical reward system.
+        """
         reward = 0.0
         dist = self.calculate_distance(current_pos, target_pos)
 
@@ -602,25 +750,80 @@ class AgentBehaviour(
                 utils_config.TaskState.INVALID: -0.3,
             }.get(task_state, -0.1)
 
-        # === Log Normalised Reward ===
-        if utils_config.ENABLE_TENSORBOARD and task_state is not None:
-            try:
-                episode = getattr(agent.faction, "episode", 0)
-                faction_id = agent.faction.id
-                suffix = (
-                    "independent"
-                    if is_independent
-                    else f"{task_type}_{task_state.name}"
-                )
-                tensorboard_logger.log_scalar(
-                    f"Faction_{faction_id}/Task_{suffix}", reward, episode
-                )
-            except Exception as e:
-                logger.log_msg(
-                    f"[TensorBoard] Failed to log reward: {e}", level=logging.WARNING
-                )
-
         return reward
+    
+    def _get_coordination_data(self, agent, task_type, task_state) -> Dict:
+        """Get coordination data for hierarchical reward system."""
+        coordination_data = {
+            "task_type": task_type,
+            "task_state": task_state,
+            "agent_role": agent.role,
+        }
+        
+        # Check if agent is coordinating with others
+        if hasattr(agent, 'faction') and hasattr(agent.faction, 'agents'):
+            other_agents = [a for a in agent.faction.agents if a != agent]
+            if other_agents:
+                # Check if other agents are working on similar tasks
+                similar_tasks = sum(
+                    1 for a in other_agents 
+                    if hasattr(a, 'current_task') and a.current_task == task_type
+                )
+                coordination_data["similar_tasks"] = similar_tasks
+                coordination_data["total_agents"] = len(other_agents)
+                
+                # Get learned communication coordination data
+                if hasattr(agent.faction, 'learned_communication'):
+                    learned_comm = agent.faction.learned_communication
+                    coordination_data["communication_success_rate"] = learned_comm.communication_success_rate.get(agent.agent_id, 0.5)
+                    coordination_data["coordination_success_rate"] = learned_comm.coordination_success_rate.get(agent.agent_id, 0.5)
+                    
+                    # Check if agent has pending messages
+                    if agent.agent_id in learned_comm.message_queues:
+                        pending_messages = len(learned_comm.message_queues[agent.agent_id])
+                        coordination_data["pending_messages"] = pending_messages
+                    
+                    # Check recent communication history
+                    if agent.agent_id in learned_comm.communication_history:
+                        recent_communications = learned_comm.communication_history[agent.agent_id][-5:]  # Last 5 communications
+                        successful_communications = sum(1 for comm in recent_communications if comm.get("success", False))
+                        coordination_data["recent_communication_success"] = successful_communications / len(recent_communications) if recent_communications else 0.0
+                
+                # Get experience sharing coordination data
+                if hasattr(agent.faction, 'experience_sharing'):
+                    exp_sharing = agent.faction.experience_sharing
+                    coordination_data["sharing_success_rate"] = exp_sharing.sharing_success_rate.get(agent.agent_id, 0.5)
+                    coordination_data["learning_success_rate"] = exp_sharing.learning_success_rate.get(agent.agent_id, 0.5)
+                    
+                    # Check if agent has shared experiences
+                    if agent.agent_id in exp_sharing.shared_experiences:
+                        shared_experiences = len(exp_sharing.shared_experiences[agent.agent_id])
+                        coordination_data["shared_experiences"] = shared_experiences
+                    
+                    # Check collective memory size
+                    coordination_data["collective_memory_size"] = len(exp_sharing.collective_memory)
+        
+        return coordination_data
+    
+    def _get_adaptation_data(self, agent, task_type, task_state) -> Dict:
+        """Get adaptation data for hierarchical reward system."""
+        adaptation_data = {
+            "task_type": task_type,
+            "task_state": task_state,
+            "agent_role": agent.role,
+        }
+        
+        # Check if agent used adaptive behavior
+        if hasattr(agent, 'adaptive_strategy_used'):
+            adaptation_data["adaptive_strategy_used"] = agent.adaptive_strategy_used
+            adaptation_data["adaptive_strategy_success"] = getattr(agent, 'adaptive_strategy_success', False)
+        
+        # Check if agent recovered from failure
+        if task_state == utils_config.TaskState.SUCCESS and hasattr(agent, 'previous_task_state'):
+            if agent.previous_task_state == utils_config.TaskState.FAILURE:
+                adaptation_data["failure_recovery"] = True
+        
+        return adaptation_data
 
     def shape_action_bonus(self, task_type, action):
         if task_type == "eliminate":
@@ -1319,3 +1522,416 @@ class AgentBehaviour(
 
         # Clean up resolved threats
         self.clean_resolved_threats()
+
+    # ============================================================================
+    # ADAPTIVE BEHAVIOR SYSTEM
+    # ============================================================================
+    
+    def analyze_failure(self, task_state, context=None):
+        """
+        Analyze why a task failed and determine the failure type.
+        
+        Args:
+            task_state: The task state that indicates failure
+            context: Additional context about the failure
+            
+        Returns:
+            FailureType: The type of failure that occurred
+        """
+        if task_state == utils_config.TaskState.FAILURE:
+            # Analyze the current task to determine failure type
+            task = self.agent.current_task
+            if not task:
+                return utils_config.FailureType.UNKNOWN_OBSTACLE
+            
+            task_type = task.get("type", "unknown")
+            
+            # Check for specific failure patterns
+            if task_type == "gather":
+                # Check if resource is unavailable
+                target_data = task.get("target", {})
+                target_position = target_data.get("position", (0, 0))
+                
+                # Look for resources at target position
+                resource_found = False
+                for resource in self.agent.faction.resource_manager.resources:
+                    if (resource.grid_x, resource.grid_y) == target_position and not resource.is_depleted():
+                        resource_found = True
+                        break
+                
+                if not resource_found:
+                    return utils_config.FailureType.RESOURCE_UNAVAILABLE
+                    
+            elif task_type == "eliminate":
+                # Check if threat is too strong or moved
+                target_data = task.get("target", {})
+                target_position = target_data.get("position", (0, 0))
+                
+                # Check if agent is low on health
+                if self.agent.Health < 30:
+                    return utils_config.FailureType.HEALTH_LOW
+                    
+                # Check if threat is still at target position
+                threat_found = False
+                for threat in self.agent.faction.global_state.get("threats", []):
+                    if threat.get("location") == target_position:
+                        threat_found = True
+                        break
+                
+                if not threat_found:
+                    return utils_config.FailureType.THREAT_TOO_STRONG
+                    
+            elif task_type == "move_to":
+                # Check if path is blocked
+                target_data = task.get("target", {})
+                target_position = target_data.get("position", (0, 0))
+                
+                # Simple path blocking detection (can be enhanced)
+                current_pos = (int(self.agent.x // utils_config.CELL_SIZE), 
+                             int(self.agent.y // utils_config.CELL_SIZE))
+                
+                if self.agent.faction.current_step - self.agent.task_start_step > 50:  # Stuck for too long
+                    return utils_config.FailureType.PATH_BLOCKED
+            
+            # Check for time exceeded
+            if hasattr(self.agent, 'task_start_step'):
+                time_elapsed = self.agent.faction.current_step - self.agent.task_start_step
+                if time_elapsed > 100:  # Task taking too long
+                    return utils_config.FailureType.TIME_EXCEEDED
+            
+            # Check for low health
+            if self.agent.Health < 20:
+                return utils_config.FailureType.HEALTH_LOW
+        
+        return utils_config.FailureType.UNKNOWN_OBSTACLE
+    
+    def select_adaptive_strategy(self, failure_type, adaptive_params=None):
+        """
+        Select an adaptive strategy based on failure type and agent parameters.
+        
+        Args:
+            failure_type: The type of failure that occurred
+            adaptive_params: Agent's adaptive behavior parameters
+            
+        Returns:
+            AdaptiveStrategy: The selected adaptive strategy
+        """
+        if adaptive_params is None:
+            adaptive_params = {
+                "failure_tolerance": 0.5,
+                "exploration_tendency": 0.5,
+                "collaboration_willingness": 0.5,
+                "risk_tolerance": 0.5,
+                "escalation_threshold": 0.5,
+            }
+        
+        # Get possible responses for this failure type
+        possible_responses = utils_config.ADAPTIVE_RESPONSES.get(failure_type, [])
+        if not possible_responses:
+            return utils_config.AdaptiveStrategy.ESCALATE_TO_HQ
+        
+        # Select strategy based on agent parameters
+        if failure_type == utils_config.FailureType.RESOURCE_UNAVAILABLE:
+            if adaptive_params["exploration_tendency"] > 0.7:
+                return utils_config.AdaptiveStrategy.SWITCH_TARGET
+            elif adaptive_params["exploration_tendency"] > 0.3:
+                return utils_config.AdaptiveStrategy.RETRY_WITH_MODIFICATION
+            else:
+                return utils_config.AdaptiveStrategy.OPPORTUNISTIC_ACTION
+                
+        elif failure_type == utils_config.FailureType.THREAT_TOO_STRONG:
+            if adaptive_params["collaboration_willingness"] > 0.6:
+                return utils_config.AdaptiveStrategy.REQUEST_SUPPORT
+            elif adaptive_params["risk_tolerance"] < 0.3:
+                return utils_config.AdaptiveStrategy.RETREAT
+            else:
+                return utils_config.AdaptiveStrategy.ESCALATE_TO_HQ
+                
+        elif failure_type == utils_config.FailureType.PATH_BLOCKED:
+            if adaptive_params["exploration_tendency"] > 0.5:
+                return utils_config.AdaptiveStrategy.RETRY_WITH_MODIFICATION
+            elif adaptive_params["risk_tolerance"] > 0.5:
+                return utils_config.AdaptiveStrategy.OPPORTUNISTIC_ACTION
+            else:
+                return utils_config.AdaptiveStrategy.SWITCH_TARGET
+                
+        elif failure_type == utils_config.FailureType.TIME_EXCEEDED:
+            if adaptive_params["escalation_threshold"] < 0.5:
+                return utils_config.AdaptiveStrategy.ESCALATE_TO_HQ
+            elif adaptive_params["exploration_tendency"] > 0.5:
+                return utils_config.AdaptiveStrategy.OPPORTUNISTIC_ACTION
+            else:
+                return utils_config.AdaptiveStrategy.EMERGENCY_PROTOCOL
+                
+        elif failure_type == utils_config.FailureType.HEALTH_LOW:
+            return utils_config.AdaptiveStrategy.EMERGENCY_PROTOCOL
+            
+        elif failure_type == utils_config.FailureType.COMMUNICATION_LOST:
+            return utils_config.AdaptiveStrategy.EMERGENCY_PROTOCOL
+            
+        else:  # UNKNOWN_OBSTACLE
+            if adaptive_params["escalation_threshold"] < 0.5:
+                return utils_config.AdaptiveStrategy.ESCALATE_TO_HQ
+            else:
+                return utils_config.AdaptiveStrategy.EMERGENCY_PROTOCOL
+    
+    def execute_adaptive_strategy(self, strategy, state, resource_manager, agents):
+        """
+        Execute the selected adaptive strategy.
+        
+        Args:
+            strategy: The adaptive strategy to execute
+            state: Current game state
+            resource_manager: Resource manager reference
+            agents: List of all agents
+            
+        Returns:
+            TaskState: Result of the adaptive action
+        """
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[ADAPTIVE] Agent {self.agent.agent_id} executing strategy: {strategy.value}",
+                level=logging.INFO,
+            )
+        
+        if strategy == utils_config.AdaptiveStrategy.RETRY_WITH_MODIFICATION:
+            return self._retry_with_modification(state, resource_manager, agents)
+            
+        elif strategy == utils_config.AdaptiveStrategy.SWITCH_TARGET:
+            return self._switch_target(state, resource_manager, agents)
+            
+        elif strategy == utils_config.AdaptiveStrategy.REQUEST_SUPPORT:
+            return self._request_support(state, resource_manager, agents)
+            
+        elif strategy == utils_config.AdaptiveStrategy.ESCALATE_TO_HQ:
+            return self._escalate_to_hq(state, resource_manager, agents)
+            
+        elif strategy == utils_config.AdaptiveStrategy.EMERGENCY_PROTOCOL:
+            return self._emergency_protocol(state, resource_manager, agents)
+            
+        elif strategy == utils_config.AdaptiveStrategy.OPPORTUNISTIC_ACTION:
+            return self._opportunistic_action(state, resource_manager, agents)
+            
+        elif strategy == utils_config.AdaptiveStrategy.RETREAT:
+            return self._emergency_protocol(state, resource_manager, agents)  # Use emergency protocol for retreat
+            
+        else:
+            # Default fallback
+            return utils_config.TaskState.FAILURE
+    
+    def _retry_with_modification(self, state, resource_manager, agents):
+        """Retry the task with a modified approach."""
+        task = self.agent.current_task
+        if not task:
+            return utils_config.TaskState.FAILURE
+        
+        # Modify the approach based on task type
+        if task.get("type") == "gather":
+            # Try gathering from a nearby resource instead
+            return self._find_alternative_resource(resource_manager)
+        elif task.get("type") == "eliminate":
+            # Try a different combat approach
+            return self._try_alternative_combat_approach(agents)
+        elif task.get("type") == "move_to":
+            # Try a different path
+            return self._try_alternative_path()
+        
+        return utils_config.TaskState.ONGOING
+    
+    def _switch_target(self, state, resource_manager, agents):
+        """Switch to an alternative target."""
+        task = self.agent.current_task
+        if not task:
+            return utils_config.TaskState.FAILURE
+        
+        if task.get("type") == "gather":
+            # Find a different resource
+            return self._find_alternative_resource(resource_manager)
+        elif task.get("type") == "eliminate":
+            # Find a different threat
+            return self._find_alternative_threat(agents)
+        
+        return utils_config.TaskState.ONGOING
+    
+    def _request_support(self, state, resource_manager, agents):
+        """Request support from other agents."""
+        # Find nearby allies
+        nearby_allies = []
+        for agent in agents:
+            if (agent.faction.id == self.agent.faction.id and 
+                agent.agent_id != self.agent.agent_id):
+                distance = ((agent.x - self.agent.x) ** 2 + (agent.y - self.agent.y) ** 2) ** 0.5
+                if distance < 100:  # Within 100 units
+                    nearby_allies.append(agent)
+        
+        if nearby_allies:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[ADAPTIVE] Agent {self.agent.agent_id} requesting support from {len(nearby_allies)} allies",
+                    level=logging.INFO,
+                )
+            # For now, just continue with current task
+            # In a full implementation, this would coordinate with other agents
+            return utils_config.TaskState.ONGOING
+        
+        return utils_config.TaskState.FAILURE
+    
+    def _escalate_to_hq(self, state, resource_manager, agents):
+        """Escalate the situation to HQ for a new mission."""
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[ADAPTIVE] Agent {self.agent.agent_id} escalating to HQ",
+                level=logging.INFO,
+            )
+        
+        # Clear current task to allow HQ to assign new one
+        self.agent.current_task = None
+        self.agent.update_task_state(utils_config.TaskState.NONE)
+        
+        # Signal to faction that agent needs new assignment
+        self.agent.faction.needs_strategy_retest = True
+        
+        return utils_config.TaskState.FAILURE  # Current task failed, but HQ will assign new one
+    
+    def _emergency_protocol(self, state, resource_manager, agents):
+        """Switch to emergency/survival mode."""
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[ADAPTIVE] Agent {self.agent.agent_id} entering emergency protocol",
+                level=logging.INFO,
+            )
+        
+        # Prioritize survival actions
+        if self.agent.Health < 30:
+            # Try to heal
+            if self.agent.faction.food_balance > 0:
+                self.heal_with_apple()
+                return utils_config.TaskState.SUCCESS
+        
+        # Move to safer position (towards HQ)
+        hq_pos = self.agent.faction.home_base["position"]
+        hq_grid_x = int(hq_pos[0] // utils_config.CELL_SIZE)
+        hq_grid_y = int(hq_pos[1] // utils_config.CELL_SIZE)
+        
+        current_grid_x = int(self.agent.x // utils_config.CELL_SIZE)
+        current_grid_y = int(self.agent.y // utils_config.CELL_SIZE)
+        
+        dx = hq_grid_x - current_grid_x
+        dy = hq_grid_y - current_grid_y
+        
+        return self.move_to_target(dx, dy)
+    
+    def _opportunistic_action(self, state, resource_manager, agents):
+        """Take advantage of current opportunities."""
+        # Look for nearby resources or threats
+        current_pos = (int(self.agent.x // utils_config.CELL_SIZE), 
+                      int(self.agent.y // utils_config.CELL_SIZE))
+        
+        # Check for nearby resources
+        for resource in resource_manager.resources:
+            resource_pos = (resource.grid_x, resource.grid_y)
+            distance = ((resource_pos[0] - current_pos[0]) ** 2 + 
+                       (resource_pos[1] - current_pos[1]) ** 2) ** 0.5
+            
+            if distance <= 3 and not resource.is_depleted():
+                # Move towards this resource
+                dx = resource_pos[0] - current_pos[0]
+                dy = resource_pos[1] - current_pos[1]
+                return self.move_to_target(dx, dy)
+        
+        # If no immediate opportunities, continue with current task
+        return utils_config.TaskState.ONGOING
+    
+    def _find_alternative_resource(self, resource_manager):
+        """Find an alternative resource to gather from."""
+        current_pos = (int(self.agent.x // utils_config.CELL_SIZE), 
+                      int(self.agent.y // utils_config.CELL_SIZE))
+        
+        # Find nearest available resource
+        nearest_resource = None
+        min_distance = float('inf')
+        
+        for resource in resource_manager.resources:
+            if not resource.is_depleted():
+                resource_pos = (resource.grid_x, resource.grid_y)
+                distance = ((resource_pos[0] - current_pos[0]) ** 2 + 
+                           (resource_pos[1] - current_pos[1]) ** 2) ** 0.5
+                
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_resource = resource
+        
+        if nearest_resource:
+            # Update task target
+            self.agent.current_task["target"] = {
+                "position": (nearest_resource.grid_x, nearest_resource.grid_y),
+                "type": type(nearest_resource).__name__
+            }
+            return utils_config.TaskState.ONGOING
+        
+        return utils_config.TaskState.FAILURE
+    
+    def _find_alternative_threat(self, agents):
+        """Find an alternative threat to eliminate."""
+        current_pos = (int(self.agent.x // utils_config.CELL_SIZE), 
+                      int(self.agent.y // utils_config.CELL_SIZE))
+        
+        # Find nearest enemy threat
+        nearest_threat = None
+        min_distance = float('inf')
+        
+        for threat in self.agent.faction.global_state.get("threats", []):
+            if threat["id"].faction_id != self.agent.faction.id:
+                threat_pos = threat["location"]
+                distance = ((threat_pos[0] - current_pos[0]) ** 2 + 
+                           (threat_pos[1] - current_pos[1]) ** 2) ** 0.5
+                
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_threat = threat
+        
+        if nearest_threat:
+            # Update task target
+            self.agent.current_task["target"] = {
+                "id": nearest_threat["id"],
+                "type": nearest_threat["type"],
+                "position": nearest_threat["location"]
+            }
+            return utils_config.TaskState.ONGOING
+        
+        return utils_config.TaskState.FAILURE
+    
+    def _try_alternative_combat_approach(self, agents):
+        """Try a different approach to combat."""
+        # For now, just continue with current approach
+        # In a full implementation, this could involve different combat tactics
+        return utils_config.TaskState.ONGOING
+    
+    def _try_alternative_path(self):
+        """Try a different path to the target."""
+        # For now, just continue with current pathfinding
+        # In a full implementation, this could involve different pathfinding algorithms
+        return utils_config.TaskState.ONGOING
+    
+    def _get_adaptive_parameters(self):
+        """Get adaptive parameters from faction's current strategy parameters."""
+        if hasattr(self.agent.faction, 'current_strategy_parameters') and self.agent.faction.current_strategy_parameters:
+            params = self.agent.faction.current_strategy_parameters
+            return {
+                "agent_adaptability": params.get("agent_adaptability", 0.5),
+                "failure_tolerance": params.get("failure_tolerance", 0.5),
+                "exploration_tendency": params.get("mission_autonomy", 0.5),  # Use mission_autonomy as exploration tendency
+                "collaboration_willingness": params.get("coordination_preference", 0.5),
+                "risk_tolerance": params.get("aggression_level", 0.5),
+                "escalation_threshold": 1.0 - params.get("urgency", 0.5),  # Higher urgency = lower escalation threshold
+            }
+        else:
+            # Default parameters if no strategy parameters available
+            return {
+                "agent_adaptability": 0.5,
+                "failure_tolerance": 0.5,
+                "exploration_tendency": 0.5,
+                "collaboration_willingness": 0.5,
+                "risk_tolerance": 0.5,
+                "escalation_threshold": 0.5,
+            }

@@ -8,6 +8,13 @@ from NEURAL_NETWORK.DQN_Model import DQNModel
 from NEURAL_NETWORK.HQ_Network import HQ_Network
 from NEURAL_NETWORK.Common import Training_device, get_hq_input_size_from_checkpoint
 from AGENT.agent_communication import CommunicationSystem
+from AGENT.hierarchical_rewards import HierarchicalRewardManager
+from AGENT.learned_communication import LearnedCommunicationSystem
+from AGENT.experience_sharing import ExperienceSharingSystem
+from AGENT.learned_state_representation import LearnedStateRepresentationSystem
+from AGENT.strategy_composition import StrategyCompositionSystem
+from AGENT.meta_learning import MetaLearningSystem
+from AGENT.strategy_visualization import StrategyVisualizer
 import UTILITIES.utils_config as utils_config
 
 
@@ -169,6 +176,27 @@ class Faction:
             self.needs_strategy_retest = True
             self.current_step = 0
             self.hq_step_rewards = []
+            
+            # Initialize hierarchical reward manager
+            self.hierarchical_reward_manager = HierarchicalRewardManager(self.id)
+            
+            # Initialize learned communication system
+            self.learned_communication = LearnedCommunicationSystem(self.id, self.agents)
+            
+            # Initialize experience sharing system
+            self.experience_sharing = ExperienceSharingSystem(self.id, self.agents)
+            
+            # Initialize learned state representation system
+            self.learned_state_representation = LearnedStateRepresentationSystem(self.id, self.state_size)
+            
+            # Initialize strategy composition system
+            self.strategy_composition = StrategyCompositionSystem(self.id, self.state_size)
+            
+            # Initialize meta-learning system
+            self.meta_learning = MetaLearningSystem(self.id, self.state_size)
+            
+            # Initialize strategy visualization system
+            self.strategy_visualization = StrategyVisualizer(self.id, self.state_size)
 
             # Final confirmation print
             print(f"{self.name} created with ID {self.id} and colour {self.colour}")
@@ -313,14 +341,22 @@ class Faction:
                     print(
                         f"\033[94mFaction {self.id} has changed HQ from {self.current_strategy} to {new_strategy}.\033[0m\n"
                     )
-                self.perform_HQ_Strategy(new_strategy)
+                # Use parametric strategy execution if parameters are available
+                if hasattr(self, 'current_strategy_parameters') and self.current_strategy_parameters:
+                    self.perform_HQ_Strategy_parametric(new_strategy, self.current_strategy_parameters)
+                else:
+                    self.perform_HQ_Strategy(new_strategy)
             else:
                 if utils_config.ENABLE_LOGGING:
                     print(
                         f"\033[93m Faction {self.id} maintained HQ strategy: {self.current_strategy}\033[0m"
                     )
                 self.current_strategy = new_strategy
-                self.perform_HQ_Strategy(self.current_strategy)
+                # Use parametric strategy execution if parameters are available
+                if hasattr(self, 'current_strategy_parameters') and self.current_strategy_parameters:
+                    self.perform_HQ_Strategy_parametric(self.current_strategy, self.current_strategy_parameters)
+                else:
+                    self.perform_HQ_Strategy(self.current_strategy)
             self.needs_strategy_retest = False
 
         self.update_tasks(agents)
@@ -1445,10 +1481,27 @@ class Faction:
         if hasattr(self, "network") and self.network:
             # Use enhanced state for better strategy selection
             enhanced_state = self.get_enhanced_global_state()
-            predicted = self.network.predict_strategy(enhanced_state)
+            
+            # Check if network supports parametric output (new networks)
+            if hasattr(self.network, 'predict_strategy_parametric'):
+                try:
+                    strategy, parameters = self.network.predict_strategy_parametric(enhanced_state)
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"[HQ PARAMETRIC] Faction {self.id} selected parametric strategy: {strategy} with parameters: {parameters}",
+                            level=logging.INFO,
+                        )
+                except Exception as e:
+                    logger.log_msg(
+                        f"[ERROR] Parametric strategy prediction failed: {e}, falling back to standard prediction",
+                        level=logging.ERROR,
+                    )
+                    strategy = self.network.predict_strategy(enhanced_state)
+            else:
+                # Fall back to standard prediction (old networks)
+                strategy = self.network.predict_strategy(enhanced_state)
 
-            if predicted in utils_config.HQ_STRATEGY_OPTIONS:
-                strategy = predicted
+            if strategy in utils_config.HQ_STRATEGY_OPTIONS:
                 if strategy != previous_strategy:
                     logger.log_msg(
                         f"[HQ STRATEGY] Faction {self.id} network picked different strategy: {strategy}",
@@ -1461,7 +1514,7 @@ class Faction:
                     )
             else:
                 logger.log_msg(
-                    f"[HQ STRATEGY] Invalid strategy returned: {predicted}. Defaulting to NO_PRIORITY.",
+                    f"[HQ STRATEGY] Invalid strategy returned: {strategy}. Defaulting to NO_PRIORITY.",
                     level=logging.WARNING,
                 )
         else:
@@ -2054,39 +2107,1255 @@ class Faction:
         # Set current strategy only if it's valid and successful
         self.current_strategy = action
 
+    def perform_HQ_Strategy_parametric(self, strategy_type: str, parameters: dict):
+        """
+        Execute strategy with learned parameters for enhanced flexibility.
+        
+        Args:
+            strategy_type: The base strategy type (e.g., "RECRUIT", "SWAP", "RESOURCE")
+            parameters: Dictionary containing learned parameters:
+                - target_role: "gatherer" or "peacekeeper"
+                - priority_resource: "gold" or "food"
+                - use_mission_system: bool (whether to use mission-oriented tasks)
+                - aggression_level: 0.0-1.0 (defensive to offensive)
+                - resource_threshold: 0.0-1.0 (when to execute)
+                - urgency: 0.0-1.0 (how urgent)
+                - mission_autonomy: 0.0-1.0 (how much autonomy to give agents)
+                - coordination_preference: 0.0-1.0 (how much to coordinate)
+                - agent_count_target: int (desired agents)
+                - mission_complexity: int (1-4, complexity level)
+        """
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[HQ PARAMETRIC] Faction {self.id} executing parametric strategy: {strategy_type} with parameters: {parameters}",
+                level=logging.INFO,
+            )
+
+        def retest_strategy():
+            new_action = self.choose_HQ_Strategy()
+            if new_action != strategy_type:
+                logger.log_msg(
+                    f"[HQ RETEST] Parametric strategy '{strategy_type}' invalid. Retesting and switching to '{new_action}'",
+                    level=logging.WARNING,
+                )
+                self.perform_HQ_Strategy(new_action)  # Fall back to old system
+            logger.log_msg(
+                f"[HQ EXECUTE] Faction {self.id} executing updated strategy: {new_action}",
+                level=logging.INFO,
+            )
+
+        # Extract parameters with defaults
+        target_role = parameters.get("target_role", "gatherer")
+        priority_resource = parameters.get("priority_resource", "gold")
+        use_mission_system = parameters.get("use_mission_system", False)
+        aggression_level = parameters.get("aggression_level", 0.5)
+        resource_threshold = parameters.get("resource_threshold", 0.3)
+        urgency = parameters.get("urgency", 0.5)
+        mission_autonomy = parameters.get("mission_autonomy", 0.5)
+        coordination_preference = parameters.get("coordination_preference", 0.5)
+        agent_count_target = parameters.get("agent_count_target", 3)
+        mission_complexity = parameters.get("mission_complexity", 2)
+
+        # ========== PARAMETRIC RECRUITMENT ==========
+        if strategy_type in ["RECRUIT_GATHERER", "RECRUIT_PEACEKEEPER"]:
+            # Use learned target_role parameter
+            role_to_recruit = target_role
+            
+            Agent_cost = utils_config.Gold_Cost_for_Agent
+            
+            # Use learned resource_threshold to determine if recruitment is logical
+            if role_to_recruit == "peacekeeper":
+                threat_count = self.global_state.get("threat_count", 0)
+                has_threats = threat_count > 0
+                # Use resource_threshold to determine recruitment urgency
+                should_recruit = has_threats or (resource_threshold < 0.3)  # Low threshold = recruit even without threats
+            else:  # gatherer
+                resource_count = self.global_state.get("resource_count", 0)
+                has_resources = resource_count > 0
+                should_recruit = has_resources or (resource_threshold < 0.3)
+
+            if (
+                self.gold_balance >= Agent_cost
+                and len(self.agents) < utils_config.MAX_AGENTS
+                and should_recruit
+            ):
+                new_agent = self.recruit_agent(role_to_recruit)
+                if new_agent:
+                    print(f"Faction {self.id} bought a {role_to_recruit} (parametric)")
+                    # Reward based on parameter effectiveness
+                    base_reward = 1.0
+                    urgency_bonus = urgency * 0.5  # Higher urgency = higher reward
+                    self.hq_step_rewards.append(base_reward + urgency_bonus)
+                else:
+                    logger.log_msg(
+                        f"[HQ EXECUTE] Failed to recruit {role_to_recruit}: spawn failed.",
+                        level=logging.WARNING,
+                    )
+                    self.current_strategy = None
+                    self.hq_step_rewards.append(-0.5)
+                    return retest_strategy()
+            else:
+                reason = (
+                    "Not enough gold"
+                    if self.gold_balance < Agent_cost
+                    else "Agent limit reached"
+                    if len(self.agents) >= utils_config.MAX_AGENTS
+                    else "Resource threshold not met"
+                )
+                logger.log_msg(
+                    f"[HQ EXECUTE] Cannot recruit {role_to_recruit}: {reason}.",
+                    level=logging.WARNING,
+                )
+                self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
+                return retest_strategy()
+
+        # ========== PARAMETRIC ROLE SWAPPING ==========
+        elif strategy_type in ["SWAP_TO_GATHERER", "SWAP_TO_PEACEKEEPER"]:
+            if len(self.agents) == 0:
+                logger.log_msg(
+                    f"[HQ EXECUTE] Cannot swap to {target_role}: No agents available.",
+                    level=logging.WARNING,
+                )
+                self.current_strategy = None
+                self.hq_step_rewards.append(-0.5)
+                return retest_strategy()
+
+            # Use learned parameters for swap decision
+            role_to_swap_to = target_role
+            
+            # Use resource_threshold to determine swap necessity
+            if role_to_swap_to == "gatherer":
+                resource_count = self.global_state.get("resource_count", 0)
+                has_resources = resource_count > 0
+                should_swap = has_resources or (resource_threshold < 0.4)
+            else:  # peacekeeper
+                threat_count = self.global_state.get("threat_count", 0)
+                has_threats = threat_count > 0
+                should_swap = has_threats or (resource_threshold < 0.4)
+
+            if should_swap:
+                candidates = self.evaluate_agent_swap_candidates(role_to_swap_to)
+                if candidates:
+                    best_candidate, score = candidates[0]
+                    if self.swap_agent_role(best_candidate, role_to_swap_to):
+                        print(f"Faction {self.id} swapped {best_candidate.role} to {role_to_swap_to} (parametric)")
+                        # Reward based on urgency and effectiveness
+                        base_reward = 0.8
+                        urgency_bonus = urgency * 0.4
+                        self.hq_step_rewards.append(base_reward + urgency_bonus)
+                    else:
+                        logger.log_msg(
+                            f"[HQ EXECUTE] Failed to swap agent to {role_to_swap_to}.",
+                            level=logging.WARNING,
+                        )
+                        self.current_strategy = None
+                        self.hq_step_rewards.append(-0.5)
+                        return retest_strategy()
+                else:
+                    logger.log_msg(
+                        f"[HQ EXECUTE] No suitable candidates for swapping to {role_to_swap_to}.",
+                        level=logging.WARNING,
+                    )
+                    self.current_strategy = None
+                    self.hq_step_rewards.append(-0.5)
+                    return retest_strategy()
+            else:
+                logger.log_msg(
+                    f"[HQ EXECUTE] Resource threshold not met for swapping to {role_to_swap_to}.",
+                    level=logging.WARNING,
+                )
+                self.hq_step_rewards.append(-0.3)  # Small penalty for unnecessary swap
+
+        # ========== PARAMETRIC RESOURCE STRATEGIES ==========
+        elif strategy_type in ["COLLECT_GOLD", "COLLECT_FOOD", "PLANT_TREES", "PLANT_GOLD_VEINS"]:
+            # Use priority_resource parameter to determine focus
+            resource_type = priority_resource
+            
+            # Use urgency parameter to determine task priority assignment
+            if strategy_type.startswith("COLLECT"):
+                # Adjust task assignment based on urgency
+                task_priority = urgency
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ PARAMETRIC] Setting {resource_type} collection priority to {task_priority:.2f}",
+                        level=logging.INFO,
+                    )
+                # Store parametric priority for task assignment
+                self.parametric_task_priority = task_priority
+                self.hq_step_rewards.append(0.5)  # Base reward for setting priority
+            else:  # PLANT strategies
+                # Use aggression_level to determine planting strategy
+                if aggression_level > 0.7:  # High aggression = plant defensively
+                    logger.log_msg(
+                        f"[HQ PARAMETRIC] High aggression ({aggression_level:.2f}) - defensive planting",
+                        level=logging.INFO,
+                    )
+                self.hq_step_rewards.append(0.3)  # Base reward for planting strategy
+
+        # ========== PARAMETRIC COMBAT STRATEGIES ==========
+        elif strategy_type in ["ATTACK_THREATS", "DEFEND_HQ"]:
+            # Use aggression_level parameter to determine combat behavior
+            if strategy_type == "ATTACK_THREATS":
+                # High aggression = more aggressive threat engagement
+                engagement_distance = 50 + (aggression_level * 100)  # 50-150 range
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ PARAMETRIC] Setting threat engagement distance to {engagement_distance:.1f} (aggression: {aggression_level:.2f})",
+                        level=logging.INFO,
+                    )
+                # Store parametric engagement distance
+                self.parametric_engagement_distance = engagement_distance
+                self.hq_step_rewards.append(0.6)
+            else:  # DEFEND_HQ
+                # Use urgency to determine defense priority
+                defense_priority = urgency
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[HQ PARAMETRIC] Setting defense priority to {defense_priority:.2f}",
+                        level=logging.INFO,
+                    )
+                self.parametric_defense_priority = defense_priority
+                self.hq_step_rewards.append(0.4)
+
+        # ========== PARAMETRIC PASSIVE STRATEGY ==========
+        elif strategy_type == "NO_PRIORITY":
+            # Use resource_threshold to determine when to stay passive
+            if resource_threshold > 0.8:  # High threshold = stay passive longer
+                logger.log_msg(
+                    f"[HQ PARAMETRIC] High resource threshold ({resource_threshold:.2f}) - maintaining passive strategy",
+                    level=logging.INFO,
+                )
+            self.hq_step_rewards.append(0.1)  # Small reward for patience
+
+            # Set current strategy
+            self.current_strategy = strategy_type
+            
+            # Store parameters for use in task assignment
+            self.current_strategy_parameters = parameters
+            
+        # ========== MISSION ASSIGNMENT SYSTEM ==========
+        # If mission system is enabled, assign missions instead of specific tasks
+        if use_mission_system:
+            self.assign_missions_to_agents(parameters)
+
+    def assign_missions_to_agents(self, parameters: dict):
+        """
+        Assign mission-oriented tasks to agents based on current strategy and parameters.
+        This replaces specific task assignment with high-level objectives.
+        """
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[MISSION SYSTEM] Faction {self.id} assigning missions to agents",
+                level=logging.INFO,
+            )
+        
+        mission_autonomy = parameters.get("mission_autonomy", 0.5)
+        coordination_preference = parameters.get("coordination_preference", 0.5)
+        mission_complexity = parameters.get("mission_complexity", 2)
+        urgency = parameters.get("urgency", 0.5)
+        
+        # Determine mission priority based on urgency
+        if urgency > 0.8:
+            priority = utils_config.MissionPriority.CRITICAL
+        elif urgency > 0.6:
+            priority = utils_config.MissionPriority.HIGH
+        elif urgency > 0.4:
+            priority = utils_config.MissionPriority.MEDIUM
+        elif urgency > 0.2:
+            priority = utils_config.MissionPriority.LOW
+        else:
+            priority = utils_config.MissionPriority.BACKGROUND
+        
+        # Get available mission types based on complexity
+        complexity_levels = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"]
+        available_missions = []
+        for i in range(mission_complexity):
+            level = complexity_levels[i]
+            available_missions.extend(utils_config.MISSION_COMPLEXITY_LEVELS[level])
+        
+        # Assign missions to idle agents
+        for agent in self.agents:
+            if agent.current_task is None or agent.current_task_state in [
+                utils_config.TaskState.SUCCESS,
+                utils_config.TaskState.FAILURE,
+                utils_config.TaskState.NONE,
+            ]:
+                mission = self.create_mission_for_agent(agent, available_missions, parameters, priority)
+                if mission:
+                    agent.current_task = mission
+                    agent.update_task_state(utils_config.TaskState.PENDING)
+                    
+                    if utils_config.ENABLE_LOGGING:
+                        logger.log_msg(
+                            f"[MISSION ASSIGNED] Agent {agent.agent_id} ({agent.role}) assigned mission: {mission['mission_type']}",
+                            level=logging.INFO,
+                        )
+
+    def create_mission_for_agent(self, agent, available_missions, parameters, priority):
+        """
+        Create a specific mission for an agent based on their role and current strategy.
+        """
+        role = agent.role
+        strategy = self.current_strategy
+        
+        # Determine mission type based on role and strategy
+        if role == "gatherer":
+            if strategy in ["COLLECT_GOLD", "COLLECT_FOOD"]:
+                mission_type = utils_config.MissionType.GATHER_RESOURCES
+            elif strategy == "PLANT_TREES":
+                mission_type = utils_config.MissionType.SECURE_AREA  # Secure area for planting
+            else:
+                mission_type = utils_config.MissionType.EXPLORE_TERRITORY
+        else:  # peacekeeper
+            if strategy == "ATTACK_THREATS":
+                mission_type = utils_config.MissionType.ELIMINATE_THREATS
+            elif strategy == "DEFEND_HQ":
+                mission_type = utils_config.MissionType.DEFEND_POSITION
+            else:
+                mission_type = utils_config.MissionType.SECURE_AREA
+        
+        # Create mission parameters
+        mission_params = {
+            "target_area": self.get_mission_target_area(mission_type, agent),
+            "resource_preference": parameters.get("priority_resource", "any"),
+            "threat_tolerance": parameters.get("aggression_level", 0.5),
+            "coordination_level": parameters.get("coordination_preference", 0.5),
+            "urgency_factor": parameters.get("urgency", 0.5),
+            "success_criteria": self.get_mission_success_criteria(mission_type, parameters),
+            "time_limit": max(50, int(100 * parameters.get("urgency", 0.5))),  # Urgency affects time limit
+            "fallback_mission": "EXPLORE_TERRITORY",  # Default fallback
+        }
+        
+        mission_id = f"Mission-{mission_type.value}-{agent.agent_id}-{self.current_step}"
+        
+        return utils_config.create_mission(
+            mission_type=mission_type,
+            parameters=mission_params,
+            mission_id=mission_id,
+            priority=priority
+        )
+
+    def get_mission_target_area(self, mission_type, agent):
+        """
+        Determine the target area for a mission based on type and current game state.
+        """
+        if mission_type == utils_config.MissionType.DEFEND_POSITION:
+            # Defend HQ area
+            hq_pos = self.home_base["position"]
+            return {
+                "center": (int(hq_pos[0] // utils_config.CELL_SIZE), int(hq_pos[1] // utils_config.CELL_SIZE)),
+                "radius": 3  # 3-cell radius around HQ
+            }
+        elif mission_type == utils_config.MissionType.GATHER_RESOURCES:
+            # Target area with resources
+            resources = self.global_state.get("resources", [])
+            if resources:
+                # Find resource cluster
+                resource_positions = [r["location"] for r in resources]
+                center_x = sum(pos[0] for pos in resource_positions) // len(resource_positions)
+                center_y = sum(pos[1] for pos in resource_positions) // len(resource_positions)
+                return {
+                    "center": (center_x, center_y),
+                    "radius": 5  # 5-cell radius around resource cluster
+                }
+        elif mission_type == utils_config.MissionType.ELIMINATE_THREATS:
+            # Target area with threats
+            threats = [t for t in self.global_state.get("threats", []) if t["id"].faction_id != self.id]
+            if threats:
+                threat_positions = [t["location"] for t in threats]
+                center_x = sum(pos[0] for pos in threat_positions) // len(threat_positions)
+                center_y = sum(pos[1] for pos in threat_positions) // len(threat_positions)
+                return {
+                    "center": (center_x, center_y),
+                    "radius": 4  # 4-cell radius around threat area
+                }
+        
+        # Default: explore around agent's current position
+        agent_grid_x = int(agent.x // utils_config.CELL_SIZE)
+        agent_grid_y = int(agent.y // utils_config.CELL_SIZE)
+        return {
+            "center": (agent_grid_x, agent_grid_y),
+            "radius": 8  # 8-cell radius for exploration
+        }
+
+    def get_mission_success_criteria(self, mission_type, parameters):
+        """
+        Define success criteria for different mission types.
+        """
+        if mission_type == utils_config.MissionType.GATHER_RESOURCES:
+            resource_type = parameters.get("priority_resource", "any")
+            if resource_type == "gold":
+                return "collect 3 gold"
+            elif resource_type == "food":
+                return "collect 5 food"
+            else:
+                return "collect 4 resources"
+        elif mission_type == utils_config.MissionType.ELIMINATE_THREATS:
+            return "eliminate all threats in area"
+        elif mission_type == utils_config.MissionType.DEFEND_POSITION:
+            return "defend position for 20 steps"
+        elif mission_type == utils_config.MissionType.SECURE_AREA:
+            return "patrol area for 15 steps"
+        elif mission_type == utils_config.MissionType.EXPLORE_TERRITORY:
+            return "explore 10 new cells"
+        else:
+            return "complete mission objectives"
+
     def compute_hq_reward(self, victory: bool = False) -> float:
         """
-        Computes the HQ reward at the end of an episode.
-        This scalar reward trains the HQ strategy network.
+        Computes the HQ reward using the hierarchical reward system.
+        This connects HQ strategy success to agent execution quality.
         """
-        reward = 0
-
-        # Sum shaped rewards collected during the episode
-        if hasattr(self, "hq_step_rewards") and self.hq_step_rewards:
-            reward += sum(self.hq_step_rewards)
-
-        # Existing static components
-        w_gold = 0.01
-        w_food = 0.01
-        w_agents = 1.0
-        w_tasks = 0.2
-        w_threats = 0.3
-        w_victory = 10.0
-
-        reward += self.gold_balance * w_gold
-        reward += self.food_balance * w_food
-        reward += len(self.agents) * w_agents
-
-        if hasattr(self, "tasks_completed"):
-            reward += self.tasks_completed * w_tasks
-
-        if hasattr(self, "threats_eliminated"):
-            reward += self.threats_eliminated * w_threats
-
+        # Get agent performance data
+        agent_performance = {}
+        for agent in self.agents:
+            if hasattr(agent, 'ai') and hasattr(agent.ai, 'memory'):
+                rewards = agent.ai.memory.get("rewards", [])
+                if rewards:
+                    # Calculate average reward for this agent
+                    avg_reward = sum(rewards) / len(rewards)
+                    agent_performance[agent.agent_id] = avg_reward
+        
+        # Calculate mission progress
+        mission_progress = self._calculate_mission_progress()
+        
+        # Use hierarchical reward manager to calculate HQ reward
+        hq_reward = self.hierarchical_reward_manager.calculate_hq_reward(
+            strategy=self.current_strategy or "UNKNOWN",
+            parameters=getattr(self, 'current_strategy_parameters', {}),
+            execution_success=self._evaluate_strategy_execution_success(),
+            agent_performance=agent_performance,
+            mission_progress=mission_progress,
+        )
+        
+        # Add victory bonus if applicable
         if victory:
-            reward += w_victory
-
-        return reward
+            victory_bonus = utils_config.HIERARCHICAL_REWARD_CONFIG["hq_weights"][
+                utils_config.RewardComponent.MISSION_SUCCESS
+            ]
+            hq_reward += victory_bonus
+        
+        # Store the hierarchical reward components for analysis
+        self.hq_reward_components = self.hierarchical_reward_manager.hq_reward_components
+        
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[HQ HIERARCHICAL REWARD] Faction {self.id}: {hq_reward:.3f} "
+                f"(strategy: {self.current_strategy}, victory: {victory})",
+                level=logging.INFO,
+            )
+        
+        return hq_reward
+    
+    def _calculate_mission_progress(self) -> Dict[str, float]:
+        """
+        Calculate progress on various mission objectives.
+        
+        Returns:
+            Dict[str, float]: Mission progress scores between 0.0 and 1.0
+        """
+        progress = {
+            "resource_collection": 0.0,
+            "threat_elimination": 0.0,
+            "territory_control": 0.0,
+            "agent_coordination": 0.0,
+        }
+        
+        # Resource collection progress
+        if hasattr(self, 'gold_balance') and hasattr(self, 'food_balance'):
+            # Calculate based on resource balance (simplified)
+            gold_progress = min(self.gold_balance / 100.0, 1.0)  # Normalize by expected max
+            food_progress = min(self.food_balance / 100.0, 1.0)
+            progress["resource_collection"] = (gold_progress + food_progress) / 2.0
+        
+        # Threat elimination progress
+        if hasattr(self, 'threats_eliminated'):
+            # Calculate based on threats eliminated (simplified)
+            threats_progress = min(self.threats_eliminated / 10.0, 1.0)  # Normalize by expected max
+            progress["threat_elimination"] = threats_progress
+        
+        # Territory control progress
+        if hasattr(self, 'territory_count'):
+            # Calculate based on territory controlled
+            territory_progress = min(self.territory_count / 50.0, 1.0)  # Normalize by expected max
+            progress["territory_control"] = territory_progress
+        
+        # Agent coordination progress
+        if self.agents:
+            # Calculate based on agent task distribution and success
+            total_tasks = 0
+            successful_tasks = 0
+            for agent in self.agents:
+                if hasattr(agent, 'ai') and hasattr(agent.ai, 'memory'):
+                    rewards = agent.ai.memory.get("rewards", [])
+                    if rewards:
+                        total_tasks += len(rewards)
+                        successful_tasks += sum(1 for r in rewards if r > 0)
+            
+            if total_tasks > 0:
+                coordination_progress = successful_tasks / total_tasks
+                progress["agent_coordination"] = coordination_progress
+        
+        return progress
+    
+    def process_learned_communication(self, current_step: int):
+        """
+        Process learned communication between agents.
+        
+        Args:
+            current_step: Current simulation step
+        """
+        if not hasattr(self, 'learned_communication'):
+            return
+        
+        # Process communication for each agent
+        for agent in self.agents:
+            agent_id = agent.agent_id
+            
+            # Check if agent should communicate
+            if self.learned_communication.should_communicate(agent, current_step):
+                # Generate message
+                message = self.learned_communication.generate_message(agent)
+                if message:
+                    # Send message to nearby agents
+                    self._broadcast_learned_message(agent, message)
+            
+            # Process incoming messages
+            self._process_incoming_messages(agent)
+    
+    def _broadcast_learned_message(self, sender: Any, message: Dict[str, Any]):
+        """
+        Broadcast a learned message to nearby agents.
+        
+        Args:
+            sender: Sending agent
+            message: Message dictionary
+        """
+        comm_range = utils_config.COMMUNICATION_CONFIG["communication_range"]
+        max_recipients = utils_config.COMMUNICATION_CONFIG["message_types"][message["type"]]["max_recipients"]
+        
+        # Find nearby agents
+        nearby_agents = []
+        for agent in self.agents:
+            if agent != sender:
+                distance = math.sqrt((sender.x - agent.x)**2 + (sender.y - agent.y)**2)
+                if distance <= comm_range:
+                    nearby_agents.append((agent, distance))
+        
+        # Sort by distance and select closest agents
+        nearby_agents.sort(key=lambda x: x[1])
+        recipients = [agent for agent, _ in nearby_agents[:max_recipients]]
+        
+        # Send message to recipients
+        for recipient in recipients:
+            if recipient.agent_id in self.learned_communication.message_queues:
+                self.learned_communication.message_queues[recipient.agent_id].append(message)
+        
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[LEARNED COMMUNICATION] Agent {sender.agent_id} sent {message['type'].value} "
+                f"to {len(recipients)} nearby agents",
+                level=logging.DEBUG,
+            )
+    
+    def _process_incoming_messages(self, agent: Any):
+        """
+        Process incoming messages for an agent.
+        
+        Args:
+            agent: Agent to process messages for
+        """
+        agent_id = agent.agent_id
+        
+        if agent_id not in self.learned_communication.message_queues:
+            return
+        
+        message_queue = self.learned_communication.message_queues[agent_id]
+        processed_count = 0
+        
+        # Process messages (limit to avoid overwhelming)
+        max_process_per_step = 3
+        while message_queue and processed_count < max_process_per_step:
+            message = message_queue.popleft()
+            
+            # Check if message has expired
+            if hasattr(message, 'expiry_steps') and message.get('expiry_steps', 0) <= 0:
+                continue
+            
+            # Process message
+            success = self.learned_communication.process_message(agent, message)
+            if success:
+                processed_count += 1
+            
+            # Decrement expiry steps
+            if 'expiry_steps' in message:
+                message['expiry_steps'] -= 1
+        
+        if processed_count > 0 and utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[LEARNED COMMUNICATION] Agent {agent_id} processed {processed_count} messages",
+                level=logging.DEBUG,
+            )
+    
+    def get_coordination_reward(self, agent_id: str) -> float:
+        """
+        Get coordination reward for an agent from learned communication.
+        
+        Args:
+            agent_id: Agent identifier
+            
+        Returns:
+            Coordination reward value
+        """
+        if hasattr(self, 'learned_communication'):
+            return self.learned_communication.get_coordination_reward(agent_id)
+        return 0.0
+    
+    def process_experience_sharing(self, current_step: int):
+        """
+        Process experience sharing between agents.
+        
+        Args:
+            current_step: Current simulation step
+        """
+        if not hasattr(self, 'experience_sharing'):
+            return
+        
+        # Process experience sharing for each agent
+        for agent in self.agents:
+            agent_id = agent.agent_id
+            
+            # Check if agent should share experiences
+            if current_step % utils_config.EXPERIENCE_SHARING_CONFIG["sharing_frequency"] == 0:
+                self._process_agent_experience_sharing(agent)
+            
+            # Learn from shared experiences
+            learning_reward = self.experience_sharing.learn_from_shared_experiences(agent_id)
+            if learning_reward > 0:
+                # Add learning reward to agent's reward
+                if hasattr(agent, 'ai') and hasattr(agent.ai, 'memory'):
+                    if 'rewards' not in agent.ai.memory:
+                        agent.ai.memory['rewards'] = []
+                    agent.ai.memory['rewards'].append(learning_reward)
+    
+    def _process_agent_experience_sharing(self, agent: Any):
+        """
+        Process experience sharing for a specific agent.
+        
+        Args:
+            agent: Agent to process experience sharing for
+        """
+        agent_id = agent.agent_id
+        
+        # Get agent's recent experiences from their memory
+        if hasattr(agent, 'ai') and hasattr(agent.ai, 'memory'):
+            recent_experiences = self._extract_recent_experiences(agent)
+            
+            # Process each experience
+            for experience in recent_experiences:
+                # Encode experience
+                encoding, value, metadata = self.experience_sharing.encode_experience(
+                    agent_id=agent_id,
+                    state=experience.get('state'),
+                    action=experience.get('action'),
+                    reward=experience.get('reward', 0.0),
+                    outcome=experience.get('outcome', 'unknown'),
+                    task_type=experience.get('task_type'),
+                    coordination_data=experience.get('coordination_data', {}),
+                )
+                
+                if encoding is not None and value is not None:
+                    # Check if should share
+                    if self.experience_sharing.should_share_experience(agent_id, metadata):
+                        # Share experience
+                        success = self.experience_sharing.share_experience(agent_id, metadata)
+                        if success:
+                            # Add sharing reward
+                            sharing_reward = utils_config.EXPERIENCE_SHARING_CONFIG["sharing_rewards"]["successful_sharing"]
+                            if 'rewards' not in agent.ai.memory:
+                                agent.ai.memory['rewards'] = []
+                            agent.ai.memory['rewards'].append(sharing_reward)
+    
+    def _extract_recent_experiences(self, agent: Any) -> List[Dict[str, Any]]:
+        """
+        Extract recent experiences from an agent's memory.
+        
+        Args:
+            agent: Agent to extract experiences from
+            
+        Returns:
+            List of recent experiences
+        """
+        experiences = []
+        
+        if hasattr(agent, 'ai') and hasattr(agent.ai, 'memory'):
+            memory = agent.ai.memory
+            
+            # Extract experiences from memory (simplified)
+            if 'states' in memory and 'actions' in memory and 'rewards' in memory:
+                states = memory.get('states', [])
+                actions = memory.get('actions', [])
+                rewards = memory.get('rewards', [])
+                
+                # Get recent experiences (last 5)
+                recent_count = min(5, len(states))
+                for i in range(recent_count):
+                    if i < len(states) and i < len(actions) and i < len(rewards):
+                        experience = {
+                            'state': states[-(i+1)] if i < len(states) else None,
+                            'action': actions[-(i+1)] if i < len(actions) else None,
+                            'reward': rewards[-(i+1)] if i < len(rewards) else 0.0,
+                            'outcome': 'success' if rewards[-(i+1)] > 0 else 'failure',
+                            'task_type': getattr(agent, 'current_task', {}).get('type') if hasattr(agent, 'current_task') else None,
+                            'coordination_data': {},
+                        }
+                        experiences.append(experience)
+        
+        return experiences
+    
+    def get_collective_learning_reward(self, agent_id: str) -> float:
+        """
+        Get collective learning reward for an agent from experience sharing.
+        
+        Args:
+            agent_id: Agent identifier
+            
+        Returns:
+            Collective learning reward value
+        """
+        if hasattr(self, 'experience_sharing'):
+            return self.experience_sharing.get_collective_learning_reward(agent_id)
+        return 0.0
+    
+    def process_learned_state_representation(self, current_step: int):
+        """
+        Process learned state representation for better HQ understanding.
+        
+        Args:
+            current_step: Current simulation step
+        """
+        if not hasattr(self, 'learned_state_representation'):
+            return
+        
+        # Get enhanced global state
+        enhanced_state = self.get_enhanced_global_state()
+        
+        # Encode state using learned representations
+        representations = self.learned_state_representation.encode_state(enhanced_state)
+        
+        # Discover patterns
+        patterns = self.learned_state_representation.discover_patterns()
+        
+        # Form concepts
+        concepts = self.learned_state_representation.form_concepts()
+        
+        # Get learned state reward
+        learned_state_reward = self.learned_state_representation.get_learned_state_reward()
+        
+        # Add learned state reward to HQ reward
+        if learned_state_reward > 0:
+            if not hasattr(self, 'hq_step_rewards'):
+                self.hq_step_rewards = []
+            self.hq_step_rewards.append(learned_state_reward)
+        
+        if utils_config.ENABLE_LOGGING and (patterns or concepts):
+            logger.log_msg(
+                f"[LEARNED STATE REPRESENTATION] Faction {self.id} discovered {len(patterns)} patterns and formed {len(concepts)} concepts",
+                level=logging.DEBUG,
+            )
+    
+    def get_learned_state_reward(self) -> float:
+        """
+        Get learned state representation reward for the faction.
+        
+        Returns:
+            Learned state representation reward value
+        """
+        if hasattr(self, 'learned_state_representation'):
+            return self.learned_state_representation.get_learned_state_reward()
+        return 0.0
+    
+    def process_strategy_composition(self, current_step: int):
+        """
+        Process strategy composition for dynamic strategy sequencing.
+        
+        Args:
+            current_step: Current simulation step
+        """
+        if not hasattr(self, 'strategy_composition'):
+            return
+        
+        # Get enhanced global state
+        enhanced_state = self.get_enhanced_global_state()
+        
+        # Create goals based on current situation
+        goals = self._create_situational_goals(enhanced_state)
+        
+        # Process active compositions
+        for composition_id, composition in list(self.strategy_composition.active_compositions.items()):
+            # Execute next step in composition
+            next_strategy = self.strategy_composition.execute_composition(composition, current_step)
+            
+            if next_strategy:
+                # Execute the strategy
+                self._execute_composed_strategy(next_strategy, composition)
+            else:
+                # Composition completed or failed
+                success_score = self.strategy_composition.evaluate_composition_success(composition, current_step)
+                composition.success_rate = success_score
+                
+                # Move to completed compositions
+                self.strategy_composition.completed_compositions.append(composition)
+                del self.strategy_composition.active_compositions[composition_id]
+        
+        # Update goal progress
+        for goal in self.strategy_composition.active_goals.values():
+            self.strategy_composition.update_goal_progress(goal, enhanced_state, current_step)
+        
+        # Create new compositions for unaddressed goals
+        for goal in goals:
+            if goal not in self.strategy_composition.active_goals.values():
+                composition = self.strategy_composition.compose_strategy(enhanced_state, goal, current_step)
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[STRATEGY COMPOSITION] Faction {self.id} created composition "
+                        f"{composition.composition_id} for goal {goal.goal_type.value}",
+                        level=logging.DEBUG,
+                    )
+    
+    def _create_situational_goals(self, state: Dict[str, Any]) -> List:
+        """
+        Create goals based on current situation.
+        
+        Args:
+            state: Current game state
+            
+        Returns:
+            List of situational goals
+        """
+        goals = []
+        
+        # Resource acquisition goal
+        if state.get("gold_balance", 0) < 200 or state.get("food_balance", 0) < 200:
+            goal = self.strategy_composition.create_goal(
+                utils_config.StrategyGoalType.RESOURCE_ACQUISITION,
+                priority=0.8
+            )
+            goals.append(goal)
+        
+        # Threat elimination goal
+        if state.get("threat_count", 0) > 2:
+            goal = self.strategy_composition.create_goal(
+                utils_config.StrategyGoalType.THREAT_ELIMINATION,
+                priority=0.9
+            )
+            goals.append(goal)
+        
+        # Agent management goal
+        if state.get("friendly_agent_count", 0) < 3:
+            goal = self.strategy_composition.create_goal(
+                utils_config.StrategyGoalType.AGENT_MANAGEMENT,
+                priority=0.7
+            )
+            goals.append(goal)
+        
+        # Defensive positioning goal
+        if state.get("HQ_health", 100) < 50:
+            goal = self.strategy_composition.create_goal(
+                utils_config.StrategyGoalType.DEFENSIVE_POSITIONING,
+                priority=0.9
+            )
+            goals.append(goal)
+        
+        return goals
+    
+    def _execute_composed_strategy(self, strategy: str, composition):
+        """
+        Execute a strategy from a composition.
+        
+        Args:
+            strategy: Strategy to execute
+            composition: Strategy composition context
+        """
+        # Execute the strategy using existing parametric system
+        if hasattr(self, 'current_strategy_parameters'):
+            # Use existing parametric execution
+            self.perform_HQ_Strategy_parametric(strategy, self.current_strategy_parameters)
+        else:
+            # Fallback to basic strategy execution
+            if strategy in utils_config.HQ_STRATEGY_OPTIONS:
+                self.perform_HQ_Strategy(strategy)
+    
+    def get_strategy_composition_reward(self) -> float:
+        """
+        Get strategy composition reward for the faction.
+        
+        Returns:
+            Strategy composition reward value
+        """
+        if hasattr(self, 'strategy_composition'):
+            return self.strategy_composition.get_composition_reward()
+        return 0.0
+    
+    def process_meta_learning(self, current_step: int):
+        """
+        Process meta-learning for strategy discovery.
+        
+        Args:
+            current_step: Current simulation step
+        """
+        if not hasattr(self, 'meta_learning'):
+            return
+        
+        # Get enhanced global state
+        enhanced_state = self.get_enhanced_global_state()
+        
+        # Discover new strategies
+        discovered_strategies = self.meta_learning.discover_strategies(enhanced_state, current_step)
+        
+        # Process discovered strategies
+        for strategy in discovered_strategies:
+            self._integrate_discovered_strategy(strategy, current_step)
+        
+        # Update meta-learning progress
+        self._update_meta_learning_progress(enhanced_state, current_step)
+        
+        if utils_config.ENABLE_LOGGING and discovered_strategies:
+            logger.log_msg(
+                f"[META-LEARNING] Faction {self.id} discovered {len(discovered_strategies)} new strategies",
+                level=logging.INFO,
+            )
+    
+    def _integrate_discovered_strategy(self, strategy, current_step: int):
+        """
+        Integrate a discovered strategy into the faction's strategy repertoire.
+        
+        Args:
+            strategy: Discovered strategy to integrate
+            current_step: Current simulation step
+        """
+        # Add to HQ strategy options if novel enough
+        if strategy.novelty_score > 0.7 and strategy.success_rate > 0.6:
+            # Create a new strategy option
+            new_strategy_name = f"META_{strategy.strategy_name}"
+            
+            # Add to HQ strategy options (if not already present)
+            if new_strategy_name not in utils_config.HQ_STRATEGY_OPTIONS:
+                utils_config.HQ_STRATEGY_OPTIONS.append(new_strategy_name)
+                
+                if utils_config.ENABLE_LOGGING:
+                    logger.log_msg(
+                        f"[META-LEARNING] Added new strategy {new_strategy_name} to HQ options",
+                        level=logging.INFO,
+                    )
+            
+            # Store strategy parameters for use
+            if not hasattr(self, 'discovered_strategy_parameters'):
+                self.discovered_strategy_parameters = {}
+            
+            self.discovered_strategy_parameters[new_strategy_name] = strategy.parameters
+    
+    def _update_meta_learning_progress(self, state: Dict[str, Any], current_step: int):
+        """
+        Update meta-learning progress based on current performance.
+        
+        Args:
+            state: Current game state
+            current_step: Current simulation step
+        """
+        # Calculate current performance metrics
+        performance_metrics = {
+            "win_rate": state.get("win_rate", 0.5),
+            "survival_rate": state.get("survival_rate", 0.5),
+            "efficiency_score": state.get("efficiency_score", 0.5),
+            "coordination_score": state.get("coordination_score", 0.5),
+        }
+        
+        # Update meta-learning progress
+        for metric, value in performance_metrics.items():
+            if hasattr(self.meta_learning, 'meta_learning_progress'):
+                current_progress = self.meta_learning.meta_learning_progress.get(metric, 0.0)
+                alpha = 0.1  # Learning rate
+                new_progress = (1 - alpha) * current_progress + alpha * value
+                self.meta_learning.meta_learning_progress[metric] = new_progress
+    
+    def get_meta_learning_reward(self) -> float:
+        """
+        Get meta-learning reward for the faction.
+        
+        Returns:
+            Meta-learning reward value
+        """
+        if hasattr(self, 'meta_learning'):
+            return self.meta_learning.get_meta_learning_reward()
+        return 0.0
+    
+    def process_strategy_visualization(self, current_step: int):
+        """
+        Process strategy visualization and interpretability analysis.
+        
+        Args:
+            current_step: Current simulation step
+        """
+        if not hasattr(self, 'strategy_visualization'):
+            return
+        
+        # Get enhanced global state
+        enhanced_state = self.get_enhanced_global_state()
+        
+        # Update performance metrics for visualization
+        self.strategy_visualization.update_performance_metrics(enhanced_state, current_step)
+        
+        # Generate visualizations if needed
+        if current_step % self.strategy_visualization.update_frequency == 0:
+            self._generate_strategy_visualizations(enhanced_state, current_step)
+        
+        # Generate interpretability analysis
+        if current_step % 50 == 0:  # Every 50 steps
+            self._generate_interpretability_analysis(enhanced_state, current_step)
+        
+        if utils_config.ENABLE_LOGGING and current_step % 100 == 0:
+            logger.log_msg(
+                f"[VISUALIZATION] Faction {self.id} processed visualization at step {current_step}",
+                level=logging.DEBUG,
+            )
+    
+    def _generate_strategy_visualizations(self, state: Dict[str, Any], current_step: int):
+        """
+        Generate various strategy visualizations.
+        
+        Args:
+            state: Current game state
+            current_step: Current simulation step
+        """
+        try:
+            # Strategy performance plot
+            if utils_config.VisualizationType.STRATEGY_PERFORMANCE in self.strategy_visualization.active_visualizations:
+                fig = self.strategy_visualization.create_strategy_performance_plot()
+                self._save_visualization(fig, f"strategy_performance_{current_step}.png")
+            
+            # Parameter analysis plot
+            if utils_config.VisualizationType.PARAMETER_ANALYSIS in self.strategy_visualization.active_visualizations:
+                strategy_params = getattr(self, 'current_strategy_parameters', {})
+                fig = self.strategy_visualization.create_parameter_analysis_plot(strategy_params)
+                self._save_visualization(fig, f"parameter_analysis_{current_step}.png")
+            
+            # Strategy composition flow
+            if (utils_config.VisualizationType.STRATEGY_COMPOSITION in self.strategy_visualization.active_visualizations and
+                hasattr(self, 'strategy_composition')):
+                composition_data = {
+                    "active_compositions": getattr(self.strategy_composition, 'active_compositions', {}),
+                }
+                fig = self.strategy_visualization.create_strategy_composition_flow(composition_data)
+                self._save_visualization(fig, f"strategy_composition_{current_step}.png")
+            
+            # Communication network
+            if (utils_config.VisualizationType.COMMUNICATION_NETWORKS in self.strategy_visualization.active_visualizations and
+                hasattr(self, 'learned_communication')):
+                communication_data = {
+                    "agents": [agent.agent_id for agent in self.agents],
+                    "communications": getattr(self.learned_communication, 'communication_history', {}),
+                }
+                fig = self.strategy_visualization.create_communication_network(communication_data)
+                self._save_visualization(fig, f"communication_network_{current_step}.png")
+            
+            # Experience sharing patterns
+            if (utils_config.VisualizationType.EXPERIENCE_SHARING in self.strategy_visualization.active_visualizations and
+                hasattr(self, 'experience_sharing')):
+                sharing_data = {
+                    "sharing_frequency": getattr(self.experience_sharing, 'sharing_success_rate', {}),
+                    "experience_types": {"successful": 10, "failed": 5, "adaptive": 8},  # Simulated
+                    "learning_success_rate": getattr(self.experience_sharing, 'learning_success_rate', {}),
+                    "collective_memory_size": {current_step: len(getattr(self.experience_sharing, 'collective_memory', []))},
+                }
+                fig = self.strategy_visualization.create_experience_sharing_plot(sharing_data)
+                self._save_visualization(fig, f"experience_sharing_{current_step}.png")
+            
+            # State representation
+            if (utils_config.VisualizationType.STATE_REPRESENTATION in self.strategy_visualization.active_visualizations and
+                hasattr(self, 'learned_state_representation')):
+                state_data = {
+                    "representation_components": {"raw": 0.3, "abstract": 0.5, "temporal": 0.4},  # Simulated
+                    "pattern_discovery": {current_step: 5},  # Simulated
+                    "concept_formation": {"resource": 0.8, "threat": 0.6, "coordination": 0.7},  # Simulated
+                    "representation_quality": {current_step: 0.75},  # Simulated
+                }
+                fig = self.strategy_visualization.create_state_representation_plot(state_data)
+                self._save_visualization(fig, f"state_representation_{current_step}.png")
+            
+            # Reward components
+            if utils_config.VisualizationType.REWARD_COMPONENTS in self.strategy_visualization.active_visualizations:
+                reward_data = {
+                    "reward_components": {"task_completion": 0.3, "efficiency": 0.25, "coordination": 0.2, "adaptation": 0.15, "survival": 0.1},
+                    "reward_evolution": {current_step: state.get("total_reward", 0.5)},
+                    "component_contribution": {"task_completion": {current_step: 0.3}, "efficiency": {current_step: 0.25}},
+                    "reward_efficiency": {current_step: 0.8},
+                }
+                fig = self.strategy_visualization.create_reward_components_plot(reward_data)
+                self._save_visualization(fig, f"reward_components_{current_step}.png")
+            
+            # Meta-learning progress
+            if (utils_config.VisualizationType.META_LEARNING_PROGRESS in self.strategy_visualization.active_visualizations and
+                hasattr(self, 'meta_learning')):
+                meta_data = {
+                    "discovered_strategies": {current_step: len(getattr(self.meta_learning, 'discovered_strategies', {}))},
+                    "strategy_quality": {f"strategy_{i}": random.uniform(0.5, 1.0) for i in range(3)},  # Simulated
+                    "meta_success_rate": {current_step: 0.7},  # Simulated
+                    "discovery_methods": {"pattern_analysis": 0.8, "genetic": 0.7, "reinforcement": 0.6},  # Simulated
+                }
+                fig = self.strategy_visualization.create_meta_learning_progress_plot(meta_data)
+                self._save_visualization(fig, f"meta_learning_progress_{current_step}.png")
+            
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[VISUALIZATION] Error generating visualizations: {e}",
+                    level=logging.WARNING,
+                )
+    
+    def _generate_interpretability_analysis(self, state: Dict[str, Any], current_step: int):
+        """
+        Generate interpretability analysis for the HQ network.
+        
+        Args:
+            state: Current game state
+            current_step: Current simulation step
+        """
+        try:
+            if hasattr(self, 'HQ_Network') and self.HQ_Network is not None:
+                # Convert state to tensor
+                state_vector = self._state_to_vector(state)
+                state_tensor = torch.tensor(state_vector, dtype=torch.float32).unsqueeze(0)
+                
+                # Generate interpretability analysis
+                interpretability_methods = [
+                    utils_config.InterpretabilityMethod.GRADIENT_ATTRIBUTION,
+                    utils_config.InterpretabilityMethod.FEATURE_IMPORTANCE,
+                ]
+                
+                for method in interpretability_methods:
+                    result = self.strategy_visualization.generate_interpretability_analysis(
+                        self.HQ_Network, state_tensor, method
+                    )
+                    
+                    # Store result
+                    if method.value not in self.strategy_visualization.interpretability_results:
+                        self.strategy_visualization.interpretability_results[method.value] = []
+                    
+                    self.strategy_visualization.interpretability_results[method.value].append(result)
+                    
+                    # Keep only recent results
+                    if len(self.strategy_visualization.interpretability_results[method.value]) > 10:
+                        self.strategy_visualization.interpretability_results[method.value] = \
+                            self.strategy_visualization.interpretability_results[method.value][-10:]
+        
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[VISUALIZATION] Error generating interpretability analysis: {e}",
+                    level=logging.WARNING,
+                )
+    
+    def _save_visualization(self, fig: plt.Figure, filename: str):
+        """
+        Save visualization figure to file.
+        
+        Args:
+            fig: matplotlib Figure object
+            filename: Filename to save
+        """
+        try:
+            # Create visualization directory if it doesn't exist
+            viz_dir = "VISUALS/STRATEGY_ANALYSIS"
+            os.makedirs(viz_dir, exist_ok=True)
+            
+            # Save figure
+            filepath = os.path.join(viz_dir, filename)
+            fig.savefig(filepath, dpi=100, bbox_inches='tight')
+            plt.close(fig)  # Close figure to free memory
+            
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[VISUALIZATION] Saved visualization: {filepath}",
+                    level=logging.DEBUG,
+                )
+        
+        except Exception as e:
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[VISUALIZATION] Error saving visualization: {e}",
+                    level=logging.WARNING,
+                )
+    
+    def _state_to_vector(self, state: Dict[str, Any]) -> List[float]:
+        """Convert state dictionary to vector representation for interpretability."""
+        # Extract key state components
+        vector = [
+            state.get("HQ_health", 100.0) / 100.0,
+            state.get("gold_balance", 0.0) / 1000.0,
+            state.get("food_balance", 0.0) / 1000.0,
+            state.get("resource_count", 0.0) / 100.0,
+            state.get("threat_count", 0.0) / 10.0,
+            state.get("friendly_agent_count", 0.0) / 10.0,
+            state.get("enemy_agent_count", 0.0) / 10.0,
+            state.get("gatherer_count", 0.0) / 10.0,
+            state.get("peacekeeper_count", 0.0) / 10.0,
+            state.get("agent_density", 0.0) / 10.0,
+        ]
+        
+        # Ensure vector has correct size
+        while len(vector) < self.state_size:
+            vector.append(0.0)
+        
+        return vector[:self.state_size]
+    
+    def get_strategy_visualization_reward(self) -> float:
+        """
+        Get strategy visualization reward for the faction.
+        
+        Returns:
+            Strategy visualization reward value
+        """
+        if hasattr(self, 'strategy_visualization'):
+            return self.strategy_visualization.get_visualization_reward()
+        return 0.0
+    
+    def _evaluate_strategy_execution_success(self) -> bool:
+        """
+        Evaluate whether the current strategy was successfully executed.
+        
+        Returns:
+            bool: True if strategy execution was successful
+        """
+        if not self.current_strategy:
+            return False
+        
+        # Check if strategy-specific success criteria were met
+        if self.current_strategy == "COLLECT_GOLD":
+            # Success if we have gold balance or agents are actively mining
+            return self.gold_balance > 0 or any(
+                agent.current_task == "gather" and agent.current_task_state == utils_config.TaskState.ONGOING
+                for agent in self.agents
+            )
+        elif self.current_strategy == "ATTACK_THREATS":
+            # Success if threats were eliminated or agents are actively attacking
+            return (hasattr(self, 'threats_eliminated') and self.threats_eliminated > 0) or any(
+                agent.current_task == "eliminate" and agent.current_task_state == utils_config.TaskState.ONGOING
+                for agent in self.agents
+            )
+        elif self.current_strategy == "DEFEND_HQ":
+            # Success if HQ is defended (no threats nearby or agents defending)
+            return any(
+                agent.current_task == "defend" and agent.current_task_state == utils_config.TaskState.ONGOING
+                for agent in self.agents
+            )
+        elif self.current_strategy in ["RECRUIT_PEACEKEEPER", "RECRUIT_GATHERER"]:
+            # Success if recruitment was successful
+            return len(self.agents) > 0  # Simplified: success if we have agents
+        else:
+            # Default: consider successful if no major failures
+            return True
 
     #    _  _  ___     _______                 ___ _            _                     _  _             _        _      _   _
     #   | || |/ _ \   / /_   _|__ __ _ _ __   / __| |_ _ _ __ _| |_ ___ __ _ _  _    /_\| |_ ___ _ __ (_)__    /_\  __| |_(_)___ _ _  ___

@@ -26,9 +26,9 @@
         "FPS": 60,
         "SCREEN_WIDTH": 1152.0,
         "SCREEN_HEIGHT": 648.0,
-        "CELL_SIZE": 20,
-        "WORLD_WIDTH": 800,
-        "WORLD_HEIGHT": 800,
+        "CELL_SIZE": 20.0,
+        "WORLD_WIDTH": 1600,
+        "WORLD_HEIGHT": 1600,
         "Terrain_Seed": 65,
         "NOISE_SCALE": 100,
         "NOISE_OCTAVES": 4,
@@ -76,7 +76,7 @@
         "USE_HUBER_LOSS": true,
         "USE_FOCAL_LOSS": false,
         "LOSS_NORMALIZATION": true,
-        "HEADLESS_MODE": true,
+        "HEADLESS_MODE": false,
         "FORCE_DEPENDENCY_CHECK": false
     }
 }

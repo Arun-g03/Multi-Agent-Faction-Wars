@@ -111,6 +111,40 @@ class HQ_Network(nn.Module):
             nn.Linear(hidden_size // 4, 1),
         )
 
+        # ============================================================================
+        # PARAMETRIC STRATEGY HEADS
+        # ============================================================================
+        
+        # Binary parameter heads (sigmoid output, interpreted as probabilities)
+        self.binary_param_head = nn.Sequential(
+            nn.Linear(self.attention_output_size, hidden_size // 2),
+            nn.LayerNorm(hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(0.05) if use_dropout else nn.Identity(),
+            nn.Linear(hidden_size // 2, 3),  # target_role, priority_resource, use_mission_system
+            nn.Sigmoid(),  # Output probabilities for binary decisions
+        )
+        
+        # Continuous parameter heads (tanh output, scaled to [0,1])
+        self.continuous_param_head = nn.Sequential(
+            nn.Linear(self.attention_output_size, hidden_size // 2),
+            nn.LayerNorm(hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(0.05) if use_dropout else nn.Identity(),
+            nn.Linear(hidden_size // 2, 7),  # aggression_level, resource_threshold, urgency, mission_autonomy, coordination_preference, agent_adaptability, failure_tolerance
+            nn.Tanh(),  # Output [-1,1], will be scaled to [0,1]
+        )
+        
+        # Discrete parameter head (softmax output, interpreted as distribution)
+        self.discrete_param_head = nn.Sequential(
+            nn.Linear(self.attention_output_size, hidden_size // 2),
+            nn.LayerNorm(hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(0.05) if use_dropout else nn.Identity(),
+            nn.Linear(hidden_size // 2, 14),  # agent_count_target (1-10) + mission_complexity (1-4)
+            nn.Softmax(dim=-1),  # Output probability distribution over discrete choices
+        )
+
         # Reset seed back to original after initialization to avoid affecting other HQs
         if faction_id is not None:
             torch.manual_seed(torch.initial_seed())
@@ -291,7 +325,21 @@ class HQ_Network(nn.Module):
         policy_logits = self.policy_head(features)
         value = self.value_head(features)
 
-        return policy_logits, value
+        # ============================================================================
+        # PARAMETRIC STRATEGY OUTPUTS
+        # ============================================================================
+        
+        # Binary parameters (sigmoid output)
+        binary_params = self.binary_param_head(features)
+        
+        # Continuous parameters (tanh output, scaled to [0,1])
+        continuous_params_raw = self.continuous_param_head(features)
+        continuous_params = (continuous_params_raw + 1.0) / 2.0  # Scale from [-1,1] to [0,1]
+        
+        # Discrete parameters (softmax output)
+        discrete_params = self.discrete_param_head(features)
+
+        return policy_logits, value, binary_params, continuous_params, discrete_params
 
     def add_memory(
         self,
@@ -349,6 +397,59 @@ class HQ_Network(nn.Module):
             logger.log_msg(
                 f"[MEMORY] Added HQ experience: action={action} ({self.strategy_labels[action]}), "
                 f"reward={reward:.2f}, memory_size={len(self.hq_memory)}",
+                level=logging.DEBUG,
+            )
+
+    def add_memory_with_parameters(
+        self,
+        state: list,
+        role: list,
+        local_state: list,
+        global_state: list,
+        action: int,
+        parameters: dict,
+        reward: float = 0.0,
+    ):
+        """
+        Store a full HQ memory entry with parameters for parametric strategy learning.
+        """
+        # Validate inputs
+        if (
+            not isinstance(action, int)
+            or action < 0
+            or action >= len(self.strategy_labels)
+        ):
+            logger.log_msg(
+                f"[ERROR] Invalid action index: {action}", level=logging.ERROR
+            )
+            return
+
+        if not isinstance(reward, (int, float)):
+            logger.log_msg(
+                f"[ERROR] Invalid reward type: {type(reward)}", level=logging.ERROR
+            )
+            return
+
+        memory_entry = {
+            "state": state,
+            "role": role,
+            "local_state": local_state,
+            "global_state": global_state,
+            "action": action,
+            "parameters": parameters,  # Store learned parameters
+            "reward": reward,
+            "timestamp": len(self.hq_memory),  # Track order
+        }
+
+        self.hq_memory.append(memory_entry)
+
+        # Update best reward if applicable
+        self.update_best_reward(reward)
+
+        if utils_config.ENABLE_LOGGING:
+            logger.log_msg(
+                f"[MEMORY] Added HQ parametric experience: action={action} ({self.strategy_labels[action]}), "
+                f"parameters={parameters}, reward={reward:.2f}, memory_size={len(self.hq_memory)}",
                 level=logging.DEBUG,
             )
 
@@ -498,7 +599,7 @@ class HQ_Network(nn.Module):
             # 3. Forward pass with error handling
             with torch.no_grad():
                 try:
-                    logits, value = self.forward(
+                    logits, value, binary_params, continuous_params, discrete_params = self.forward(
                         state_tensor, role_tensor, local_tensor, global_tensor
                     )
                 except Exception as e:
@@ -545,21 +646,16 @@ class HQ_Network(nn.Module):
             action_index = torch.argmax(logits).item()
             selected_strategy = self.strategy_labels[action_index]
 
-            logger.log_msg(
-                f"[STRATEGY_SELECT] Selected strategy: {selected_strategy} (index: {action_index})",
-                level=logging.INFO,
-            )
-
-            # 6. Store memory for training
-            self.add_memory(state, role, local_state, global_state_vec, action_index)
-
-            if utils_config.ENABLE_LOGGING:
-                logger.log_msg(
-                    f"[HQ STRATEGY] Selected: {selected_strategy} (index: {action_index})",
-                    level=logging.INFO,
-                )
-
-            return selected_strategy
+            # ============================================================================
+            # INTERPRET PARAMETERS
+            # ============================================================================
+            
+            # Extract parameter values
+            binary_values = binary_params.squeeze(0).tolist()
+            continuous_values = continuous_params.squeeze(0).tolist()
+            discrete_values = discrete_params.squeeze(0).tolist()
+            
+        
 
         except Exception as e:
             logger.log_msg(
@@ -567,6 +663,131 @@ class HQ_Network(nn.Module):
             )
             # Return default strategy on error
             return self.strategy_labels[0]
+        finally:
+            delattr(self, "predicting")
+
+    def predict_strategy_parametric(self, global_state: dict) -> tuple:
+        """
+        Enhanced strategy prediction that returns both strategy and parameters.
+        Returns: (strategy_name, parameters_dict)
+        """
+        if hasattr(self, "predicting"):
+            logger.log_msg(
+                "[WARNING] Recursive prediction call detected, returning default strategy",
+                level=logging.WARNING,
+            )
+            return self.strategy_labels[0], {}
+
+        self.predicting = True
+
+        try:
+            # Validate global state
+            if not isinstance(global_state, dict):
+                logger.log_msg(
+                    f"[ERROR] Invalid global_state type: {type(global_state)}",
+                    level=logging.ERROR,
+                )
+                return self.strategy_labels[0], {}
+
+            # Check if global_state has required keys
+            required_keys = [
+                "HQ_health",
+                "gold_balance",
+                "food_balance",
+                "resource_count",
+                "threat_count",
+            ]
+            missing_keys = [key for key in required_keys if key not in global_state]
+            if missing_keys:
+                logger.log_msg(
+                    f"[WARNING] Missing keys in global_state: {missing_keys}",
+                    level=logging.WARNING,
+                )
+                # Fill missing keys with defaults
+                for key in missing_keys:
+                    global_state[key] = 0.0
+
+            # Store the enhanced global_state temporarily and use it for encoding
+            old_global_state = self.global_state
+            self.global_state = global_state
+
+            try:
+                # 1. Extract structured input parts
+                state, role, local_state, global_state_vec = self.encode_state_parts()
+            finally:
+                # Restore original global_state
+                self.global_state = old_global_state
+
+            # 2. Convert to tensors and move to correct device
+            device = self.device
+            state_tensor = torch.tensor(
+                state, dtype=torch.float32, device=device
+            ).unsqueeze(0)
+            role_tensor = torch.tensor(
+                role, dtype=torch.float32, device=device
+            ).unsqueeze(0)
+            local_tensor = torch.tensor(
+                local_state, dtype=torch.float32, device=device
+            ).unsqueeze(0)
+            global_tensor = torch.tensor(
+                global_state_vec, dtype=torch.float32, device=device
+            ).unsqueeze(0)
+
+            # 3. Forward pass with error handling
+            with torch.no_grad():
+                try:
+                    logits, value, binary_params, continuous_params, discrete_params = self.forward(
+                        state_tensor, role_tensor, local_tensor, global_tensor
+                    )
+                except Exception as e:
+                    logger.log_msg(
+                        f"[ERROR] Forward pass failed: {e}", level=logging.ERROR
+                    )
+                    return self.strategy_labels[0], {}
+
+            # 4. Select strategy
+            action_index = torch.argmax(logits).item()
+            selected_strategy = self.strategy_labels[action_index]
+
+            # 5. Interpret parameters
+            binary_values = binary_params.squeeze(0).tolist()
+            continuous_values = continuous_params.squeeze(0).tolist()
+            discrete_values = discrete_params.squeeze(0).tolist()
+            
+            agent_count_idx = torch.argmax(discrete_params[:, :10]).item()  # First 10 for agent count
+            mission_complexity_idx = torch.argmax(discrete_params[:, 10:]).item()  # Last 4 for complexity
+            
+            parameters = {
+                "target_role": "peacekeeper" if binary_values[0] > 0.5 else "gatherer",
+                "priority_resource": "food" if binary_values[1] > 0.5 else "gold",
+                "use_mission_system": binary_values[2] > 0.5,
+                "aggression_level": continuous_values[0],
+                "resource_threshold": continuous_values[1],
+                "urgency": continuous_values[2],
+                "mission_autonomy": continuous_values[3],
+                "coordination_preference": continuous_values[4],
+                "agent_adaptability": continuous_values[5],
+                "failure_tolerance": continuous_values[6],
+                "agent_count_target": agent_count_idx + 1,  # Convert 0-9 to 1-10
+                "mission_complexity": mission_complexity_idx + 1,  # Convert 0-3 to 1-4
+            }
+
+            # 6. Store memory for training
+            self.add_memory_with_parameters(state, role, local_state, global_state_vec, action_index, parameters)
+
+            if utils_config.ENABLE_LOGGING:
+                logger.log_msg(
+                    f"[HQ PARAMETRIC] Selected: {selected_strategy} with parameters: {parameters}",
+                    level=logging.INFO,
+                )
+
+            return selected_strategy, parameters
+
+        except Exception as e:
+            logger.log_msg(
+                f"[ERROR] Parametric strategy prediction failed: {e}", level=logging.ERROR
+            )
+            return self.strategy_labels[0], {}
         finally:
             delattr(self, "predicting")
 
