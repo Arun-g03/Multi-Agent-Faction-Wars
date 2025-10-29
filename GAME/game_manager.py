@@ -81,6 +81,10 @@ class GameManager:
         # Pause state
         self.paused = False
 
+        # ETA tracking
+        self.start_time = None
+        self.last_step_time = None
+
         # Initialise the resource manager with the terrain
         self.resource_manager = ResourceManager(self.terrain)
 
@@ -554,7 +558,7 @@ class GameManager:
         Initialise agents for the game, passing the mode to each agent for appropriate setup.
         :param mode: The mode in which to Initialise the agents ('train' or 'evaluate').
         """
-        
+
         try:
             if hasattr(self, "agents_initialised") and self.agents_initialised:
                 print("Agents already initialised. Skipping duplicate initialisation.")
@@ -563,7 +567,9 @@ class GameManager:
             print("Initialising agents...")
 
             """Creates agents and assigns them to factions using stratified grid coverage for HQ placement."""
-            minimum_distance = utils_config.HQ_SPAWN_RADIUS  # Minimum distance between HQs
+            minimum_distance = (
+                utils_config.HQ_SPAWN_RADIUS
+            )  # Minimum distance between HQs
             print("Calculating valid positions...")
             num_factions = len(self.faction_manager.factions)
 
@@ -595,7 +601,9 @@ class GameManager:
                 raise ValueError("Not enough valid positions for all factions' HQs.")
 
             # Step 3: Assign positions to factions
-            for faction, position in zip(self.faction_manager.factions, selected_positions):
+            for faction, position in zip(
+                self.faction_manager.factions, selected_positions
+            ):
                 # Convert grid position to pixel coordinates
                 base_pixel_x, base_pixel_y = (
                     position[0] * utils_config.CELL_SIZE,
@@ -686,7 +694,10 @@ class GameManager:
                 )
 
         except Exception as e:
-            self.logger.log_msg(f"An error occurred during agent initialisation: {e}", level=logging.ERROR)
+            self.logger.log_msg(
+                f"An error occurred during agent initialisation: {e}",
+                level=logging.ERROR,
+            )
             traceback.print_exc()
             raise
 
@@ -806,11 +817,16 @@ class GameManager:
                 attempts += 1
 
             # If no valid position found, fallback to random valid land cell
-            self.logger.log_msg(f"Failed to spawn agent after {max_attempts} attempts.", level=logging.ERROR)
+            self.logger.log_msg(
+                f"Failed to spawn agent after {max_attempts} attempts.",
+                level=logging.ERROR,
+            )
             return None
 
         except Exception as e:
-            self.logger.log_msg(f"An error occurred during agent spawn: {e}", level=logging.ERROR)
+            self.logger.log_msg(
+                f"An error occurred during agent spawn: {e}", level=logging.ERROR
+            )
             traceback.print_exc()
             raise
 
@@ -879,6 +895,9 @@ class GameManager:
                         )
                         pygame.display.update()
                     else:
+                        # Render simple black screen with message in HEADLESS_MODE
+                        self.render_headless_screen()
+                        pygame.display.update()
                         step_bar.update(1)
 
                     # Only update game systems if not paused
@@ -997,7 +1016,9 @@ class GameManager:
         except SystemExit:
             print("[INFO] Game closed successfully.")
         except Exception as e:
-            self.logger.log_msg(f"An error occurred in {self.mode}: {e}", level=logging.ERROR)
+            self.logger.log_msg(
+                f"An error occurred in {self.mode}: {e}", level=logging.ERROR
+            )
             traceback.print_exc()
             cleanup(QUIT=True)
 
@@ -1557,12 +1578,180 @@ class GameManager:
 
         return victory_series
 
+    def render_headless_screen(self):
+        """Render a simple black screen with status message in HEADLESS_MODE."""
+        if not pygame.display.get_init():
+            return
+
+        # Fill screen with black
+        self.screen.fill((0, 0, 0))
+
+        # Create font for text
+        font = pygame.font.Font(None, 36)
+        small_font = pygame.font.Font(None, 24)
+
+        # Main message
+        main_text = font.render("HEADLESS MODE - AI Training", True, (255, 255, 255))
+        main_rect = main_text.get_rect(
+            center=(
+                utils_config.SCREEN_WIDTH // 2,
+                utils_config.SCREEN_HEIGHT // 2 - 50,
+            )
+        )
+
+        # Status info
+        status_text = f"Episode: {self.episode}/{utils_config.EPISODES_LIMIT} | Step: {self.current_step}/{utils_config.STEPS_PER_EPISODE}"
+        status_surface = small_font.render(status_text, True, (200, 200, 200))
+        status_rect = status_surface.get_rect(
+            center=(utils_config.SCREEN_WIDTH // 2, utils_config.SCREEN_HEIGHT // 2)
+        )
+
+        # Progress bars
+        bar_width = 300
+        bar_height = 20
+        bar_x = (utils_config.SCREEN_WIDTH - bar_width) // 2
+        bar_y = utils_config.SCREEN_HEIGHT // 2 + 20
+
+        # Episode progress bar
+        episode_progress = self.episode / utils_config.EPISODES_LIMIT
+        episode_bar_width = int(bar_width * episode_progress)
+
+        # Episode bar background
+        pygame.draw.rect(
+            self.screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height)
+        )
+        # Episode bar fill
+        pygame.draw.rect(
+            self.screen, (0, 150, 255), (bar_x, bar_y, episode_bar_width, bar_height)
+        )
+        # Episode bar border
+        pygame.draw.rect(
+            self.screen, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height), 2
+        )
+
+        # Step progress bar
+        step_progress = self.current_step / utils_config.STEPS_PER_EPISODE
+        step_bar_width = int(bar_width * step_progress)
+        step_bar_y = bar_y + bar_height + 10
+
+        # Step bar background
+        pygame.draw.rect(
+            self.screen, (50, 50, 50), (bar_x, step_bar_y, bar_width, bar_height)
+        )
+        # Step bar fill
+        pygame.draw.rect(
+            self.screen, (0, 255, 100), (bar_x, step_bar_y, step_bar_width, bar_height)
+        )
+        # Step bar border
+        pygame.draw.rect(
+            self.screen, (100, 100, 100), (bar_x, step_bar_y, bar_width, bar_height), 2
+        )
+
+        # Progress labels
+        episode_label = small_font.render("Episode Progress", True, (180, 180, 180))
+        episode_label_rect = episode_label.get_rect(
+            center=(bar_x - 80, bar_y + bar_height // 2)
+        )
+
+        step_label = small_font.render("Step Progress", True, (180, 180, 180))
+        step_label_rect = step_label.get_rect(
+            center=(bar_x - 80, step_bar_y + bar_height // 2)
+        )
+
+        # ETA calculation
+        eta_text = self._calculate_eta()
+        eta_surface = small_font.render(eta_text, True, (255, 200, 100))
+        eta_rect = eta_surface.get_rect(
+            center=(utils_config.SCREEN_WIDTH // 2, step_bar_y + bar_height + 10)
+        )
+
+        # Controls info
+        controls_text = "Press Q to quit, P to pause"
+        controls_surface = small_font.render(controls_text, True, (150, 150, 150))
+        controls_rect = controls_surface.get_rect(
+            center=(utils_config.SCREEN_WIDTH // 2, step_bar_y + bar_height + 40)
+        )
+
+        # Blit text to screen
+        self.screen.blit(main_text, main_rect)
+        self.screen.blit(status_surface, status_rect)
+        self.screen.blit(episode_label, episode_label_rect)
+        self.screen.blit(step_label, step_label_rect)
+        self.screen.blit(eta_surface, eta_rect)
+        self.screen.blit(controls_surface, controls_rect)
+
+    def _calculate_eta(self):
+        """Calculate estimated time remaining for training completion."""
+        import time
+
+        current_time = time.time()
+
+        # Initialize timing on first call
+        if self.start_time is None:
+            self.start_time = current_time
+            self.last_step_time = current_time
+            return "ETA: Calculating..."
+
+        # Calculate progress
+        total_episodes = utils_config.EPISODES_LIMIT
+        total_steps_per_episode = utils_config.STEPS_PER_EPISODE
+
+        # Current progress (0.0 to 1.0)
+        episode_progress = (self.episode - 1) / total_episodes
+        step_progress = self.current_step / total_steps_per_episode
+        total_progress = episode_progress + (step_progress / total_episodes)
+
+        # Avoid division by zero
+        if total_progress <= 0:
+            return "ETA: Calculating..."
+
+        # Calculate elapsed time
+        elapsed_time = current_time - self.start_time
+
+        # Calculate estimated total time
+        estimated_total_time = elapsed_time / total_progress
+
+        # Calculate remaining time
+        remaining_time = estimated_total_time - elapsed_time
+
+        # Format ETA
+        return self._format_time(remaining_time)
+
+    def _format_time(self, seconds):
+        """Format time in a human-readable format."""
+        if seconds < 0:
+            return "ETA: Training Complete!"
+
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        seconds_remaining = int(seconds % 60)
+
+        # Build time string based on relevance
+        time_parts = []
+
+        if hours > 0:
+            time_parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+
+        if minutes > 0:
+            time_parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+
+        # Only show seconds if less than 5 minutes remaining
+        if hours == 0 and minutes < 5 and seconds_remaining > 0:
+            time_parts.append(
+                f"{seconds_remaining} second{'s' if seconds_remaining != 1 else ''}"
+            )
+
+        if not time_parts:
+            return "ETA: < 1 minute"
+        #Time for total Completion
+        return f"Full Training ETA: {', '.join(time_parts)}"
+
     def process_pygame_events(self):
         """
         Handle pygame events like quitting and camera zooming.
         """
-        if utils_config.HEADLESS_MODE or not pygame.display.get_init():
-            return  # Skip processing events in headless mode or if display is closed
+        if not pygame.display.get_init():
+            return  # Skip processing events if display is closed
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1601,7 +1790,22 @@ class GameManager:
                         self.change_map()
                         self.paused = False  # Unpause after map change
 
-                # Only process other keys if not paused
+                # Handle HEADLESS_MODE specific keys
+                elif utils_config.HEADLESS_MODE:
+                    if event.key == pygame.K_q:
+                        print("[INFO] Quitting game from HEADLESS_MODE...")
+                        return "QUIT"
+                    elif event.key == pygame.K_p:
+                        self.paused = not self.paused
+                        print(
+                            f"[INFO] Game state: {'PAUSED' if self.paused else 'RESUMED'}"
+                        )
+                        if self.paused:
+                            print(
+                                "[INFO] Game paused. Press 'p' to resume, 'q' to quit."
+                            )
+
+                # Only process other keys if not paused and not in headless mode
                 elif event.key in (pygame.K_PLUS, pygame.K_EQUALS):
                     self.camera.zoom_around_mouse(True, mouse_x, mouse_y)
                 elif event.key == pygame.K_MINUS:

@@ -76,7 +76,7 @@
         "USE_HUBER_LOSS": true,
         "USE_FOCAL_LOSS": false,
         "LOSS_NORMALIZATION": true,
-        "HEADLESS_MODE": false,
+        "HEADLESS_MODE": true,
         "FORCE_DEPENDENCY_CHECK": false
     }
 }

@@ -3495,12 +3495,16 @@ class Faction:
         """
         try:
             # Use integrated matplotlib plotter system
-            if hasattr(self, 'strategy_visualization') and hasattr(self.strategy_visualization, 'matplotlib_plotter'):
+            if hasattr(self, "strategy_visualization") and hasattr(
+                self.strategy_visualization, "matplotlib_plotter"
+            ):
                 self.strategy_visualization.matplotlib_plotter.update_image_plot(
-                    name=filename.replace('.png', ''),
+                    name=filename.replace(".png", ""),
                     fig=fig,
-                    tensorboard_logger=getattr(self.strategy_visualization, 'tensorboard_logger', None),
-                    step=self.current_step
+                    tensorboard_logger=getattr(
+                        self.strategy_visualization, "tensorboard_logger", None
+                    ),
+                    step=self.current_step,
                 )
             else:
                 # Fallback to direct save
@@ -3763,7 +3767,9 @@ class Faction:
         self.home_base["health"] = max(0, self.home_base["health"] - damage)
 
         # Print HQ damage for immediate visibility
-        print(f"HQ DAMAGE: Faction {self.id} HQ took {damage} damage! Health: {self.home_base['health']}/{self.home_base['max_health']}")
+        print(
+            f"HQ DAMAGE: Faction {self.id} HQ took {damage} damage! Health: {self.home_base['health']}/{self.home_base['max_health']}"
+        )
 
         if utils_config.ENABLE_LOGGING:
             logger.log_msg(

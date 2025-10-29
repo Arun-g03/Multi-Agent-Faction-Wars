@@ -410,9 +410,9 @@ class GameRenderer:
 
                         # Calculate faction health percentage
                         hq_health_pct = 0.0
-                        if hasattr(faction, 'home_base') and faction.home_base:
-                            current_health = faction.home_base.get('health', 0)
-                            max_health = faction.home_base.get('max_health', 100)
+                        if hasattr(faction, "home_base") and faction.home_base:
+                            current_health = faction.home_base.get("health", 0)
+                            max_health = faction.home_base.get("max_health", 100)
                             if max_health > 0:
                                 hq_health_pct = (current_health / max_health) * 100
 
@@ -541,6 +541,7 @@ class GameRenderer:
                 "Faction Leaderboard:", GAME_FONT, font_size, (255, 255, 255)
             )
         )
+
         # Leaderboard - Sort by agents > gold > food (agents are most important for capability)
         def faction_sort_key(faction):
             agent_count = len(faction.agents)
@@ -549,7 +550,7 @@ class GameRenderer:
                 return (0, 0, 0)  # Lowest priority
             # Sort by agent count, then gold, then food (descending)
             return (agent_count, faction.gold_balance, faction.food_balance)
-        
+
         sorted_factions = sorted(factions, key=faction_sort_key, reverse=True)
         for faction in sorted_factions[:4]:
             lines.append(
@@ -743,14 +744,13 @@ class GameRenderer:
                         )
                         task_state = agent.current_task.get("state", "Unknown")
                         task_id = agent.current_task.get("id", "N/A")
-                        
+
                         # Get HQ strategy context
-                        hq_strategy = getattr(agent.faction, 'current_strategy', 'None')
+                        hq_strategy = getattr(agent.faction, "current_strategy", "None")
                         strategy_context = ""
                         if hq_strategy and hq_strategy != "None":
                             strategy_context = f"\nHQ Strategy: {hq_strategy}"
-                        
-                        
+
                         task_info = (
                             f"HQ Task: {task_type}\n"
                             f"Target: {target_type} at {target_position}\n"
@@ -760,8 +760,12 @@ class GameRenderer:
                         )
                     else:
                         # Show HQ strategy even when no task
-                        hq_strategy = getattr(agent.faction, 'current_strategy', 'None')
-                        strategy_context = f"\nHQ Strategy: {hq_strategy}" if hq_strategy and hq_strategy != "None" else ""
+                        hq_strategy = getattr(agent.faction, "current_strategy", "None")
+                        strategy_context = (
+                            f"\nHQ Strategy: {hq_strategy}"
+                            if hq_strategy and hq_strategy != "None"
+                            else ""
+                        )
                         task_info = f"Task: None{strategy_context}"
 
                     action = (
@@ -780,7 +784,7 @@ class GameRenderer:
 
                     # Enhanced agent info with role-specific context
                     role_context = self._get_role_context(agent.role, hq_strategy)
-                    
+
                     self.render_tooltip(
                         f"Agent ID: {agent.agent_id}\n"
                         f"Role: {agent.role.title()}{role_context}\n"
@@ -804,12 +808,12 @@ class GameRenderer:
         role_contexts = {
             "gatherer": {
                 "COLLECT_GOLD": " (Primary Resource Collector)",
-                "COLLECT_FOOD": " (Primary Resource Collector)", 
+                "COLLECT_FOOD": " (Primary Resource Collector)",
                 "ATTACK_THREATS": " (Supporting War Effort)",
                 "RECRUIT_GATHERER": " (Training New Recruits)",
                 "RECRUIT_PEACEKEEPER": " (Supporting Recruitment)",
                 "EXPAND_TERRITORY": " (Resource Support)",
-                "DEFEND_BASE": " (Resource Support)"
+                "DEFEND_BASE": " (Resource Support)",
             },
             "peacekeeper": {
                 "COLLECT_GOLD": " (Security Detail)",
@@ -818,10 +822,10 @@ class GameRenderer:
                 "RECRUIT_GATHERER": " (Security Detail)",
                 "RECRUIT_PEACEKEEPER": " (Training New Recruits)",
                 "EXPAND_TERRITORY": " (Primary Combat Unit)",
-                "DEFEND_BASE": " (Primary Defense Unit)"
-            }
+                "DEFEND_BASE": " (Primary Defense Unit)",
+            },
         }
-        
+
         context = role_contexts.get(role, {}).get(hq_strategy, "")
         return context
 

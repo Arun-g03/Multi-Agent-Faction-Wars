@@ -9,6 +9,7 @@ except ImportError:
     # Fallback if utils_config is not available
     class MockConfig:
         ENABLE_LOGGING = True
+
     utils_config = MockConfig()
 
 
@@ -62,7 +63,7 @@ class Logger:
         self.logger.setLevel(self.log_level)
 
         # Regular file handler for all logs with UTF-8 encoding
-        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
+        file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
         file_handler.setLevel(self.log_level)
         file_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
@@ -70,7 +71,7 @@ class Logger:
         file_handler.setFormatter(file_formatter)
 
         # Dedicated error file handler for ERROR and CRITICAL logs only with UTF-8 encoding
-        error_file_handler = logging.FileHandler(error_log_file, encoding='utf-8')
+        error_file_handler = logging.FileHandler(error_log_file, encoding="utf-8")
         error_file_handler.setLevel(logging.ERROR)  # Only capture ERROR and CRITICAL
         error_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
@@ -95,40 +96,40 @@ class Logger:
         """Sanitize message to handle Unicode characters safely."""
         try:
             # Try to encode/decode to catch problematic characters
-            message.encode('utf-8').decode('utf-8')
+            message.encode("utf-8").decode("utf-8")
             return message
         except UnicodeError:
             # Replace problematic Unicode characters with ASCII equivalents
             replacements = {
-                '→': '->',
-                '←': '<-',
-                '↑': '^',
-                '↓': 'v',
-                '∞': 'inf',
-                '≠': '!=',
-                '≤': '<=',
-                '≥': '>=',
-                '±': '+/-',
-                '×': 'x',
-                '÷': '/',
-                '°': 'deg',
-                'α': 'alpha',
-                'β': 'beta',
-                'γ': 'gamma',
-                'δ': 'delta',
-                'ε': 'epsilon',
-                'π': 'pi',
-                'σ': 'sigma',
-                'τ': 'tau',
-                'φ': 'phi',
-                'ψ': 'psi',
-                'ω': 'omega',
+                "→": "->",
+                "←": "<-",
+                "↑": "^",
+                "↓": "v",
+                "∞": "inf",
+                "≠": "!=",
+                "≤": "<=",
+                "≥": ">=",
+                "±": "+/-",
+                "×": "x",
+                "÷": "/",
+                "°": "deg",
+                "α": "alpha",
+                "β": "beta",
+                "γ": "gamma",
+                "δ": "delta",
+                "ε": "epsilon",
+                "π": "pi",
+                "σ": "sigma",
+                "τ": "tau",
+                "φ": "phi",
+                "ψ": "psi",
+                "ω": "omega",
             }
-            
+
             sanitized = message
             for unicode_char, ascii_replacement in replacements.items():
                 sanitized = sanitized.replace(unicode_char, ascii_replacement)
-            
+
             return sanitized
 
     def log_msg(self, message, level=logging.INFO):
@@ -167,7 +168,7 @@ class Logger:
                 # Clear buffer but don't log if disabled
                 self.log_buffer = []
                 return
-                
+
             import time
 
             for message, level, _ in self.log_buffer:

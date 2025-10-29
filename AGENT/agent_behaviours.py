@@ -1470,7 +1470,7 @@ class AgentBehaviour(
                         level=logging.INFO,
                     )
                     print(
-                            f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}."
+                        f"{self.agent.role} attacked assigned threat {target_agent.role} (ID: {assigned_id}) at {assigned_position}. Health is now {target_agent.Health}."
                     )
                 if target_agent.Health <= 0:
                     self.report_threat_eliminated(threat)

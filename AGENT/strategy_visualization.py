@@ -191,13 +191,11 @@ class StrategyVisualizer:
             "resource_balance": state.get("gold_balance", 0)
             + state.get("food_balance", 0),
         }
-        
+
         # Log key metrics to TensorBoard using existing system
         for metric_name, value in performance_metrics.items():
             self.tensorboard_logger.log_scalar(
-                f"Faction_{self.faction_id}/Strategy/{metric_name}",
-                value,
-                current_step
+                f"Faction_{self.faction_id}/Strategy/{metric_name}", value, current_step
             )
 
     def create_strategy_performance_plot(
@@ -239,15 +237,15 @@ class StrategyVisualizer:
                 ax.legend()
 
         plt.tight_layout()
-        
+
         # Save using integrated matplotlib plotter
         self.matplotlib_plotter.update_image_plot(
             name=f"strategy_performance_faction_{self.faction_id}",
             fig=fig,
             tensorboard_logger=self.tensorboard_logger,
-            step=getattr(self, 'current_step', 0)
+            step=getattr(self, "current_step", 0),
         )
-        
+
         return fig
 
     def create_scalar_plots(self, current_step: int):
@@ -256,20 +254,20 @@ class StrategyVisualizer:
         """
         if not self.performance_history:
             return
-            
+
         # Create scalar plots for key metrics
         for metric_name, data in self.performance_history.items():
             if data:
                 # Extract values for plotting
                 values = [d["value"] for d in data]
                 steps = [d["step"] for d in data]
-                
+
                 # Use existing scalar plotting system
                 self.matplotlib_plotter.plot_scalar_over_time(
                     names=[f"Strategy_{metric_name}"],
                     values_list=[values],
                     episodes=steps,
-                    tensorboard_logger=self.tensorboard_logger
+                    tensorboard_logger=self.tensorboard_logger,
                 )
 
     def create_parameter_analysis_plot(
@@ -347,15 +345,15 @@ class StrategyVisualizer:
                 ax4.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        
+
         # Save using integrated matplotlib plotter
         self.matplotlib_plotter.update_image_plot(
             name=f"parameter_analysis_faction_{self.faction_id}",
             fig=fig,
             tensorboard_logger=self.tensorboard_logger,
-            step=getattr(self, 'current_step', 0)
+            step=getattr(self, "current_step", 0),
         )
-        
+
         return fig
 
     def create_attention_map(

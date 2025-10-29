@@ -203,11 +203,11 @@ class MainGame:
                 elif is_game:
                     try:
                         if game_manager and game_renderer:
-                            if utils_config.HEADLESS_MODE and pygame.display.get_init():
+                            # Keep pygame display open in HEADLESS_MODE for simple input handling
+                            if utils_config.HEADLESS_MODE:
                                 print(
-                                    "[INFO] HEADLESS_MODE is active — closing display."
+                                    "[INFO] HEADLESS_MODE is active — showing minimal display for input."
                                 )
-                                pygame.display.quit()  # Disable rendering from this point on
 
                             game_running = game_manager.run()
 
