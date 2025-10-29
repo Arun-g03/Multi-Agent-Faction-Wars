@@ -13,7 +13,7 @@ import inspect
 import io
 import cProfile
 import pstats
-from typing import Union, Dict, Any, Optional
+from typing import Union, Dict, Any, Optional, List
 from importlib import util as importlib_util
 from enum import Enum
 from collections import namedtuple, defaultdict

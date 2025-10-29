@@ -554,134 +554,141 @@ class GameManager:
         Initialise agents for the game, passing the mode to each agent for appropriate setup.
         :param mode: The mode in which to Initialise the agents ('train' or 'evaluate').
         """
-        if hasattr(self, "agents_initialised") and self.agents_initialised:
-            print("Agents already initialised. Skipping duplicate initialisation.")
-            return
-        self.agents_initialised = True
-        print("Initialising agents...")
+        
+        try:
+            if hasattr(self, "agents_initialised") and self.agents_initialised:
+                print("Agents already initialised. Skipping duplicate initialisation.")
+                return
+            self.agents_initialised = True
+            print("Initialising agents...")
 
-        """Creates agents and assigns them to factions using stratified grid coverage for HQ placement."""
-        minimum_distance = utils_config.HQ_SPAWN_RADIUS  # Minimum distance between HQs
-        print("Calculating valid positions...")
-        num_factions = len(self.faction_manager.factions)
+            """Creates agents and assigns them to factions using stratified grid coverage for HQ placement."""
+            minimum_distance = utils_config.HQ_SPAWN_RADIUS  # Minimum distance between HQs
+            print("Calculating valid positions...")
+            num_factions = len(self.faction_manager.factions)
 
-        # Step 1: Precompute valid HQ positions
-        valid_positions = [
-            (i, j)
-            for i in range(self.terrain.grid.shape[0])
-            for j in range(self.terrain.grid.shape[1])
-            if self.terrain.grid[i][j]["type"] == "land"
-            and not self.terrain.grid[i][j]["occupied"]
-        ]
+            # Step 1: Precompute valid HQ positions
+            valid_positions = [
+                (i, j)
+                for i in range(self.terrain.grid.shape[0])
+                for j in range(self.terrain.grid.shape[1])
+                if self.terrain.grid[i][j]["type"] == "land"
+                and not self.terrain.grid[i][j]["occupied"]
+            ]
 
-        # Shuffle positions for randomness
-        random.shuffle(valid_positions)
+            # Shuffle positions for randomness
+            random.shuffle(valid_positions)
 
-        # Step 2: Select HQ positions with minimum distance enforcement
-        selected_positions = []
-        for pos in valid_positions:
-            if all(
-                math.dist(pos, existing_hq) >= minimum_distance
-                for existing_hq in selected_positions
-            ):
-                selected_positions.append(pos)
-            if len(selected_positions) == num_factions:
-                break
+            # Step 2: Select HQ positions with minimum distance enforcement
+            selected_positions = []
+            for pos in valid_positions:
+                if all(
+                    math.dist(pos, existing_hq) >= minimum_distance
+                    for existing_hq in selected_positions
+                ):
+                    selected_positions.append(pos)
+                if len(selected_positions) == num_factions:
+                    break
 
-        if len(selected_positions) < num_factions:
-            print("Failure: Not enough valid positions for all factions' HQs.")
-            raise ValueError("Not enough valid positions for all factions' HQs.")
+            if len(selected_positions) < num_factions:
+                print("Failure: Not enough valid positions for all factions' HQs.")
+                raise ValueError("Not enough valid positions for all factions' HQs.")
 
-        # Step 3: Assign positions to factions
-        for faction, position in zip(self.faction_manager.factions, selected_positions):
-            # Convert grid position to pixel coordinates
-            base_pixel_x, base_pixel_y = (
-                position[0] * utils_config.CELL_SIZE,
-                position[1] * utils_config.CELL_SIZE,
-            )
-            faction.home_base["position"] = (base_pixel_x, base_pixel_y)
-
-            # Mark the HQ position in the terrain grid
-            self.terrain.grid[position[0]][position[1]]["occupied"] = True
-            self.terrain.grid[position[0]][position[1]]["faction"] = faction.id
-            self.terrain.grid[position[0]][position[1]]["resource_type"] = None
-
-            print(
-                f"Faction {faction.id} HQ placed at grid {position}, (pixel ({base_pixel_x}, {base_pixel_y}))"
-            )
-
-            # Step 4: Spawn agents for the faction using spawn_agent
-            faction_agents = []
-            print(f"Spawning agents for faction {faction.id}...")
-
-            # Define network_type for each agent (you can modify this logic to dynamically choose the network type)
-            # Example network type (can also be dynamic based on the agent role
-            # or other factors)
-            network_type = "PPOModel"
-
-            print("Peacekeeper")
-            # Pass the required arguments to spawn_agent
-            for _ in range(utils_config.INITAL_PEACEKEEPER_COUNT):
-                agent = self.spawn_agent(
-                    base_x=base_pixel_x,
-                    base_y=base_pixel_y,
-                    faction=faction,
-                    agent_class=Peacekeeper,  # Pass the agent class
-                    state_size=utils_config.DEF_AGENT_STATE_SIZE,  # Pass the state size
-                    role_actions=utils_config.ROLE_ACTIONS_MAP,  # Pass role-specific actions
-                    communication_system=self.communication_system,  # Pass the communication system
-                    event_manager=self.event_manager,  # Pass EventManager
-                    # Pass network type for the agent (e.g., PPOModel,
-                    # DQNModel)
-                    network_type=network_type,
+            # Step 3: Assign positions to factions
+            for faction, position in zip(self.faction_manager.factions, selected_positions):
+                # Convert grid position to pixel coordinates
+                base_pixel_x, base_pixel_y = (
+                    position[0] * utils_config.CELL_SIZE,
+                    position[1] * utils_config.CELL_SIZE,
                 )
-                if agent:
-                    faction_agents.append(agent)
+                faction.home_base["position"] = (base_pixel_x, base_pixel_y)
 
-            print("Gatherer")
-            # Pass the required arguments to spawn_agent
-            for _ in range(utils_config.INITAL_GATHERER_COUNT):
-                agent = self.spawn_agent(
-                    base_x=base_pixel_x,
-                    base_y=base_pixel_y,
-                    faction=faction,
-                    agent_class=Gatherer,
-                    state_size=utils_config.DEF_AGENT_STATE_SIZE,  # Pass the state size
-                    role_actions=utils_config.ROLE_ACTIONS_MAP,  # Pass role-specific actions
-                    communication_system=self.communication_system,  # Pass the communication system
-                    event_manager=self.event_manager,  # Pass EventManager
-                    # Pass network type for the agent (e.g., PPOModel,
-                    # DQNModel)
-                    network_type=network_type,
+                # Mark the HQ position in the terrain grid
+                self.terrain.grid[position[0]][position[1]]["occupied"] = True
+                self.terrain.grid[position[0]][position[1]]["faction"] = faction.id
+                self.terrain.grid[position[0]][position[1]]["resource_type"] = None
+
+                print(
+                    f"Faction {faction.id} HQ placed at grid {position}, (pixel ({base_pixel_x}, {base_pixel_y}))"
                 )
-                if agent:
-                    faction_agents.append(agent)
 
-            # Add the newly spawned agents to the faction and the global agent
-            # list
-            print(f"Faction {faction.id} has {len(faction_agents)} agents.")
+                # Step 4: Spawn agents for the faction using spawn_agent
+                faction_agents = []
+                print(f"Spawning agents for faction {faction.id}...")
 
-            # Clear and reassign to avoid shared references
-            faction.agents = []  # Make sure each faction starts fresh
-            faction.agents.extend(faction_agents)  # Assign its agents properly
-            self.agents.extend(faction_agents)  # Keep global tracking
+                # Define network_type for each agent (you can modify this logic to dynamically choose the network type)
+                # Example network type (can also be dynamic based on the agent role
+                # or other factors)
+                network_type = "PPOModel"
 
-            if self.load_existing and self.models and not self.models_loaded_once:
-                self.load_models()
-                self.models_loaded_once = True
-            else:
-                pass  # Skip model loading if load_existing is False
+                print("Peacekeeper")
+                # Pass the required arguments to spawn_agent
+                for _ in range(utils_config.INITAL_PEACEKEEPER_COUNT):
+                    agent = self.spawn_agent(
+                        base_x=base_pixel_x,
+                        base_y=base_pixel_y,
+                        faction=faction,
+                        agent_class=Peacekeeper,  # Pass the agent class
+                        state_size=utils_config.DEF_AGENT_STATE_SIZE,  # Pass the state size
+                        role_actions=utils_config.ROLE_ACTIONS_MAP,  # Pass role-specific actions
+                        communication_system=self.communication_system,  # Pass the communication system
+                        event_manager=self.event_manager,  # Pass EventManager
+                        # Pass network type for the agent (e.g., PPOModel,
+                        # DQNModel)
+                        network_type=network_type,
+                    )
+                    if agent:
+                        faction_agents.append(agent)
 
-            # Print faction agent counts
-            peacekeeper_count = sum(
-                1 for agent in faction.agents if isinstance(agent, Peacekeeper)
-            )
-            gatherer_count = sum(
-                1 for agent in faction.agents if isinstance(agent, Gatherer)
-            )
-            print(
-                f"Faction {faction.id} has {peacekeeper_count} Peacekeepers and {gatherer_count} Gatherers."
-            )
+                print("Gatherer")
+                # Pass the required arguments to spawn_agent
+                for _ in range(utils_config.INITAL_GATHERER_COUNT):
+                    agent = self.spawn_agent(
+                        base_x=base_pixel_x,
+                        base_y=base_pixel_y,
+                        faction=faction,
+                        agent_class=Gatherer,
+                        state_size=utils_config.DEF_AGENT_STATE_SIZE,  # Pass the state size
+                        role_actions=utils_config.ROLE_ACTIONS_MAP,  # Pass role-specific actions
+                        communication_system=self.communication_system,  # Pass the communication system
+                        event_manager=self.event_manager,  # Pass EventManager
+                        # Pass network type for the agent (e.g., PPOModel,
+                        # DQNModel)
+                        network_type=network_type,
+                    )
+                    if agent:
+                        faction_agents.append(agent)
+
+                # Add the newly spawned agents to the faction and the global agent
+                # list
+                print(f"Faction {faction.id} has {len(faction_agents)} agents.")
+
+                # Clear and reassign to avoid shared references
+                faction.agents = []  # Make sure each faction starts fresh
+                faction.agents.extend(faction_agents)  # Assign its agents properly
+                self.agents.extend(faction_agents)  # Keep global tracking
+
+                if self.load_existing and self.models and not self.models_loaded_once:
+                    self.load_models()
+                    self.models_loaded_once = True
+                else:
+                    pass  # Skip model loading if load_existing is False
+
+                # Print faction agent counts
+                peacekeeper_count = sum(
+                    1 for agent in faction.agents if isinstance(agent, Peacekeeper)
+                )
+                gatherer_count = sum(
+                    1 for agent in faction.agents if isinstance(agent, Gatherer)
+                )
+                print(
+                    f"Faction {faction.id} has {peacekeeper_count} Peacekeepers and {gatherer_count} Gatherers."
+                )
+
+        except Exception as e:
+            self.logger.log_msg(f"An error occurred during agent initialisation: {e}", level=logging.ERROR)
+            traceback.print_exc()
+            raise
 
     def load_models(self):
         """
@@ -735,71 +742,77 @@ class GameManager:
         :param action_size: The action size for the specific role (peacekeeper, gatherer, etc.)
         :return: The spawned agent.
         """
-        spawn_radius = utils_config.HQ_Agent_Spawn_Radius
-        attempts = 0
-        max_attempts = 1000  # Prevent infinite loops
-        max_radius = 100  # Maximum radius to prevent infinite growth
+        try:
+            spawn_radius = utils_config.HQ_Agent_Spawn_Radius
+            attempts = 0
+            max_attempts = 1000  # Prevent infinite loops
+            max_radius = 100  # Maximum radius to prevent infinite growth
 
-        # Maintain a persistent counter for agent IDs in the faction
-        if not hasattr(faction, "next_agent_id"):
-            faction.next_agent_id = 1  # Initialise if not already set
+            # Maintain a persistent counter for agent IDs in the faction
+            if not hasattr(faction, "next_agent_id"):
+                faction.next_agent_id = 1  # Initialise if not already set
 
-        while attempts < max_attempts:
-            # Dynamically expand the spawn radius
-            current_radius = (
-                spawn_radius + (attempts // 100) * 10
-            )  # Expand every 100 attempts
-            current_radius = min(current_radius, max_radius)  # Cap the radius
+            while attempts < max_attempts:
+                # Dynamically expand the spawn radius
+                current_radius = (
+                    spawn_radius + (attempts // 100) * 10
+                )  # Expand every 100 attempts
+                current_radius = min(current_radius, max_radius)  # Cap the radius
 
-            offset_x = random.randint(-current_radius, current_radius)
-            offset_y = random.randint(-current_radius, current_radius)
-            spawn_x = base_x + offset_x
-            spawn_y = base_y + offset_y
+                offset_x = random.randint(-current_radius, current_radius)
+                offset_y = random.randint(-current_radius, current_radius)
+                spawn_x = base_x + offset_x
+                spawn_y = base_y + offset_y
 
-            # Convert pixel coordinates to grid coordinates
-            grid_x = int(spawn_x // utils_config.CELL_SIZE)
-            grid_y = int(spawn_y // utils_config.CELL_SIZE)
+                # Convert pixel coordinates to grid coordinates
+                grid_x = int(spawn_x // utils_config.CELL_SIZE)
+                grid_y = int(spawn_y // utils_config.CELL_SIZE)
 
-            # Check if the spawn position is valid
-            if (
-                0 <= grid_x < self.terrain.grid.shape[0]
-                and 0 <= grid_y < self.terrain.grid.shape[1]
-                and self.terrain.grid[grid_x][grid_y]["type"] == "land"
-                and not self.terrain.grid[grid_x][grid_y]["occupied"]
-            ):
+                # Check if the spawn position is valid
+                if (
+                    0 <= grid_x < self.terrain.grid.shape[0]
+                    and 0 <= grid_y < self.terrain.grid.shape[1]
+                    and self.terrain.grid[grid_x][grid_y]["type"] == "land"
+                    and not self.terrain.grid[grid_x][grid_y]["occupied"]
+                ):
 
-                # Mark the cell as occupied
-                self.terrain.grid[grid_x][grid_y]["occupied"] = True
+                    # Mark the cell as occupied
+                    self.terrain.grid[grid_x][grid_y]["occupied"] = True
 
-                # Create the agent with a unique AgentID
-                agent = agent_class(
-                    x=spawn_x,
-                    y=spawn_y,
-                    faction=faction,
-                    base_sprite_path=(
-                        utils_config.Peacekeeper_PNG
-                        if agent_class == Peacekeeper
-                        else utils_config.Gatherer_PNG
-                    ),
-                    terrain=self.terrain,
-                    agents=self.agents,
-                    agent_id=faction.next_agent_id,
-                    resource_manager=self.resource_manager,
-                    role_actions=role_actions,
-                    state_size=state_size,
-                    communication_system=communication_system,
-                    event_manager=event_manager,
-                    network_type=network_type,
-                )
+                    # Create the agent with a unique AgentID
+                    agent = agent_class(
+                        x=spawn_x,
+                        y=spawn_y,
+                        faction=faction,
+                        base_sprite_path=(
+                            utils_config.Peacekeeper_PNG
+                            if agent_class == Peacekeeper
+                            else utils_config.Gatherer_PNG
+                        ),
+                        terrain=self.terrain,
+                        agents=self.agents,
+                        agent_id=faction.next_agent_id,
+                        resource_manager=self.resource_manager,
+                        role_actions=role_actions,
+                        state_size=state_size,
+                        communication_system=communication_system,
+                        event_manager=event_manager,
+                        network_type=network_type,
+                    )
 
-                faction.next_agent_id += 1  # Increment the counter
-                return agent
+                    faction.next_agent_id += 1  # Increment the counter
+                    return agent
 
-            attempts += 1
+                attempts += 1
 
-        # If no valid position found, fallback to random valid land cell
-        print(f"Failed to spawn agent after {max_attempts} attempts.")
-        return None
+            # If no valid position found, fallback to random valid land cell
+            self.logger.log_msg(f"Failed to spawn agent after {max_attempts} attempts.", level=logging.ERROR)
+            return None
+
+        except Exception as e:
+            self.logger.log_msg(f"An error occurred during agent spawn: {e}", level=logging.ERROR)
+            traceback.print_exc()
+            raise
 
     #    ____                 __                     _   __
     #   |  _ \ _   _ _ __    / /___ _ __   ___   ___| |__\ \
@@ -984,7 +997,7 @@ class GameManager:
         except SystemExit:
             print("[INFO] Game closed successfully.")
         except Exception as e:
-            print(f"An error occurred in {self.mode}: {e}")
+            self.logger.log_msg(f"An error occurred in {self.mode}: {e}", level=logging.ERROR)
             traceback.print_exc()
             cleanup(QUIT=True)
 

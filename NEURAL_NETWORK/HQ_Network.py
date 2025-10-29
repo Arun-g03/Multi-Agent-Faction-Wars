@@ -114,34 +114,40 @@ class HQ_Network(nn.Module):
         # ============================================================================
         # PARAMETRIC STRATEGY HEADS
         # ============================================================================
-        
+
         # Binary parameter heads (sigmoid output, interpreted as probabilities)
         self.binary_param_head = nn.Sequential(
             nn.Linear(self.attention_output_size, hidden_size // 2),
             nn.LayerNorm(hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(0.05) if use_dropout else nn.Identity(),
-            nn.Linear(hidden_size // 2, 3),  # target_role, priority_resource, use_mission_system
+            nn.Linear(
+                hidden_size // 2, 3
+            ),  # target_role, priority_resource, use_mission_system
             nn.Sigmoid(),  # Output probabilities for binary decisions
         )
-        
+
         # Continuous parameter heads (tanh output, scaled to [0,1])
         self.continuous_param_head = nn.Sequential(
             nn.Linear(self.attention_output_size, hidden_size // 2),
             nn.LayerNorm(hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(0.05) if use_dropout else nn.Identity(),
-            nn.Linear(hidden_size // 2, 7),  # aggression_level, resource_threshold, urgency, mission_autonomy, coordination_preference, agent_adaptability, failure_tolerance
+            nn.Linear(
+                hidden_size // 2, 7
+            ),  # aggression_level, resource_threshold, urgency, mission_autonomy, coordination_preference, agent_adaptability, failure_tolerance
             nn.Tanh(),  # Output [-1,1], will be scaled to [0,1]
         )
-        
+
         # Discrete parameter head (softmax output, interpreted as distribution)
         self.discrete_param_head = nn.Sequential(
             nn.Linear(self.attention_output_size, hidden_size // 2),
             nn.LayerNorm(hidden_size // 2),
             nn.ReLU(),
             nn.Dropout(0.05) if use_dropout else nn.Identity(),
-            nn.Linear(hidden_size // 2, 14),  # agent_count_target (1-10) + mission_complexity (1-4)
+            nn.Linear(
+                hidden_size // 2, 14
+            ),  # agent_count_target (1-10) + mission_complexity (1-4)
             nn.Softmax(dim=-1),  # Output probability distribution over discrete choices
         )
 
@@ -328,14 +334,16 @@ class HQ_Network(nn.Module):
         # ============================================================================
         # PARAMETRIC STRATEGY OUTPUTS
         # ============================================================================
-        
+
         # Binary parameters (sigmoid output)
         binary_params = self.binary_param_head(features)
-        
+
         # Continuous parameters (tanh output, scaled to [0,1])
         continuous_params_raw = self.continuous_param_head(features)
-        continuous_params = (continuous_params_raw + 1.0) / 2.0  # Scale from [-1,1] to [0,1]
-        
+        continuous_params = (
+            continuous_params_raw + 1.0
+        ) / 2.0  # Scale from [-1,1] to [0,1]
+
         # Discrete parameters (softmax output)
         discrete_params = self.discrete_param_head(features)
 
@@ -599,8 +607,10 @@ class HQ_Network(nn.Module):
             # 3. Forward pass with error handling
             with torch.no_grad():
                 try:
-                    logits, value, binary_params, continuous_params, discrete_params = self.forward(
-                        state_tensor, role_tensor, local_tensor, global_tensor
+                    logits, value, binary_params, continuous_params, discrete_params = (
+                        self.forward(
+                            state_tensor, role_tensor, local_tensor, global_tensor
+                        )
                     )
                 except Exception as e:
                     logger.log_msg(
@@ -649,13 +659,11 @@ class HQ_Network(nn.Module):
             # ============================================================================
             # INTERPRET PARAMETERS
             # ============================================================================
-            
+
             # Extract parameter values
             binary_values = binary_params.squeeze(0).tolist()
             continuous_values = continuous_params.squeeze(0).tolist()
             discrete_values = discrete_params.squeeze(0).tolist()
-            
-        
 
         except Exception as e:
             logger.log_msg(
@@ -736,8 +744,10 @@ class HQ_Network(nn.Module):
             # 3. Forward pass with error handling
             with torch.no_grad():
                 try:
-                    logits, value, binary_params, continuous_params, discrete_params = self.forward(
-                        state_tensor, role_tensor, local_tensor, global_tensor
+                    logits, value, binary_params, continuous_params, discrete_params = (
+                        self.forward(
+                            state_tensor, role_tensor, local_tensor, global_tensor
+                        )
                     )
                 except Exception as e:
                     logger.log_msg(
@@ -753,10 +763,14 @@ class HQ_Network(nn.Module):
             binary_values = binary_params.squeeze(0).tolist()
             continuous_values = continuous_params.squeeze(0).tolist()
             discrete_values = discrete_params.squeeze(0).tolist()
-            
-            agent_count_idx = torch.argmax(discrete_params[:, :10]).item()  # First 10 for agent count
-            mission_complexity_idx = torch.argmax(discrete_params[:, 10:]).item()  # Last 4 for complexity
-            
+
+            agent_count_idx = torch.argmax(
+                discrete_params[:, :10]
+            ).item()  # First 10 for agent count
+            mission_complexity_idx = torch.argmax(
+                discrete_params[:, 10:]
+            ).item()  # Last 4 for complexity
+
             parameters = {
                 "target_role": "peacekeeper" if binary_values[0] > 0.5 else "gatherer",
                 "priority_resource": "food" if binary_values[1] > 0.5 else "gold",
@@ -773,7 +787,9 @@ class HQ_Network(nn.Module):
             }
 
             # 6. Store memory for training
-            self.add_memory_with_parameters(state, role, local_state, global_state_vec, action_index, parameters)
+            self.add_memory_with_parameters(
+                state, role, local_state, global_state_vec, action_index, parameters
+            )
 
             if utils_config.ENABLE_LOGGING:
                 logger.log_msg(
@@ -785,7 +801,8 @@ class HQ_Network(nn.Module):
 
         except Exception as e:
             logger.log_msg(
-                f"[ERROR] Parametric strategy prediction failed: {e}", level=logging.ERROR
+                f"[ERROR] Parametric strategy prediction failed: {e}",
+                level=logging.ERROR,
             )
             return self.strategy_labels[0], {}
         finally:

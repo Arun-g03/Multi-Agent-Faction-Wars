@@ -1,5 +1,15 @@
-from SHARED.core_imports import *
-import UTILITIES.utils_config as utils_config
+import os
+import logging
+import time
+
+# Import utils_config directly to avoid circular import
+try:
+    import UTILITIES.utils_config as utils_config
+except ImportError:
+    # Fallback if utils_config is not available
+    class MockConfig:
+        ENABLE_LOGGING = True
+    utils_config = MockConfig()
 
 
 class Logger:
@@ -10,6 +20,12 @@ class Logger:
         self.enabled = getattr(
             utils_config, "ENABLE_LOGGING"
         )  # Default safe fallback: True
+
+        # Initialize log_buffer regardless of enabled status
+        self.log_buffer = []
+        self.buffer_size = 200  # Flush after 200 messages
+        self.last_flush_time = 0
+        self.flush_interval = 2.0  # Force flush every 2 seconds
 
         if not self.enabled:
             # Logging is disabled globally: create a dummy logger
@@ -45,16 +61,16 @@ class Logger:
 
         self.logger.setLevel(self.log_level)
 
-        # Regular file handler for all logs
-        file_handler = logging.FileHandler(self.log_file)
+        # Regular file handler for all logs with UTF-8 encoding
+        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
         file_handler.setLevel(self.log_level)
         file_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
         )
         file_handler.setFormatter(file_formatter)
 
-        # Dedicated error file handler for ERROR and CRITICAL logs only
-        error_file_handler = logging.FileHandler(error_log_file)
+        # Dedicated error file handler for ERROR and CRITICAL logs only with UTF-8 encoding
+        error_file_handler = logging.FileHandler(error_log_file, encoding='utf-8')
         error_file_handler.setLevel(logging.ERROR)  # Only capture ERROR and CRITICAL
         error_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
@@ -75,26 +91,63 @@ class Logger:
 
         self.logger.info("Logger initialised and log file cleared.")
 
-        # Buffer for batch writing to reduce I/O overhead
-        self.log_buffer = []
-        self.buffer_size = 200  # Flush after 200 messages
-        self.last_flush_time = 0
-        self.flush_interval = 2.0  # Force flush every 2 seconds
+    def _sanitize_message(self, message):
+        """Sanitize message to handle Unicode characters safely."""
+        try:
+            # Try to encode/decode to catch problematic characters
+            message.encode('utf-8').decode('utf-8')
+            return message
+        except UnicodeError:
+            # Replace problematic Unicode characters with ASCII equivalents
+            replacements = {
+                '→': '->',
+                '←': '<-',
+                '↑': '^',
+                '↓': 'v',
+                '∞': 'inf',
+                '≠': '!=',
+                '≤': '<=',
+                '≥': '>=',
+                '±': '+/-',
+                '×': 'x',
+                '÷': '/',
+                '°': 'deg',
+                'α': 'alpha',
+                'β': 'beta',
+                'γ': 'gamma',
+                'δ': 'delta',
+                'ε': 'epsilon',
+                'π': 'pi',
+                'σ': 'sigma',
+                'τ': 'tau',
+                'φ': 'phi',
+                'ψ': 'psi',
+                'ω': 'omega',
+            }
+            
+            sanitized = message
+            for unicode_char, ascii_replacement in replacements.items():
+                sanitized = sanitized.replace(unicode_char, ascii_replacement)
+            
+            return sanitized
 
     def log_msg(self, message, level=logging.INFO):
         """
         Log a message at a specified logging level with batch buffering.
         """
         try:
-            if not utils_config.ENABLE_LOGGING:
+            if not self.enabled or not utils_config.ENABLE_LOGGING:
                 return
+
+            # Sanitize message to handle Unicode characters
+            sanitized_message = self._sanitize_message(message)
 
             # Add to buffer with timestamp
             import time
 
             current_time = time.time()
 
-            self.log_buffer.append((message, level, current_time))
+            self.log_buffer.append((sanitized_message, level, current_time))
 
             # Flush buffer if it's full or if enough time has passed
             should_flush = (
@@ -110,6 +163,11 @@ class Logger:
     def _flush_buffer(self):
         """Flush all buffered log messages."""
         try:
+            if not self.enabled or self.logger is None:
+                # Clear buffer but don't log if disabled
+                self.log_buffer = []
+                return
+                
             import time
 
             for message, level, _ in self.log_buffer:

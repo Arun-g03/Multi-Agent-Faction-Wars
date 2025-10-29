@@ -144,8 +144,8 @@ class MainGame:
             game_renderer = None
 
             while program_running:
-                # Handle events (only in GUI mode)
-                if not utils_config.HEADLESS_MODE:
+                # Handle events (only in GUI mode and when display is initialized)
+                if not utils_config.HEADLESS_MODE and pygame.display.get_init():
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             print("\033[91m[INFO] Window closed. Exiting game..\033[0m")
@@ -161,8 +161,8 @@ class MainGame:
                     if is_menu or not game_running:
                         time.sleep(0.001)
 
-                # Menu logic
-                if is_menu:
+                # Menu logic (only when display is initialized)
+                if is_menu and pygame.display.get_init():
                     is_menu = menu_renderer.render_menu()
 
                     # If the menu exits with config, start the game
